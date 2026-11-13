@@ -1,0 +1,92 @@
+@*
+    Scatter with equal x/y scales and a y = x diagonal, so "above the line" means more than expected.
+    Points are HTML (stay round at any size) with a 24px hit area; gridlines and the diagonal are SVG.
+*@
+
+@if (Points.Count == 0)
+{
+    <p class="muted">@Empty</p>
+}
+else
+{
+    var (min, max, ticks) = ChartMath.Nice(0, Points.Max(p => Math.Max(p.X, p.Y)));
+    double P(double v) => ChartMath.Pct(v, min, max);
+    var above = Points.Count(p => p.Y > p.X);
+
+    <ul class="legend">
+        @foreach (var g in Groups)
+        {
+            <li><span class="k-dot" style="background:var(@g.Color)"></span>@g.Name</li>
+        }
+        <li><span class="k-diag"></span>As expected</li>
+    </ul>
+
+    <div class="scatter" role="group" aria-label="@Title">
+        <div class="ylab" aria-hidden="true">@YLabel</div>
+        <div class="yaxis" aria-hidden="true">
+            @foreach (var t in ticks) { <span style="bottom:@Fmt.Css(P(t))%">@t.ToString("0.##")</span> }
+        </div>
+        <div class="plot">
+            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+                @foreach (var t in ticks)
+                {
+                    var c = Fmt.Css(P(t) * 10);
+                    <line x1="@c" x2="@c" y1="0" y2="1000" class="grid" />
+                    <line x1="0" x2="1000" y1="@Fmt.Css(1000 - P(t) * 10)" y2="@Fmt.Css(1000 - P(t) * 10)" class="grid" />
+                }
+                <line x1="0" y1="1000" x2="1000" y2="0" class="diag" />
+            </svg>
+            <span class="region above" aria-hidden="true">More than expected</span>
+            <span class="region below" aria-hidden="true">Fewer than expected</span>
+            @foreach (var p in Points)
+            {
+                var g = Groups[p.Group];
+                var x = P(p.X);
+                var y = P(p.Y);
+                <a class="pt @(x > 60 ? "tip-left" : "") @(y > 60 ? "tip-down" : "")" href="@p.Href" tabindex="0"
+                   aria-label="@($"{p.Title}. {g.Name}. Expected {p.X:F1}, actual {p.Y:0.#}")"
+                   style="left:@Fmt.Css(x)%;bottom:@Fmt.Css(y)%;--c:var(@g.Color)">
+                    <span class="tip" role="tooltip">
+                        <span class="tip-title">@p.Title</span>
+                        @if (p.Note is not null) { <span class="tip-note">@p.Note</span> }
+                        <span class="tip-row"><strong>@p.Y.ToString("0.#")</strong> <span class="muted">actual</span></span>
+                        <span class="tip-row"><strong>@p.X.ToString("F1")</strong> <span class="muted">expected</span></span>
+                        <span class="tip-row"><strong>@((p.Y - p.X).ToString("+0.0;-0.0;0"))</strong> <span class="muted">difference</span></span>
+                    </span>
+                </a>
+            }
+        </div>
+        <div></div>
+        <div></div>
+        <div class="xaxis" aria-hidden="true">
+            @foreach (var t in ticks) { <span style="left:@Fmt.Css(P(t))%">@t.ToString("0.##")</span> }
+        </div>
+        <div></div><div></div>
+        <div class="xlab" aria-hidden="true">@XLabel</div>
+    </div>
+    <p class="hint">@above of @Points.Count games (@Fmt.Pct(100.0 * above / Points.Count, 0)) above the line.</p>
+
+    <details class="table-view">
+        <summary>Show as table</summary>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th class="l">Match</th><th class="l">Result</th><th>@XLabel</th><th>@YLabel</th><th>Difference</th></tr></thead>
+                <tbody>
+                    @foreach (var p in Points)
+                    {
+                        <tr><td class="l">@p.Title</td><td class="l">@Groups[p.Group].Name</td><td>@p.X.ToString("F1")</td><td>@p.Y.ToString("0.#")</td><td>@((p.Y - p.X).ToString("+0.0;-0.0;0"))</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<ScatterPoint> Points { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<ScatterGroup> Groups { get; set; } = [];
+    [Parameter] public string XLabel { get; set; } = "Expected";
+    [Parameter] public string YLabel { get; set; } = "Actual";
+    [Parameter] public string Empty { get; set; } = "No data.";
+}

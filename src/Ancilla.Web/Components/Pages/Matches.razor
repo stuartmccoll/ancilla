@@ -1,0 +1,122 @@
+@page "/matches"
+@implements IDisposable
+@inject HaloSession Session
+
+<PageTitle>Matches · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Matches</h1>
+        <p>Your recent games. Select one for the full scoreboard.</p>
+    </div>
+    <div class="chips" role="group" aria-label="Match type">
+        @foreach (var t in new[] { MatchHistoryType.Matchmaking, MatchHistoryType.Custom, MatchHistoryType.All })
+        {
+            <button class="chip @(S.Type == t ? "on" : "")" @onclick="() => SetTypeAsync(t)">@t</button>
+        }
+    </div>
+</div>
+
+@if (S.Error is not null)
+{
+    <p class="error" role="alert">@S.Error</p>
+}
+
+<div class="match-list">
+    @foreach (var row in S.Rows)
+    {
+        var e = row.Entry;
+        var info = e.MatchInfo;
+        <a class="match" href="matches/@e.MatchId">
+            <div class="thumb">
+                @if (row.Map?.ThumbnailUrl is { } thumb)
+                {
+                    <img src="@thumb" alt="" loading="lazy" />
+                }
+            </div>
+            <div class="m-main">
+                <div class="m-title">
+                    <span class="badge @Fmt.OutcomeClass(e.Outcome)">@Fmt.Outcome(e.Outcome)</span>
+                    @if (row.Mode is not null)
+                    {
+                        <span class="mode">@row.Mode.PublicName</span>
+                    }
+                    else if (!row.Loaded)
+                    {
+                        <span class="skeleton" style="width:9rem"></span>
+                    }
+                    @if (row.ScoreLine is not null)
+                    {
+                        <span class="score">@row.ScoreLine</span>
+                    }
+                </div>
+                <div class="m-sub muted">
+                    @(row.Map?.PublicName ?? (row.Loaded ? "Unknown map" : "…"))
+                    @if (row.Playlist?.PublicName is { } pl)
+                    {
+                        <span> · @pl</span>
+                    }
+                </div>
+                <div class="m-when muted">@Fmt.Ago(info.StartTime) · @Fmt.Duration(info.Duration)</div>
+            </div>
+            <div class="m-stats">
+                @if (row.Mine is { } me)
+                {
+                    <div><span class="k">K/D/A</span><span class="v">@me.Kills/@me.Deaths/@me.Assists</span></div>
+                    <div><span class="k">KDA</span><span class="v @((me.KDA ?? 0) >= 0 ? "pos" : "neg")">@((me.KDA ?? 0).ToString("+0.##;-0.##;0"))</span></div>
+                    <div><span class="k">Acc</span><span class="v">@Fmt.Pct(me.Accuracy, 0)</span></div>
+                    <div><span class="k">Dmg</span><span class="v">@Fmt.N(me.DamageDealt)</span></div>
+                }
+                else if (!row.Loaded)
+                {
+                    <span class="skeleton" style="width:12rem;height:2.2rem"></span>
+                }
+            </div>
+        </a>
+    }
+</div>
+
+@if (S.Loading)
+{
+    <p class="muted center">Loading matches…</p>
+}
+else if (S.Rows.Count == 0 && S.Error is null)
+{
+    <p class="muted center">No matches found.</p>
+}
+else if (S.HasMore)
+{
+    <div class="center"><button class="secondary" @onclick="Session.LoadMoreMatchesAsync">Load 25 more</button></div>
+}
+
+@code {
+    private MatchListState S => Session.Matches;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.MatchesChanged += OnChanged;
+        if (S.Rows.Count == 0 && S.HasMore) await Session.LoadMoreMatchesAsync();
+    }
+
+    private async Task SetTypeAsync(MatchHistoryType t)
+    {
+        if (S.Type == t) return;
+        Session.SetMatchType(t);
+        await Session.LoadMoreMatchesAsync();
+    }
+
+    // Rows fill in from background tasks; throttle re-renders to one per frame-ish.
+    private int _pending;
+    private void OnChanged()
+    {
+        if (Interlocked.Exchange(ref _pending, 1) == 1) return;
+        _ = InvokeAsync(async () =>
+        {
+            await Task.Delay(50);
+            Interlocked.Exchange(ref _pending, 0);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Session.MatchesChanged -= OnChanged;
+}

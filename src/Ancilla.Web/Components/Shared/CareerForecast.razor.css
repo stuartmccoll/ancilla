@@ -1,0 +1,59 @@
+.fc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem 1.5rem; margin-bottom: 1rem; }
+.fc-tiles > div { display: flex; flex-direction: column; }
+.label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.value { font-size: 1.35rem; font-weight: 700; }
+.note { font-size: .78rem; color: var(--muted); }
+
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; margin: 0 0 .75rem; padding: 0; font-size: .85rem; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: .45rem; }
+.k-line { display: inline-block; width: 14px; height: 2px; border-radius: 1px; background: var(--viz-1); }
+.k-line.pace { opacity: .4; }
+
+.panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1.5rem 2rem; }
+.panels h3 { margin: 0 0 .9rem; font-size: .85rem; font-weight: 700; }
+/* Stack by the card's width, not the viewport's. */
+.panels-wrap { container-type: inline-size; }
+@container (max-width: 560px) { .panels { grid-template-columns: 1fr; } }
+
+.fc { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: .5rem; }
+.yaxis { position: relative; min-width: 2.4rem; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.yaxis span { position: absolute; right: 0; transform: translateY(50%); }
+.plot { position: relative; height: 170px; margin-top: .6rem; }
+.plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.grid { stroke: var(--viz-grid); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.hero { stroke: var(--viz-ref); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.hist { fill: none; stroke: var(--viz-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.pace { stroke: var(--viz-1); stroke-opacity: .4; stroke-width: 2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.hero-label { position: absolute; top: -1.25rem; right: 0; font-size: .72rem; color: var(--muted); }
+
+.pt { position: absolute; width: 24px; height: 24px; transform: translate(-50%, 50%); outline: none; }
+.pt::before {
+    content: ""; position: absolute; left: 8px; top: 8px; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--viz-1); box-shadow: 0 0 0 2px var(--surface);
+}
+.pt.end::before { background: var(--surface); border: 2px solid var(--viz-1); box-sizing: border-box; box-shadow: none; left: 7px; top: 7px; width: 10px; height: 10px; }
+.pt:hover, .pt:focus-visible { z-index: 6; }
+.pt:focus-visible::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; box-shadow: 0 0 0 2px var(--accent); }
+.tip {
+    display: none; position: absolute; left: 22px; bottom: 22px; z-index: 6; flex-direction: column; gap: .15rem;
+    min-width: 11rem; padding: .55rem .7rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 6px 18px rgba(0,0,0,.18);
+    font-size: .8rem; pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.pt.tip-left .tip { left: auto; right: 22px; }
+.pt.end .tip { bottom: auto; top: 22px; }
+.pt:hover .tip, .pt:focus-visible .tip { display: flex; }
+.tip-title { font-weight: 700; }
+
+.xaxis { position: relative; height: 1.4rem; font-size: .72rem; color: var(--muted); }
+.xaxis span { position: absolute; top: .35rem; transform: translateX(-50%); white-space: nowrap; }
+.xaxis .first { left: 0; transform: none; }
+.xaxis .last { right: 0; transform: none; }
+
+.table-view { margin-top: .5rem; font-size: .85rem; }
+.table-view summary { cursor: pointer; color: var(--muted); }
+.table-wrap { overflow-x: auto; max-height: 16rem; overflow-y: auto; margin-top: .5rem; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: .35rem .6rem; text-align: right; white-space: nowrap; border-top: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+.l { text-align: left; }

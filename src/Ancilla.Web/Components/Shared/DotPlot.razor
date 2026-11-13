@@ -1,0 +1,94 @@
+@*
+    Dot plot: one row per category, one panel per measure. Each panel has its own axis (never a
+    dual axis) and a reference line. Rows with few games get a hollow dot, so small samples don't
+    read as strongly as big ones.
+*@
+
+@if (Rows.Count == 0)
+{
+    <p class="muted">@Empty</p>
+}
+else
+{
+    var panels = Panels.Select(p => (Panel: p, Scale: ChartMath.Nice(p.Min, p.Max))).ToList();
+    <ul class="legend">
+        <li><span class="k-dot solid" style="background:var(--viz-1)"></span>@MinCount+ games</li>
+        <li><span class="k-dot hollow" style="border-color:var(--viz-1)"></span>Fewer than @MinCount games</li>
+        <li><span class="k-ref"></span>Your overall average</li>
+    </ul>
+    <div class="dotplot" role="group" aria-label="@Title" style="--panels:@panels.Count">
+        <div class="hdr label-col"></div>
+        @foreach (var (p, sc) in panels)
+        {
+            <div class="hdr">
+                <div class="ptitle">@p.Title @if (p.RefLabel is not null) { <span class="muted">· @p.RefLabel</span> }</div>
+                <div class="ticks" aria-hidden="true">
+                    @foreach (var t in sc.Ticks)
+                    {
+                        <span style="left:@Fmt.Css(ChartMath.Pct(t, sc.Min, sc.Max))%">@p.Format(t)</span>
+                    }
+                </div>
+            </div>
+        }
+
+        @foreach (var r in Rows)
+        {
+            var aria = $"{r.Label}, {r.Count} games. " + string.Join(". ", panels.Select((x, i) => $"{x.Panel.Title} {x.Panel.Format(r.Values[i])}"));
+            <div class="row" tabindex="0" aria-label="@aria">
+                <div class="label-col">
+                    <span class="rlabel">@r.Label</span>
+                    <span class="rcount">@r.Count</span>
+                </div>
+                @for (var i = 0; i < panels.Count; i++)
+                {
+                    var (p, sc) = panels[i];
+                    var v = Math.Clamp(r.Values[i], sc.Min, sc.Max);
+                    <div class="track" aria-hidden="true">
+                        @foreach (var t in sc.Ticks)
+                        {
+                            <span class="gl" style="left:@Fmt.Css(ChartMath.Pct(t, sc.Min, sc.Max))%"></span>
+                        }
+                        @if (p.Ref is { } rf)
+                        {
+                            <span class="rl" style="left:@Fmt.Css(ChartMath.Pct(rf, sc.Min, sc.Max))%"></span>
+                        }
+                        <span class="pt @(r.Count < MinCount ? "hollow" : "solid")"
+                              style="left:@Fmt.Css(ChartMath.Pct(v, sc.Min, sc.Max))%;--c:var(@p.Color)"></span>
+                    </div>
+                }
+                <div class="tip" role="tooltip">
+                    <span class="tip-title">@r.Label</span>
+                    @for (var i = 0; i < panels.Count; i++)
+                    {
+                        <span class="tip-row"><strong>@panels[i].Panel.Format(r.Values[i])</strong> <span class="muted">@panels[i].Panel.Title</span></span>
+                    }
+                    @foreach (var d in r.Detail) { <span class="tip-note">@d</span> }
+                </div>
+            </div>
+        }
+    </div>
+
+    <details class="table-view">
+        <summary>Show as table</summary>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th class="l">@CategoryName</th><th>Games</th>@foreach (var p in Panels) { <th>@p.Title</th> }</tr></thead>
+                <tbody>
+                    @foreach (var r in Rows)
+                    {
+                        <tr><td class="l">@r.Label</td><td>@r.Count</td>@for (var i = 0; i < Panels.Count; i++) { <td>@Panels[i].Format(r.Values[i])</td> }</tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<DotRow> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<DotPanel> Panels { get; set; } = [];
+    [Parameter] public string CategoryName { get; set; } = "Category";
+    [Parameter] public int MinCount { get; set; } = 3;
+    [Parameter] public string Empty { get; set; } = "No data.";
+}

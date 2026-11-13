@@ -1,0 +1,191 @@
+@*
+    Per-match chart. SVG draws gridlines and lines (non-scaling 2px strokes, so the plot can
+    stretch to any width); dots, bars, the crosshair and tooltips are HTML positioned in %,
+    so dots stay round and hover works in pure CSS without a server round trip.
+*@
+
+@if (Columns.Count == 0)
+{
+    <p class="muted">@Empty</p>
+}
+else
+{
+    var n = Columns.Count;
+    var (min, max, ticks) = Scale();
+    double Y(double v) => (max - v) / (max - min) * 100;
+    double X(int i) => (i + 0.5) / n * 100;
+    var y0 = Y(Math.Clamp(0, min, max));
+
+    @if (Legend)
+    {
+        <ul class="legend">
+            @foreach (var s in Series)
+            {
+                @if (s.Kind == SeriesKind.Bars)
+                {
+                    <li><span class="key k-bar" style="background:var(@s.Color)"></span>@(s.PosLabel ?? s.Name)</li>
+                    @if (s.NegColor is not null)
+                    {
+                        <li><span class="key k-bar" style="background:var(@s.NegColor)"></span>@(s.NegLabel ?? s.Name)</li>
+                    }
+                }
+                else
+                {
+                    <li>
+                        @if (s.Kind is SeriesKind.Line or SeriesKind.LineDots) { <span class="key k-line" style="background:var(@s.Color)"></span> }
+                        @if (s.Kind is SeriesKind.Dots) { <span class="key k-dot" style="background:var(@s.Color)"></span> }
+                        @s.Name
+                    </li>
+                }
+            }
+        </ul>
+    }
+
+    <div class="chart" role="group" aria-label="@Title">
+        <div class="yaxis" aria-hidden="true">
+            @foreach (var t in ticks)
+            {
+                <span style="top:@Fmt.Css(Y(t))%">@YFormat(t)</span>
+            }
+        </div>
+        <div class="plot" style="height:@(Height)px">
+            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+                @foreach (var t in ticks)
+                {
+                    <line x1="0" x2="1000" y1="@Fmt.Css(Y(t) * 10)" y2="@Fmt.Css(Y(t) * 10)" class="grid" />
+                }
+                @if (RefLine is { } r && r >= min && r <= max)
+                {
+                    <line x1="0" x2="1000" y1="@Fmt.Css(Y(r) * 10)" y2="@Fmt.Css(Y(r) * 10)" class="ref" />
+                }
+                @foreach (var s in Series.Where(s => s.Kind is SeriesKind.Line or SeriesKind.LineDots))
+                {
+                    @foreach (var seg in Segments(s.Values))
+                    {
+                        <polyline class="line" style="stroke:var(@s.Color)"
+                                  points="@string.Join(' ', seg.Select(i => $"{Fmt.Css(X(i) * 10)},{Fmt.Css(Y(s.Values[i]!.Value) * 10)}"))" />
+                    }
+                }
+            </svg>
+
+            @foreach (var s in Series.Where(s => s.Kind == SeriesKind.Bars))
+            {
+                @for (var i = 0; i < n; i++)
+                {
+                    if (s.Values[i] is not { } v || v == 0) continue;
+                    var top = Math.Min(Y(v), y0);
+                    var h = Math.Abs(Y(v) - y0);
+                    <span class="mbar @(v > 0 ? "up" : "down")" aria-hidden="true"
+                          style="left:@Fmt.Css(X(i))%;width:min(24px, calc(@Fmt.Css(100.0 / n)% - 2px));top:@Fmt.Css(top)%;height:@Fmt.Css(h)%;background:var(@(v < 0 && s.NegColor is not null ? s.NegColor : s.Color))"></span>
+                }
+            }
+
+            @foreach (var s in Series.Where(s => s.Kind is SeriesKind.Dots or SeriesKind.LineDots))
+            {
+                @for (var i = 0; i < n; i++)
+                {
+                    if (s.Values[i] is not { } v) continue;
+                    <span class="dot" aria-hidden="true" style="left:@Fmt.Css(X(i))%;top:@Fmt.Css(Y(v))%;background:var(@s.Color)"></span>
+                }
+            }
+
+            <div class="cols">
+                @for (var i = 0; i < n; i++)
+                {
+                    var c = Columns[i];
+                    var idx = i;
+                    var label = $"{c.Title}. {string.Join(". ", Series.Where(s => s.Values[idx] is not null).Select(s => $"{s.Name} {s.Format(s.Values[idx]!.Value)}"))}";
+                    <a class="col @(i >= n / 2.0 ? "right" : "")" href="@c.Href" tabindex="0" aria-label="@label"
+                       style="left:@Fmt.Css(100.0 * i / n)%;width:@Fmt.Css(100.0 / n)%">
+                        <span class="xhair"></span>
+                        <span class="tip" role="tooltip">
+                            <span class="tip-title">@c.Title</span>
+                            @if (c.Note is not null) { <span class="tip-note">@c.Note</span> }
+                            @foreach (var s in Series)
+                            {
+                                if (s.Values[i] is not { } v) continue;
+                                <span class="tip-row">
+                                    <span class="key k-line" style="background:var(@(v < 0 && s.NegColor is not null ? s.NegColor : s.Color))"></span>
+                                    <strong>@s.Format(v)</strong>
+                                    <span class="tip-name">@s.Name</span>
+                                </span>
+                            }
+                        </span>
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="xaxis" aria-hidden="true">
+            @foreach (var i in XLabelIndexes(n))
+            {
+                <span class="@(i == 0 ? "first" : i == n - 1 ? "last" : "")" style="left:@Fmt.Css(X(i))%">@Columns[i].AxisLabel</span>
+            }
+        </div>
+    </div>
+
+    <details class="table-view">
+        <summary>Show as table</summary>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="l">Match</th>
+                        @foreach (var s in Series) { <th>@s.Name</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = n - 1; i >= 0; i--)
+                    {
+                        <tr>
+                            <td class="l">@Columns[i].Title</td>
+                            @foreach (var s in Series)
+                            {
+                                <td>@(s.Values[i] is { } v ? s.Format(v) : "—")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<ChartColumn> Columns { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<ChartSeries> Series { get; set; } = [];
+    [Parameter] public Func<double, string> YFormat { get; set; } = v => v.ToString("0.##");
+    /// <summary>A reference line, e.g. K/D 1.0.</summary>
+    [Parameter] public double? RefLine { get; set; }
+    [Parameter] public bool IncludeZero { get; set; }
+    [Parameter] public int Height { get; set; } = 220;
+    [Parameter] public string Empty { get; set; } = "No data.";
+
+    // A legend whenever colour has to tell things apart: 2+ series, or bars coloured by sign.
+    private bool Legend => Series.Count >= 2 || Series.Any(s => s.Kind == SeriesKind.Bars && s.NegColor is not null);
+
+    private (double Min, double Max, double[] Ticks) Scale()
+    {
+        var values = Series.SelectMany(s => s.Values).OfType<double>().ToList();
+        if (RefLine is { } r) values.Add(r);
+        if (IncludeZero || Series.Any(s => s.Kind == SeriesKind.Bars)) values.Add(0);
+        var lo = values.Count > 0 ? values.Min() : 0;
+        var hi = values.Count > 0 ? values.Max() : 1;
+        return ChartMath.Nice(lo, hi);
+    }
+
+    /// <summary>Runs of consecutive non-null indexes, so a line breaks at gaps instead of bridging them.</summary>
+    private static IEnumerable<List<int>> Segments(double?[] values)
+    {
+        var run = new List<int>();
+        for (var i = 0; i < values.Length; i++)
+        {
+            if (values[i] is null) { if (run.Count > 0) { yield return run; run = []; } continue; }
+            run.Add(i);
+        }
+        if (run.Count > 0) yield return run;
+    }
+
+    private static IEnumerable<int> XLabelIndexes(int n) =>
+        n <= 3 ? Enumerable.Range(0, n) : new[] { 0, (n - 1) / 2, n - 1 };
+}

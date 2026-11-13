@@ -1,0 +1,24 @@
+.about { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+.toc { position: sticky; top: 7rem; display: flex; flex-direction: column; gap: .15rem; margin: 0; }
+.toc-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: .4rem; }
+.toc a { text-decoration: none; padding: .3rem 0; font-weight: 500; }
+.toc a:hover { text-decoration: underline; }
+.content { min-width: 0; }
+.content section { scroll-margin-top: 7.5rem; }
+.content h2 { font-size: 1.15rem; margin: 0 0 .75rem; text-transform: none; letter-spacing: normal; color: var(--text); }
+.content p, .content li, .content dd { line-height: 1.6; }
+.content p { margin: 0 0 .75rem; max-width: 70ch; }
+.content p:last-child { margin-bottom: 0; }
+.content ul { margin: 0 0 .75rem; padding-left: 1.2rem; max-width: 72ch; display: flex; flex-direction: column; gap: .5rem; }
+.note { color: var(--muted); font-size: .9rem; }
+.path { overflow-wrap: anywhere; }
+.defs { margin: 0; display: grid; grid-template-columns: 10rem minmax(0, 1fr); gap: .65rem 1.25rem; max-width: 80ch; }
+.defs dt { font-weight: 700; }
+.defs dd { margin: 0; color: var(--muted); }
+
+@media (max-width: 760px) {
+    .about { grid-template-columns: 1fr; }
+    .toc { position: static; }
+    .defs { grid-template-columns: 1fr; gap: .2rem; }
+    .defs dd { margin-bottom: .6rem; }
+}

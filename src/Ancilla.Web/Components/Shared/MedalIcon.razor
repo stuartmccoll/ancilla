@@ -1,0 +1,28 @@
+@* One medal, cut from the sprite sheet: medal N sits at column N % Columns, row N / Columns. *@
+
+@if (Def is { } d)
+{
+    var col = d.SpriteIndex % Book.Sprite.Columns;
+    var row = d.SpriteIndex / Book.Sprite.Columns;
+    <span class="medal @(Dim ? "dim" : "")" role="img" aria-label="@d.Name" title="@($"{d.Name}: {d.Description}")"
+          style="width:@(Size)px;height:@(Size)px;background-image:url('@Book.SheetUrl');background-size:@(Book.Sprite.Columns * Size)px;background-position:-@(col * Size)px -@(row * Size)px">
+        @if (Count is > 1)
+        {
+            <span class="count">@Count</span>
+        }
+    </span>
+}
+else
+{
+    <span class="medal unknown" style="width:@(Size)px;height:@(Size)px" title="Unknown medal @NameId">?</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public MedalBook Book { get; set; } = default!;
+    [Parameter] public long NameId { get; set; }
+    [Parameter] public int Size { get; set; } = 48;
+    [Parameter] public int? Count { get; set; }
+    [Parameter] public bool Dim { get; set; }
+
+    private MedalDefinition? Def => Book.ById.GetValueOrDefault(NameId);
+}

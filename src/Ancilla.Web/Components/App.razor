@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="@Theme">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["Ancilla.Web.styles.css"]" />
+    <ImportMap />
+    <HeadOutlet @rendermode="Mode" />
+</head>
+
+<body>
+    <Routes @rendermode="Mode" />
+    <ReconnectModal />
+    <script src="@Assets["theme.js"]"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>
+
+@code {
+    // The page shell is rendered on the server, so the theme comes from the cookie theme.js sets.
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string Theme => Themes.Normalize(HttpContext?.Request.Cookies[Themes.CookieName]);
+
+    // Interactive everywhere so the signed-in session (a scoped service) survives navigation.
+    // No prerendering: every page needs the session's token anyway, and prerendering would
+    // run each page's API calls twice.
+    private static readonly IComponentRenderMode Mode = new InteractiveServerRenderMode(prerender: false);
+}

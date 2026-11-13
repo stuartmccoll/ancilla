@@ -1,0 +1,38 @@
+@using System.Text.Json
+@* Renders the per-mode stat groups (CaptureTheFlagStats, OddballStats, ...) generically. *@
+
+@{
+    var groups = Groups
+        .Where(g => g.Value.ValueKind == JsonValueKind.Object && g.Key.EndsWith("Stats"))
+        .Select(g => (g.Key, Fields: g.Value.EnumerateObject()
+            .Where(p => p.Value.ValueKind is JsonValueKind.Number or JsonValueKind.String)
+            .ToList()))
+        .Where(g => g.Fields.Count > 0 && (ShowEmpty || g.Fields.Any(f => !Fmt.IsZero(f.Value))))
+        .ToList();
+}
+
+@if (groups.Count > 0)
+{
+    <div class="groups">
+        @foreach (var (key, fields) in groups)
+        {
+            <section class="card group">
+                <h2>@Fmt.GroupTitle(key)</h2>
+                <dl class="kv">
+                    @foreach (var f in fields)
+                    {
+                        <div class="@(Fmt.IsZero(f.Value) ? "zero" : "")">
+                            <dt>@Fmt.Humanize(f.Name)</dt>
+                            <dd>@Fmt.Json(f.Value)</dd>
+                        </div>
+                    }
+                </dl>
+            </section>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Dictionary<string, JsonElement> Groups { get; set; } = default!;
+    [Parameter] public bool ShowEmpty { get; set; }
+}

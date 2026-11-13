@@ -1,0 +1,172 @@
+@page "/progress"
+@inject HaloSession Session
+@inject SnapshotStore Snapshots
+
+<PageTitle>Progress · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Progress</h1>
+        <p>How many more matches until your passes are done and you hit Hero.</p>
+    </div>
+</div>
+
+<section class="card controls">
+    <div class="row">
+        <label class="inline">
+            XP per match
+            <input type="number" min="1" step="1" placeholder="auto" @bind="_xpOverride" />
+        </label>
+        <label class="inline check">
+            <input type="checkbox" @bind="_includeUnowned" /> Include passes I don't own
+        </label>
+        <button @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Loading…" : "Refresh")</button>
+    </div>
+    @if (_error is not null)
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+</section>
+
+@if (Session.Report is { } r)
+{
+    <section class="tiles">
+        <div class="tile"><span class="label">Matchmade games</span><span class="value">@Fmt.N(r.MatchesCompleted)</span></div>
+        <div class="tile">
+            <span class="label">XP per match</span>
+            <span class="value">@Fmt.N(r.Estimate.XpPerMatch)</span>
+            <span class="note">@r.Estimate.Source</span>
+        </div>
+    </section>
+
+    var c = r.Career;
+    <section class="card career">
+        <h2>Career rank</h2>
+        <div class="career-body">
+            @if (_rankIcon is not null)
+            {
+                <img class="rank-icon" src="@_rankIcon" alt="@c.NextRankTitle" />
+            }
+            <div class="career-main">
+                @if (c.IsHero)
+                {
+                    <p class="big">Hero reached.</p>
+                }
+                else
+                {
+                    var pct = 100.0 * c.XpEarned / c.XpTotal;
+                    <div class="career-head">
+                        <div>
+                            <div class="rank-title">@c.NextRankTitle</div>
+                            <div class="muted">@c.RanksCompleted / @c.TotalRanks ranks done</div>
+                        </div>
+                        <div class="games">
+                            <span class="big">~@Fmt.N(r.GamesFor(c.XpRemaining))</span>
+                            <span class="muted">games to Hero</span>
+                        </div>
+                    </div>
+                    <div class="bar" role="progressbar" aria-valuenow="@pct.ToString("F1")" aria-valuemin="0" aria-valuemax="100">
+                        <div class="fill" style="width:@Fmt.Css(pct)%"></div>
+                    </div>
+                    <div class="bar-legend">
+                        <span>@Fmt.N(c.XpEarned) / @Fmt.N(c.XpTotal) XP</span>
+                        <span>@Fmt.Pct(pct)</span>
+                    </div>
+                }
+                <p class="hint">Career XP is earned at the same time as pass XP, not after it.</p>
+            </div>
+        </div>
+    </section>
+
+    @if (!c.IsHero && _snapshots is not null)
+    {
+        <section class="card">
+            <h2>Road to Hero</h2>
+            <CareerForecast Snapshots="_snapshots" XpTotal="c.XpTotal" />
+        </section>
+    }
+
+    var passes = r.RemainingPasses(_includeUnowned).ToList();
+    var passXp = passes.Sum(p => (long)p.XpRemaining);
+    <section class="card">
+        <h2>@(_includeUnowned ? "Unfinished passes" : "Unfinished passes you own")</h2>
+        @if (passes.Count == 0)
+        {
+            <p class="big">All done.</p>
+        }
+        else
+        {
+            <div class="passes">
+                @foreach (var p in passes)
+                {
+                    var pp = p.XpTotal == 0 ? 0 : 100.0 * p.XpEarned / p.XpTotal;
+                    <div class="pass @(p.IsActive ? "active" : "")">
+                        <div class="pass-name">
+                            @p.Name
+                            @if (p.IsActive) { <span class="tag">Active</span> }
+                            @if (!p.IsOwned) { <span class="tag dim">Not owned</span> }
+                        </div>
+                        <div class="pass-ranks">@p.RanksCompleted / @p.TotalRanks</div>
+                        <div class="bar small"><div class="fill" style="width:@Fmt.Css(pp)%"></div></div>
+                        <div class="pass-xp">@Fmt.N(p.XpRemaining) XP left</div>
+                        <div class="pass-games">~@Fmt.N(r.GamesFor(p.XpRemaining)) games</div>
+                    </div>
+                }
+                <div class="pass total">
+                    <div class="pass-name">Total</div>
+                    <div class="pass-ranks"></div>
+                    <div></div>
+                    <div class="pass-xp">@Fmt.N(passXp) XP left</div>
+                    <div class="pass-games">~@Fmt.N(r.GamesFor(passXp)) games</div>
+                </div>
+            </div>
+        }
+        <p class="hint">Only the active pass earns XP, so these add up one after another.</p>
+    </section>
+}
+else if (_loading)
+{
+    <p class="muted">Loading your progress…</p>
+}
+
+@code {
+    private double? _xpOverride;
+    private bool _includeUnowned;
+    private bool _loading;
+    private string? _error;
+    private string? _rankIcon;
+    private IReadOnlyList<ProgressSnapshot>? _snapshots;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.Report is null) await LoadAsync();
+        else
+        {
+            _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
+            _snapshots = (await Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            Session.Report = await new ProgressService(Session.Client, Snapshots)
+                .BuildReportAsync(_xpOverride is > 0 ? _xpOverride : null);
+            _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
+            _snapshots = (await Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

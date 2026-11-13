@@ -1,0 +1,162 @@
+@*
+    Two panels, each on its own scales (never one chart with two y-axes):
+      - Recent pace: career XP over the measurement window, zoomed in so the real history is visible,
+        with a faint line showing the average pace the forecast uses.
+      - Projection: from the first snapshot to Hero, at that pace.
+*@
+
+@if (Forecast() is not { } f)
+{
+    <p class="muted">
+        Not enough history yet. A snapshot of your career XP is saved each time this page loads
+        (@Snapshots.Count so far@(Snapshots.Count > 0 ? $", since {Snapshots[0].TakenAt.ToLocalTime():d MMM yyyy}" : "")).
+        The forecast appears once there are snapshots at least a day apart with XP gained in between.
+    </p>
+}
+else
+{
+    <div class="fc-tiles">
+        <div><span class="label">Hero at this pace</span><span class="value">@(f.Eta is { } eta ? eta.ToLocalTime().ToString("MMM yyyy") : "—")</span>
+            <span class="note">@(f.Eta is null ? "more than 30 years away" : $"in about {Humanize(f.DaysToHero)}")</span></div>
+        <div><span class="label">XP per day</span><span class="value">@Fmt.N(f.XpPerDay)</span>
+            <span class="note">average over the last @Humanize(f.WindowDays)</span></div>
+        <div><span class="label">Games per day</span><span class="value">@f.GamesPerDay.ToString("0.#")</span>
+            <span class="note">@Fmt.N(f.XpPerGame) XP per game</span></div>
+    </div>
+
+    <ul class="legend">
+        <li><span class="k-line"></span>Career XP</li>
+        <li><span class="k-line pace"></span>Average pace</li>
+    </ul>
+
+    var last = Snapshots[^1];
+    var window = Snapshots.Where(s => s.TakenAt >= f.WindowStart.TakenAt).ToList();
+    var (rMin, rMax, rTicks) = ChartMath.Nice(window.Min(s => s.CareerXpEarned), window.Max(s => s.CareerXpEarned), 3);
+    var end = f.Eta ?? Snapshots[0].TakenAt.AddYears(30);
+    var endXp = f.Eta is null ? last.CareerXpEarned + f.XpPerDay * (end - last.TakenAt).TotalDays : XpTotal;
+    var (_, _, pTicks) = ChartMath.Nice(0, XpTotal, 3);
+
+    <div class="panels-wrap"><div class="panels">
+        <section>
+            <h3>Recent pace</h3>
+            @Plot(new Spec("Career XP over the last " + Humanize(f.WindowDays), window, f.WindowStart.TakenAt, last.TakenAt, rMin, rMax, rTicks,
+                PaceFrom: (f.WindowStart.TakenAt, f.WindowStart.CareerXpEarned), PaceTo: (last.TakenAt, last.CareerXpEarned), HeroLine: false, EndMarker: null))
+        </section>
+        <section>
+            <h3>Projection to Hero</h3>
+            @Plot(new Spec("Career XP projected to Hero", Snapshots, Snapshots[0].TakenAt, end, 0, XpTotal, pTicks.Where(t => t < XpTotal).ToArray(),
+                PaceFrom: (last.TakenAt, last.CareerXpEarned), PaceTo: (end, endXp), HeroLine: true, EndMarker: f.Eta))
+        </section>
+    </div></div>
+    <p class="hint">
+        The pace is your average daily XP over the last @Humanize(f.WindowDays), including days you didn't play,
+        extended in a straight line. A snapshot is saved each time this page loads, so the more often you open it,
+        the better the history it has to go on.
+    </p>
+
+    <details class="table-view">
+        <summary>Show as table</summary>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th class="l">Snapshot</th><th>Career XP</th><th>Matches</th></tr></thead>
+                <tbody>
+                    @foreach (var s in Snapshots.Reverse())
+                    {
+                        <tr><td class="l">@s.TakenAt.ToLocalTime().ToString("d MMM yyyy, HH:mm")</td><td>@Fmt.N(s.CareerXpEarned)</td><td>@Fmt.N(s.MatchesCompleted)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+}
+
+@code {
+    /// <summary>Oldest first.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<ProgressSnapshot> Snapshots { get; set; } = [];
+    [Parameter, EditorRequired] public long XpTotal { get; set; }
+    /// <summary>How far back the pace is measured.</summary>
+    [Parameter] public int WindowDays { get; set; } = 60;
+
+    private sealed record ForecastResult(ProgressSnapshot WindowStart, double XpPerDay, double GamesPerDay, double XpPerGame,
+        double WindowDays, double DaysToHero, DateTimeOffset? Eta);
+
+    private sealed record Spec(string Aria, IReadOnlyList<ProgressSnapshot> Points, DateTimeOffset Start, DateTimeOffset End,
+        double YMin, double YMax, double[] YTicks,
+        (DateTimeOffset T, double Xp) PaceFrom, (DateTimeOffset T, double Xp) PaceTo, bool HeroLine, DateTimeOffset? EndMarker);
+
+    private ForecastResult? Forecast()
+    {
+        if (Snapshots.Count < 2) return null;
+        var last = Snapshots[^1];
+        var first = Snapshots.FirstOrDefault(s => s.TakenAt >= last.TakenAt.AddDays(-WindowDays)) ?? Snapshots[0];
+        var days = (last.TakenAt - first.TakenAt).TotalDays;
+        var xp = last.CareerXpEarned - first.CareerXpEarned;
+        if (days < 1 || xp <= 0) return null;
+        var games = last.MatchesCompleted - first.MatchesCompleted;
+        var perDay = xp / days;
+        var toHero = Math.Max(0, XpTotal - last.CareerXpEarned) / perDay;
+        DateTimeOffset? eta = toHero <= 365 * 30 ? last.TakenAt.AddDays(toHero) : null;
+        return new ForecastResult(first, perDay, games / days, games == 0 ? 0 : (double)xp / games, days, toHero, eta);
+    }
+
+    private RenderFragment Plot(Spec s) => __builder =>
+    {
+        var span = Math.Max((s.End - s.Start).TotalDays, 1e-6);
+        double X(DateTimeOffset t) => Math.Clamp((t - s.Start).TotalDays / span * 100, 0, 100);
+        double Y(double xp) => ChartMath.Pct(xp, s.YMin, s.YMax);
+        var showDots = s.Points.Count <= 60;
+        var longSpan = span > 400;
+        <div class="fc" role="group" aria-label="@s.Aria">
+            <div class="yaxis" aria-hidden="true">
+                @foreach (var t in s.YTicks) { <span style="bottom:@Fmt.Css(Y(t))%">@Compact(t)</span> }
+            </div>
+            <div class="plot">
+                <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+                    @foreach (var t in s.YTicks)
+                    {
+                        <line x1="0" x2="1000" y1="@Fmt.Css(1000 - Y(t) * 10)" y2="@Fmt.Css(1000 - Y(t) * 10)" class="grid" />
+                    }
+                    @if (s.HeroLine) { <line x1="0" x2="1000" y1="0" y2="0" class="hero" /> }
+                    <line class="pace" x1="@Fmt.Css(X(s.PaceFrom.T) * 10)" y1="@Fmt.Css(1000 - Y(s.PaceFrom.Xp) * 10)"
+                          x2="@Fmt.Css(X(s.PaceTo.T) * 10)" y2="@Fmt.Css(1000 - Y(s.PaceTo.Xp) * 10)" />
+                    <polyline class="hist" points="@string.Join(' ', s.Points.Select(p => $"{Fmt.Css(X(p.TakenAt) * 10)},{Fmt.Css(1000 - Y(p.CareerXpEarned) * 10)}"))" />
+                </svg>
+                @if (s.HeroLine) { <span class="hero-label" aria-hidden="true">Hero · @Compact(XpTotal) XP</span> }
+                @for (var i = 0; i < s.Points.Count; i++)
+                {
+                    var p = s.Points[i];
+                    if (!showDots && i != s.Points.Count - 1) continue;
+                    <span class="pt @(X(p.TakenAt) > 60 ? "tip-left" : "")" tabindex="0"
+                          style="left:@Fmt.Css(X(p.TakenAt))%;bottom:@Fmt.Css(Y(p.CareerXpEarned))%"
+                          aria-label="@($"{p.TakenAt.ToLocalTime():d MMM yyyy}: {p.CareerXpEarned:N0} XP")">
+                        <span class="tip" role="tooltip">
+                            <span class="tip-title">@p.TakenAt.ToLocalTime().ToString("d MMM yyyy, HH:mm")</span>
+                            <span><strong>@Fmt.N(p.CareerXpEarned)</strong> <span class="muted">career XP</span></span>
+                            <span class="muted">@Fmt.N(p.MatchesCompleted) matches played</span>
+                        </span>
+                    </span>
+                }
+                @if (s.EndMarker is { } e)
+                {
+                    <span class="pt end tip-left" tabindex="0" style="left:100%;bottom:100%" aria-label="@($"Projected Hero: {e.ToLocalTime():MMM yyyy}")">
+                        <span class="tip" role="tooltip">
+                            <span class="tip-title">Projected Hero</span>
+                            <span><strong>@e.ToLocalTime().ToString("MMM yyyy")</strong></span>
+                        </span>
+                    </span>
+                }
+            </div>
+            <div></div>
+            <div class="xaxis" aria-hidden="true">
+                <span class="first">@s.Start.ToLocalTime().ToString(longSpan ? "MMM yyyy" : "d MMM")</span>
+                <span class="last">@s.End.ToLocalTime().ToString(longSpan ? "MMM yyyy" : "d MMM")</span>
+            </div>
+        </div>
+    };
+
+    private static string Humanize(double days) =>
+        days >= 730 ? $"{days / 365:0.#} years" : days >= 60 ? $"{days / 30.4:0} months" : days >= 2 ? $"{days:0} days" : "a day";
+
+    private static string Compact(double v) =>
+        v >= 1_000_000 ? $"{v / 1_000_000:0.##}M" : v >= 1_000 ? $"{v / 1_000:0.#}K" : v.ToString("0");
+}

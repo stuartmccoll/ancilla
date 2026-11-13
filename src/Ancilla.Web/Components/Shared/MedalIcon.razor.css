@@ -1,0 +1,13 @@
+.medal {
+    display: inline-block; position: relative; flex: none;
+    background-repeat: no-repeat;
+}
+.medal.dim { filter: grayscale(1); opacity: .3; }
+.medal.unknown { display: inline-grid; place-items: center; background: var(--track); border-radius: 50%; color: var(--muted); }
+.count {
+    position: absolute; right: -4px; bottom: -4px;
+    min-width: 1.35rem; padding: 0 .3rem; border-radius: var(--radius-pill);
+    background: var(--text); color: var(--bg);
+    font-size: .7rem; font-weight: 700; line-height: 1.35rem; text-align: center;
+    font-variant-numeric: tabular-nums;
+}

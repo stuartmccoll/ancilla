@@ -1,0 +1,135 @@
+@page "/matches/players"
+@page "/players"
+@inject HaloSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Players · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Players</h1>
+        <p>People who've been in at least two of your recent games, as teammates or opponents.</p>
+    </div>
+</div>
+
+<div class="filters">
+    <div class="chips" role="group" aria-label="Range">
+        @foreach (var r in new[] { 50, 100, 200 })
+        {
+            <button class="chip @(_range == r ? "on" : "")" @onclick="() => SetRangeAsync(r)" disabled="@_loading">Last @r</button>
+        }
+    </div>
+    <div class="chips" role="group" aria-label="Show">
+        <button class="chip @(_filter == "all" ? "on" : "")" @onclick='() => _filter = "all"'>Everyone</button>
+        <button class="chip @(_filter == "with" ? "on" : "")" @onclick='() => _filter = "with"'>Teammates</button>
+        <button class="chip @(_filter == "against" ? "on" : "")" @onclick='() => _filter = "against"'>Opponents</button>
+    </div>
+    <button class="secondary" @onclick="RefreshAsync" disabled="@_loading">Refresh</button>
+    @if (_loading)
+    {
+        <span class="muted progress" role="status">@_status</span>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@if (_companions is { } all)
+{
+    var list = all.Where(c => _filter switch { "with" => c.WithGames >= 2, "against" => c.AgainstGames >= 2, _ => true })
+                  .OrderByDescending(c => _filter switch { "with" => c.WithGames, "against" => c.AgainstGames, _ => c.Games })
+                  .ThenByDescending(c => c.LastPlayed)
+                  .ToList();
+    <section class="card list @(_loading ? "stale" : "")">
+        @if (list.Count == 0)
+        {
+            <p class="muted">Nobody shows up more than once in this range.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="l">Player</th>
+                            <th>Games</th>
+                            <th title="Your wins and losses when on the same team">With</th>
+                            <th title="Your wins and losses when on opposite teams">Against</th>
+                            <th>Their K/D</th>
+                            <th>Your K/D</th>
+                            <th class="hide-sm">Last played</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in list)
+                        {
+                            var u = _users?.GetValueOrDefault(c.Xuid);
+                            <tr @onclick='() => Nav.NavigateTo($"matches/players/{c.Xuid}?range={_range}")'>
+                                <td class="l">
+                                    <a class="who" href="matches/players/@c.Xuid?range=@_range">
+                                        @if (u?.Gamerpic?.Small is { } pic) { <img src="@pic" alt="" width="28" height="28" loading="lazy" /> }
+                                        <span>@(u?.Gamertag ?? "Player")</span>
+                                    </a>
+                                </td>
+                                <td><strong>@c.Games</strong></td>
+                                <td>@Record(c.WithWins, c.WithGames)</td>
+                                <td>@Record(c.AgainstWins, c.AgainstGames)</td>
+                                <td>@c.TheirKd.ToString("F2")</td>
+                                <td>@c.MyKd.ToString("F2")</td>
+                                <td class="hide-sm muted">@Fmt.Ago(c.LastPlayed)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="hint">"With" and "Against" are your win–loss record in those games. K/D columns cover only the games you shared.</p>
+        }
+    </section>
+}
+
+@code {
+    private int _range = 100;
+    private string _filter = "all";
+    private bool _loading;
+    private string? _status;
+    private string? _error;
+    private List<Companion>? _companions;
+    private IReadOnlyDictionary<string, UserProfile>? _users;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task SetRangeAsync(int r) { _range = r; return LoadAsync(); }
+    private Task RefreshAsync() { Session.ForgetHistory(); return LoadAsync(); }
+
+    private static string Record(int wins, int games) => games == 0 ? "—" : $"{wins}–{games - wins}";
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        _error = null;
+        _status = "Loading match history…";
+        try
+        {
+            var recent = await Session.GetRecentMatchesAsync(MatchHistoryType.All, _range, (done, total) =>
+            {
+                _status = $"Loading match {done} of {total}…";
+                _ = InvokeAsync(StateHasChanged);
+            });
+            _companions = Companion.FromMatches(recent, Session.Xuid).Values.Where(c => c.Games >= 2).ToList();
+            _status = "Looking up gamertags…";
+            StateHasChanged();
+            _users = await Session.GetUsersAsync(_companions.Select(c => c.Xuid));
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,0 +1,113 @@
+@page "/stats/medals"
+@page "/medals"
+@inject HaloSession Session
+
+<PageTitle>Medals · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Medals</h1>
+        @if (_book is not null && _sr is not null)
+        {
+            <p>@Fmt.N(_earned.Values.Sum()) medals earned · @_earned.Count of @_book.ById.Count different medals</p>
+        }
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@if (_book is { } book && _sr is not null)
+{
+    <section class="card filters">
+        <div class="chips" role="group" aria-label="Medal type">
+            <button class="chip @(_type is null ? "on" : "")" @onclick="() => _type = null">All</button>
+            @foreach (var t in book.Meta.Types)
+            {
+                <button class="chip @(_type == t ? "on" : "")" @onclick="() => _type = t">@t</button>
+            }
+        </div>
+        <div class="filter-row">
+            <label>
+                Sort
+                <select @bind="_sort">
+                    <option value="count">Most earned</option>
+                    <option value="difficulty">Hardest first</option>
+                    <option value="name">Name</option>
+                </select>
+            </label>
+            <label class="check"><input type="checkbox" @bind="_showUnearned" /> Show medals I haven't earned</label>
+        </div>
+    </section>
+
+    var list = Visible(book).ToList();
+    @if (list.Count == 0)
+    {
+        <p class="muted">No medals match.</p>
+    }
+    <div class="medal-grid">
+        @foreach (var (m, count) in list)
+        {
+            var diff = book.DifficultyOf(m);
+            <div class="medal-card @(count == 0 ? "unearned" : "")">
+                <MedalIcon Book="book" NameId="m.NameId" Size="64" Dim="count == 0" />
+                <div class="mc-body">
+                    <div class="mc-head">
+                        <span class="mc-name">@m.Name</span>
+                        <span class="mc-count">@(count == 0 ? "—" : "×" + Fmt.N(count))</span>
+                    </div>
+                    <div class="mc-desc">@m.Description</div>
+                    <div class="mc-meta">
+                        <span class="diff diff-@diff">@diff</span>
+                        <span>@book.TypeOf(m)</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (_error is null)
+{
+    <p class="muted">Loading medals…</p>
+}
+
+@code {
+    private ServiceRecord? _sr;
+    private MedalBook? _book;
+    private Dictionary<long, int> _earned = [];
+    private string? _error;
+    private string? _type;
+    private string _sort = "count";
+    private bool _showUnearned;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var sr = Session.GetServiceRecordAsync();
+            _book = await Session.GetMedalBookAsync();
+            _sr = await sr;
+            _earned = _sr.CoreStats.Medals.GroupBy(m => m.NameId).ToDictionary(g => g.Key, g => g.Sum(m => m.Count));
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+    }
+
+    private IEnumerable<(MedalDefinition Medal, int Count)> Visible(MedalBook book)
+    {
+        var items = book.ById.Values
+            .Select(m => (Medal: m, Count: _earned.GetValueOrDefault(m.NameId)))
+            .Where(x => _showUnearned || x.Count > 0)
+            .Where(x => _type is null || book.TypeOf(x.Medal) == _type);
+        return _sort switch
+        {
+            "difficulty" => items.OrderByDescending(x => x.Medal.DifficultyIndex).ThenByDescending(x => x.Count).ThenBy(x => x.Medal.Name),
+            "name" => items.OrderBy(x => x.Medal.Name),
+            _ => items.OrderByDescending(x => x.Count).ThenBy(x => x.Medal.SortingWeight),
+        };
+    }
+}

@@ -1,0 +1,161 @@
+@page "/matches/players/{Xuid}"
+@page "/players/{Xuid}"
+@inject HaloSession Session
+
+<PageTitle>@(_them?.Gamertag ?? "Player") · Ancilla</PageTitle>
+
+<p class="back"><a href="matches/players">&larr; Players</a></p>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+else if (_c is null)
+{
+    <p class="muted">@(_status ?? "Loading…")</p>
+}
+else if (_c.Games == 0)
+{
+    <p class="muted">You haven't shared a game with this player in your last @Range matches.</p>
+}
+else
+{
+    var c = _c;
+    <div class="vs-head">
+        <div class="side">
+            @if (Session.Me?.Gamerpic?.Medium is { } myPic) { <img src="@myPic" alt="" width="64" height="64" /> }
+            <span class="key-row"><span class="key you"></span>@Session.Me!.Gamertag</span>
+        </div>
+        <span class="vs">vs</span>
+        <div class="side">
+            @if (_them?.Gamerpic?.Medium is { } pic) { <img src="@pic" alt="" width="64" height="64" /> }
+            <span class="key-row"><span class="key them"></span>@(_them?.Gamertag ?? "Player")</span>
+        </div>
+    </div>
+    <p class="muted center">@c.Games shared @(c.Games == 1 ? "game" : "games") in your last @Range matches · last played @Fmt.Ago(c.LastPlayed)</p>
+
+    <section class="tiles">
+        <div class="tile"><span class="label">As teammates</span>
+            <span class="value">@(c.WithGames == 0 ? "—" : $"{c.WithWins}–{c.WithGames - c.WithWins}")</span>
+            <span class="note">@(c.WithGames == 0 ? "never on the same team" : $"{Fmt.Pct(100.0 * c.WithWins / c.WithGames, 0)} win rate together")</span></div>
+        <div class="tile"><span class="label">As opponents</span>
+            <span class="value">@(c.AgainstGames == 0 ? "—" : $"{c.AgainstWins}–{c.AgainstGames - c.AgainstWins}")</span>
+            <span class="note">@(c.AgainstGames == 0 ? "never on opposite teams" : "your record against them")</span></div>
+    </section>
+
+    <section class="card">
+        <h2>Per game, in your shared matches</h2>
+        <ul class="legend">
+            <li><span class="key you"></span>You</li>
+            <li><span class="key them"></span>@(_them?.Gamertag ?? "Them")</li>
+        </ul>
+        <div class="compare">
+            @foreach (var row in Compare(c))
+            {
+                var max = Math.Max(Math.Max(row.Mine, row.Theirs), 1e-9);
+                <div class="cmp-row">
+                    <div class="cmp-label">@row.Label</div>
+                    <div class="cmp-bars">
+                        <div class="cmp-bar" title="You: @row.Format(row.Mine)">
+                            <div class="track">
+                                <span class="fillbar you" style="width:@Fmt.Css(100 * row.Mine / max)%"></span>
+                                <span class="cmp-val @(row.Better(row.Mine, row.Theirs) ? "best" : "")">@row.Format(row.Mine)</span>
+                            </div>
+                        </div>
+                        <div class="cmp-bar" title="@(_them?.Gamertag ?? "Them"): @row.Format(row.Theirs)">
+                            <div class="track">
+                                <span class="fillbar them" style="width:@Fmt.Css(100 * row.Theirs / max)%"></span>
+                                <span class="cmp-val @(row.Better(row.Theirs, row.Mine) ? "best" : "")">@row.Format(row.Theirs)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        <p class="hint">Bold marks the better figure (fewer is better for deaths).</p>
+    </section>
+
+    <h2 class="section-title">Shared matches</h2>
+    <div class="shared">
+        @foreach (var m in c.Matches.OrderByDescending(m => m.Match.Entry.MatchInfo.StartTime))
+        {
+            var e = m.Match.Entry;
+            var mine = m.MyStats;
+            var theirs = m.TheirStats;
+            <a class="sm" href="matches/@e.MatchId">
+                <span class="badge @Fmt.OutcomeClass(m.Me.Outcome)">@Fmt.Outcome(m.Me.Outcome)</span>
+                <span class="sm-main">
+                    <span class="sm-title">@(_modes.GetValueOrDefault(e.MatchId) ?? "Match")</span>
+                    <span class="muted">@Fmt.Ago(e.MatchInfo.StartTime) · <span class="tag dim">@(m.Teammates ? "Teammate" : "Opponent")</span></span>
+                </span>
+                <span class="sm-kda"><span class="k">You</span>@(mine is null ? "—" : $"{mine.Kills}/{mine.Deaths}/{mine.Assists}")</span>
+                <span class="sm-kda"><span class="k">Them</span>@(theirs is null ? "—" : $"{theirs.Kills}/{theirs.Deaths}/{theirs.Assists}")</span>
+            </a>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string Xuid { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "range")] public int? RangeQuery { get; set; }
+
+    private int Range => RangeQuery is > 0 and <= 200 ? RangeQuery.Value : 100;
+
+    private Companion? _c;
+    private UserProfile? _them;
+    private Dictionary<string, string> _modes = [];
+    private string? _status;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _c = null; _them = null; _error = null; _modes = [];
+        if (!HaloIds.IsXuid(Xuid))
+        {
+            _error = "That isn't a valid player link.";
+            return;
+        }
+        try
+        {
+            var recent = await Session.GetRecentMatchesAsync(MatchHistoryType.All, Range, (done, total) =>
+            {
+                _status = $"Loading match {done} of {total}…";
+                _ = InvokeAsync(StateHasChanged);
+            });
+            _c = Companion.FromMatches(recent, Session.Xuid).GetValueOrDefault(Xuid) ?? new Companion(Xuid);
+            StateHasChanged();
+            _them = (await Session.GetUsersAsync([Xuid])).GetValueOrDefault(Xuid);
+            foreach (var m in _c.Matches)
+            {
+                var info = m.Match.Entry.MatchInfo;
+                var mode = await Session.GetModeAsync(info.UgcGameVariant);
+                var map = await Session.GetMapAsync(info.MapVariant);
+                _modes[m.Match.Entry.MatchId] = $"{mode?.PublicName ?? "Unknown mode"} on {map?.PublicName ?? "unknown map"}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+    }
+
+    private sealed record CompareRow(string Label, double Mine, double Theirs, Func<double, string> Format, bool LowerIsBetter = false)
+    {
+        public bool Better(double a, double b) => LowerIsBetter ? a < b : a > b;
+    }
+
+    private static IEnumerable<CompareRow> Compare(Companion c)
+    {
+        var mine = c.Matches.Select(m => m.MyStats).OfType<CoreStats>().ToList();
+        var theirs = c.Matches.Select(m => m.TheirStats).OfType<CoreStats>().ToList();
+        static double Avg(List<CoreStats> s, Func<CoreStats, double> f) => s.Count == 0 ? 0 : s.Average(f);
+        Func<double, string> one = v => v.ToString("0.0");
+        yield return new("Kills", Avg(mine, s => s.Kills), Avg(theirs, s => s.Kills), one);
+        yield return new("Deaths", Avg(mine, s => s.Deaths), Avg(theirs, s => s.Deaths), one, LowerIsBetter: true);
+        yield return new("Assists", Avg(mine, s => s.Assists), Avg(theirs, s => s.Assists), one);
+        yield return new("K/D", Companion.Kd(mine), Companion.Kd(theirs), v => v.ToString("F2"));
+        yield return new("Accuracy", Avg(mine, s => s.Accuracy), Avg(theirs, s => s.Accuracy), v => Fmt.Pct(v));
+        yield return new("Damage dealt", Avg(mine, s => s.DamageDealt), Avg(theirs, s => s.DamageDealt), v => Fmt.N(v));
+        yield return new("Personal score", Avg(mine, s => s.PersonalScore), Avg(theirs, s => s.PersonalScore), v => Fmt.N(v));
+    }
+}

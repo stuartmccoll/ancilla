@@ -1,0 +1,238 @@
+@page "/matches/trends"
+@page "/trends"
+@inject HaloSession Session
+
+<PageTitle>Trends · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Trends</h1>
+        <p>How your recent PvP games have gone, oldest on the left. Select a point to open that match.</p>
+    </div>
+</div>
+
+<div class="filters">
+    <div class="chips" role="group" aria-label="Range">
+        @foreach (var r in new[] { 25, 50, 100 })
+        {
+            <button class="chip @(_range == r ? "on" : "")" @onclick="() => SetRangeAsync(r)" disabled="@_loading">Last @r</button>
+        }
+    </div>
+    <div class="chips" role="group" aria-label="Match type">
+        @foreach (var t in new[] { MatchHistoryType.Matchmaking, MatchHistoryType.All })
+        {
+            <button class="chip @(_type == t ? "on" : "")" @onclick="() => SetTypeAsync(t)" disabled="@_loading">@t</button>
+        }
+    </div>
+    <button class="secondary" @onclick="RefreshAsync" disabled="@_loading">Refresh</button>
+    @if (_loading)
+    {
+        <span class="muted progress" role="status">@_status</span>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@if (_points is { } pts)
+{
+    <div class="@(_loading ? "stale" : "")">
+        @if (pts.Count == 0)
+        {
+            <section class="card"><p class="muted">No PvP games in this range.</p></section>
+        }
+        else
+        {
+            var kills = pts.Sum(p => p.S.Kills);
+            var deaths = pts.Sum(p => p.S.Deaths);
+            var wins = pts.Count(p => p.Me.Outcome == MatchOutcome.Win);
+            var withSkill = pts.Where(p => p.KillsVsExpected is not null).ToList();
+            <section class="tiles">
+                <div class="tile"><span class="label">PvP games</span><span class="value">@pts.Count</span>
+                    @if (_pveSkipped > 0) { <span class="note">@_pveSkipped Firefight left out</span> }</div>
+                <div class="tile"><span class="label">Win rate</span><span class="value">@Fmt.Pct(100.0 * wins / pts.Count, 0)</span>
+                    <span class="note">@wins of @pts.Count</span></div>
+                <div class="tile"><span class="label">K/D</span><span class="value">@((deaths == 0 ? kills : (double)kills / deaths).ToString("F2"))</span>
+                    <span class="note">@Fmt.N(kills) / @Fmt.N(deaths)</span></div>
+                <div class="tile"><span class="label">Avg accuracy</span><span class="value">@Fmt.Pct(pts.Average(p => p.S.Accuracy))</span></div>
+                @if (withSkill.Count > 0)
+                {
+                    var avg = withSkill.Average(p => p.KillsVsExpected!.Value);
+                    <div class="tile"><span class="label">Kills vs expected</span>
+                        <span class="value">@avg.ToString("+0.0;-0.0;0")</span><span class="note">per game</span></div>
+                }
+            </section>
+
+            <section class="card">
+                <h2>K/D by match</h2>
+                <MatchChart Title="K/D by match, with a rolling average" Columns="_columns!" Series="_kdSeries!" RefLine="1"
+                            YFormat='v => v.ToString("0.#")' />
+                <p class="hint">The line is your K/D over the previous @RollingWindow games. The grey line marks 1.0.</p>
+            </section>
+
+            <section class="card">
+                <h2>Kills against expectations</h2>
+                @if (_skillLoaded)
+                {
+                    <MatchChart Title="Kills above or below what the matchmaker expected" Columns="_columns!" Series="_perfSeries!"
+                                YFormat='v => v.ToString("+0;-0;0")' Empty="No skill data for these games." />
+                    <p class="hint">How many more (or fewer) kills you got than the matchmaker predicted for a player of your skill in that lobby.</p>
+                }
+                else
+                {
+                    <p class="muted">Loading skill data…</p>
+                }
+            </section>
+
+            <section class="card">
+                <h2>Ranked CSR</h2>
+                @if (!_skillLoaded)
+                {
+                    <p class="muted">Loading skill data…</p>
+                }
+                else if (_csrColumns!.Count == 0)
+                {
+                    <p class="muted">No ranked games in this range. CSR only changes in ranked playlists.</p>
+                }
+                else
+                {
+                    <MatchChart Title="CSR after each ranked match" Columns="_csrColumns" Series="_csrSeries!" YFormat='v => v.ToString("N0")' />
+                }
+            </section>
+        }
+    </div>
+}
+else if (!_loading && _error is null)
+{
+    <p class="muted">Loading…</p>
+}
+
+@code {
+    private const int RollingWindow = 10;
+
+    private sealed record Point(RecentMatch M, MatchPlayer Me, CoreStats S, double KD)
+    {
+        public MatchSkill? Skill { get; set; }
+        public double? KillsVsExpected => Skill?.StatPerformances?.GetValueOrDefault("Kills") is { } k ? k.Count - k.Expected : null;
+    }
+
+    private int _range = 50;
+    private MatchHistoryType _type = MatchHistoryType.Matchmaking;
+    private bool _loading;
+    private bool _skillLoaded;
+    private string? _status;
+    private string? _error;
+    private int _pveSkipped;
+    private List<Point>? _points;
+    private List<ChartColumn>? _columns, _csrColumns;
+    private List<ChartSeries>? _kdSeries, _perfSeries, _csrSeries;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task SetRangeAsync(int r) { _range = r; return LoadAsync(); }
+    private Task SetTypeAsync(MatchHistoryType t) { _type = t; return LoadAsync(); }
+    private Task RefreshAsync() { Session.ForgetHistory(); return LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        _error = null;
+        _status = "Loading match history…";
+        try
+        {
+            var recent = await Session.GetRecentMatchesAsync(_type, _range, (done, total) =>
+            {
+                _status = $"Loading match {done} of {total}…";
+                _ = InvokeAsync(StateHasChanged);
+            });
+
+            var xuid = Session.Xuid;
+            var points = new List<Point>();
+            _pveSkipped = 0;
+            foreach (var m in recent.Reverse())   // oldest first, left to right
+            {
+                if (m.IsPve(xuid)) { _pveSkipped++; continue; }
+                var me = m.Stats.Players.FirstOrDefault(p => p.Xuid == xuid);
+                if (me?.Stats?.CoreStats is not { } s) continue;
+                points.Add(new Point(m, me, s, s.Deaths == 0 ? s.Kills : (double)s.Kills / s.Deaths));
+            }
+
+            // Mode and map names for the tooltips (cached; there are only a handful of distinct ones).
+            var names = new Dictionary<string, string>();
+            foreach (var p in points)
+            {
+                var info = p.M.Entry.MatchInfo;
+                var mode = await Session.GetModeAsync(info.UgcGameVariant);
+                var map = await Session.GetMapAsync(info.MapVariant);
+                names[p.M.Entry.MatchId] = $"{Fmt.Outcome(p.Me.Outcome)} · {mode?.PublicName ?? "Unknown mode"} on {map?.PublicName ?? "unknown map"}";
+            }
+
+            _points = points;
+            _columns = points.Select(p => Column(p, names)).ToList();
+            _kdSeries =
+            [
+                new("Match K/D", "--viz-1", SeriesKind.Dots, points.Select(p => (double?)p.KD).ToArray(), v => v.ToString("F2")),
+                new($"{RollingWindow}-game K/D", "--viz-2", SeriesKind.Line, Rolling(points), v => v.ToString("F2")),
+            ];
+            _skillLoaded = false;
+            _status = "Loading skill data…";
+            StateHasChanged();
+
+            var skills = await Session.GetSkillsAsync(points.Select(p => p.M.Entry.MatchId));
+            foreach (var p in points) p.Skill = skills.GetValueOrDefault(p.M.Entry.MatchId);
+
+            _perfSeries =
+            [
+                new("Kills vs expected", "--viz-1", SeriesKind.Bars, points.Select(p => p.KillsVsExpected).ToArray(), v => v.ToString("+0.0;-0.0;0"))
+                {
+                    NegColor = "--viz-neg", PosLabel = "More kills than expected", NegLabel = "Fewer kills than expected",
+                },
+            ];
+
+            var ranked = points.Where(p => p.Skill?.RankRecap?.PostMatchCsr is { IsRanked: true }).ToList();
+            _csrColumns = ranked.Select(p => Column(p, names)).ToList();
+            _csrSeries =
+            [
+                new("CSR", "--viz-1", SeriesKind.LineDots,
+                    ranked.Select(p => (double?)p.Skill!.RankRecap!.PostMatchCsr!.Value).ToArray(),
+                    v => v.ToString("N0")),
+            ];
+            _skillLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static ChartColumn Column(Point p, Dictionary<string, string> names)
+    {
+        var e = p.M.Entry;
+        return new ChartColumn(
+            Title: Fmt.When(e.MatchInfo.StartTime),
+            AxisLabel: e.MatchInfo.StartTime.ToLocalTime().ToString("d MMM"),
+            Note: $"{names.GetValueOrDefault(e.MatchId)} · {p.S.Kills}/{p.S.Deaths}/{p.S.Assists}",
+            Href: $"matches/{e.MatchId}");
+    }
+
+    /// <summary>K/D over the previous N games (total kills / total deaths), once at least half a window exists.</summary>
+    private static double?[] Rolling(List<Point> pts)
+    {
+        var result = new double?[pts.Count];
+        for (var i = 0; i < pts.Count; i++)
+        {
+            var window = pts.Skip(Math.Max(0, i - RollingWindow + 1)).Take(Math.Min(RollingWindow, i + 1)).ToList();
+            if (window.Count < RollingWindow / 2) continue;
+            var d = window.Sum(p => p.S.Deaths);
+            result[i] = d == 0 ? window.Sum(p => p.S.Kills) : (double)window.Sum(p => p.S.Kills) / d;
+        }
+        return result;
+    }
+}

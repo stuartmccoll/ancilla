@@ -1,0 +1,272 @@
+@page "/matches/insights"
+@page "/insights"
+@inject HaloSession Session
+
+<PageTitle>Insights · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Insights</h1>
+        <p>Where you do well, how you compare with the matchmaker's predictions, and whether your lobbies were fair.</p>
+    </div>
+</div>
+
+<div class="filters">
+    <div class="chips" role="group" aria-label="Range">
+        @foreach (var r in new[] { 50, 100, 200 })
+        {
+            <button class="chip @(_range == r ? "on" : "")" @onclick="() => SetRangeAsync(r)" disabled="@_loading">Last @r</button>
+        }
+    </div>
+    <div class="chips" role="group" aria-label="Match type">
+        @foreach (var t in new[] { MatchHistoryType.Matchmaking, MatchHistoryType.All })
+        {
+            <button class="chip @(_type == t ? "on" : "")" @onclick="() => SetTypeAsync(t)" disabled="@_loading">@t</button>
+        }
+    </div>
+    <button class="secondary" @onclick="RefreshAsync" disabled="@_loading">Refresh</button>
+    @if (_loading)
+    {
+        <span class="muted progress" role="status">@_status</span>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@if (_games is { } games)
+{
+    <div class="@(_loading ? "stale" : "")">
+        @if (games.Count == 0)
+        {
+            <section class="card"><p class="muted">No PvP games in this range.</p></section>
+        }
+        else
+        {
+            <p class="muted scope">@games.Count PvP games@(_pveSkipped > 0 ? $" ({_pveSkipped} Firefight left out)" : "").</p>
+
+            @* ---- 1. Performance by map / mode / playlist ---- *@
+            <section class="card">
+                <div class="card-head">
+                    <h2>Where you do best</h2>
+                    <div class="chips" role="group" aria-label="Group by">
+                        @foreach (var d in new[] { "Map", "Mode", "Playlist" })
+                        {
+                            <button class="chip @(_dim == d ? "on" : "")" @onclick="() => _dim = d">@d</button>
+                        }
+                    </div>
+                </div>
+                @{ var (rows, panels) = ByDimension(games); }
+                <DotPlot Title="@($"Win rate and K/D by {_dim.ToLowerInvariant()}")" Rows="rows" Panels="panels" CategoryName="@_dim" />
+                <p class="hint">Sorted by games played; the number by each name is how many. Hollow dots are based on fewer than 3 games, so treat them with caution.</p>
+            </section>
+
+            @* ---- 2. Expected vs actual kills ---- *@
+            <section class="card">
+                <h2>Kills against expectations</h2>
+                @if (_skills is null)
+                {
+                    <p class="muted">Loading skill data…</p>
+                }
+                else
+                {
+                    <ScatterPlot Title="Actual kills against the matchmaker's expected kills, per game"
+                                 Points="Scatter(games)" Groups="ScatterGroups"
+                                 XLabel="Expected kills" YLabel="Actual kills" Empty="No skill data for these games." />
+                    <p class="hint">Each dot is a game. "Expected" is what the matchmaker predicted for a player of your skill in that lobby; dots above the diagonal beat it.</p>
+                }
+            </section>
+
+            @* ---- 3. Match fairness ---- *@
+            <section class="card">
+                <h2>Were your matches fair?</h2>
+                @if (_skills is null)
+                {
+                    <p class="muted">Loading skill data…</p>
+                }
+                else if (Fairness(games) is not { Count: > 0 } fair)
+                {
+                    <p class="muted">No team MMR data for these games.</p>
+                }
+                else
+                {
+                    var wins = fair.Where(f => f.Won).ToList();
+                    var losses = fair.Where(f => !f.Won).ToList();
+                    var under = fair.Count(f => f.Gap < -EvenBand);
+                    <div class="mini-tiles">
+                        <div><span class="label">Avg MMR gap in wins</span><span class="value">@(wins.Count == 0 ? "—" : wins.Average(f => f.Gap).ToString("+0;-0;0"))</span></div>
+                        <div><span class="label">Avg MMR gap in losses</span><span class="value">@(losses.Count == 0 ? "—" : losses.Average(f => f.Gap).ToString("+0;-0;0"))</span></div>
+                        <div><span class="label">Games as the underdog</span><span class="value">@Fmt.Pct(100.0 * under / fair.Count, 0)</span><span class="note">@under of @fair.Count</span></div>
+                    </div>
+                    <ColumnChart Title="Win rate by how your team's MMR compared with the other team's"
+                                 Buckets="Buckets(fair)" Ref="50" ValueName="win rate" CategoryName="Your team vs theirs" />
+                    <p class="hint">
+                        MMR gap = your team's average matchmaking rating minus the other team's. Negative means you were the underdog.
+                        "Even" is within ±@EvenBand. The grey line marks 50%.
+                    </p>
+                }
+            </section>
+        }
+    </div>
+}
+
+@code {
+    private const int EvenBand = 25;
+    private const int WideBand = 75;
+
+    private sealed record Game(RecentMatch M, MatchPlayer Me, CoreStats S, string Map, string Mode, string Playlist)
+    {
+        public bool Won => Me.Outcome == MatchOutcome.Win;
+        public string Id => M.Entry.MatchId;
+    }
+
+    private sealed record FairGame(Game G, double Gap)
+    {
+        public bool Won => G.Won;
+    }
+
+    private static readonly IReadOnlyList<ScatterGroup> ScatterGroups =
+        [new("Win", "--viz-1"), new("Loss or other", "--viz-2")];
+
+    private int _range = 100;
+    private MatchHistoryType _type = MatchHistoryType.Matchmaking;
+    private string _dim = "Map";
+    private bool _loading;
+    private string? _status;
+    private string? _error;
+    private int _pveSkipped;
+    private List<Game>? _games;
+    private IReadOnlyDictionary<string, MatchSkill>? _skills;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task SetRangeAsync(int r) { _range = r; return LoadAsync(); }
+    private Task SetTypeAsync(MatchHistoryType t) { _type = t; return LoadAsync(); }
+    private Task RefreshAsync() { Session.ForgetHistory(); return LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        _error = null;
+        _status = "Loading match history…";
+        try
+        {
+            var recent = await Session.GetRecentMatchesAsync(_type, _range, (done, total) =>
+            {
+                _status = $"Loading match {done} of {total}…";
+                _ = InvokeAsync(StateHasChanged);
+            });
+            var xuid = Session.Xuid;
+            var games = new List<Game>();
+            _pveSkipped = 0;
+            _status = "Looking up maps and modes…";
+            StateHasChanged();
+            foreach (var m in recent)
+            {
+                if (m.IsPve(xuid)) { _pveSkipped++; continue; }
+                var me = m.Stats.Players.FirstOrDefault(p => p.Xuid == xuid);
+                if (me?.Stats?.CoreStats is not { } s) continue;
+                var info = m.Entry.MatchInfo;
+                var map = await Session.GetMapAsync(info.MapVariant);
+                var mode = await Session.GetModeAsync(info.UgcGameVariant);
+                var playlist = await Session.GetPlaylistAsync(info.Playlist);
+                games.Add(new Game(m, me, s, map?.PublicName ?? "Unknown map", mode?.PublicName ?? "Unknown mode",
+                    playlist?.PublicName ?? (info.Playlist is null ? "Custom game" : "Unknown playlist")));
+            }
+            _games = games;
+            _skills = null;
+            _status = "Loading skill data…";
+            StateHasChanged();
+            _skills = await Session.GetSkillsAsync(games.Select(g => g.Id));
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static double Kd(IEnumerable<Game> gs)
+    {
+        var k = gs.Sum(g => g.S.Kills);
+        var d = gs.Sum(g => g.S.Deaths);
+        return d == 0 ? k : (double)k / d;
+    }
+
+    private (List<DotRow>, List<DotPanel>) ByDimension(List<Game> games)
+    {
+        Func<Game, string> key = _dim switch { "Mode" => g => g.Mode, "Playlist" => g => g.Playlist, _ => g => g.Map };
+        var rows = games.GroupBy(key)
+            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key)
+            .Take(15)
+            .Select(g =>
+            {
+                var list = g.ToList();
+                var wins = list.Count(x => x.Won);
+                var kd = Kd(list);
+                return new DotRow(g.Key, list.Count, [100.0 * wins / list.Count, kd],
+                [
+                    $"{wins}–{list.Count - wins} in {list.Count} {(list.Count == 1 ? "game" : "games")}",
+                    $"{list.Sum(x => x.S.Kills)} kills, {list.Sum(x => x.S.Deaths)} deaths",
+                ]);
+            })
+            .ToList();
+        var overallWin = 100.0 * games.Count(g => g.Won) / games.Count;
+        var overallKd = Kd(games);
+        var kdMax = Math.Max(2, rows.Max(r => r.Values[1]));
+        List<DotPanel> panels =
+        [
+            new("Win rate", 0, 100, overallWin, $"overall {Fmt.Pct(overallWin, 0)}", v => Fmt.Pct(v, 0), "--viz-1"),
+            new("K/D", 0, kdMax, overallKd, $"overall {overallKd:F2}", v => v.ToString("0.##"), "--viz-1"),
+        ];
+        return (rows, panels);
+    }
+
+    private List<ScatterPoint> Scatter(List<Game> games) =>
+        games.Select(g => (g, k: _skills!.GetValueOrDefault(g.Id)?.StatPerformances?.GetValueOrDefault("Kills")))
+            .Where(x => x.k is not null)
+            .Select(x => new ScatterPoint(x.k!.Expected, x.k.Count, x.g.Won ? 0 : 1,
+                Fmt.When(x.g.M.Entry.MatchInfo.StartTime),
+                $"{Fmt.Outcome(x.g.Me.Outcome)} · {x.g.Mode} on {x.g.Map}",
+                $"matches/{x.g.Id}"))
+            .ToList();
+
+    private List<FairGame> Fairness(List<Game> games)
+    {
+        var result = new List<FairGame>();
+        foreach (var g in games)
+        {
+            if (_skills!.GetValueOrDefault(g.Id) is not { TeamMmrs: { Count: >= 2 } mmrs } sk) continue;
+            if (!mmrs.TryGetValue(sk.TeamId.ToString(), out var mine)) continue;
+            var others = mmrs.Where(t => t.Key != sk.TeamId.ToString()).Select(t => t.Value).ToList();
+            result.Add(new FairGame(g, mine - others.Average()));
+        }
+        return result;
+    }
+
+    private static List<ColumnBucket> Buckets(List<FairGame> fair)
+    {
+        (string Label, string Range, Func<double, bool> In)[] defs =
+        [
+            ("Much weaker", $"below −{WideBand}", g => g < -WideBand),
+            ("Weaker", $"−{WideBand} to −{EvenBand}", g => g >= -WideBand && g < -EvenBand),
+            ("Even", $"±{EvenBand}", g => g >= -EvenBand && g <= EvenBand),
+            ("Stronger", $"+{EvenBand} to +{WideBand}", g => g > EvenBand && g <= WideBand),
+            ("Much stronger", $"above +{WideBand}", g => g > WideBand),
+        ];
+        return defs.Select(d =>
+        {
+            var inBucket = fair.Where(f => d.In(f.Gap)).ToList();
+            var wins = inBucket.Count(f => f.Won);
+            return new ColumnBucket(d.Label, $"{d.Range} · {inBucket.Count} {(inBucket.Count == 1 ? "game" : "games")}",
+                inBucket.Count == 0 ? null : 100.0 * wins / inBucket.Count,
+                inBucket.Count == 0 ? [] : [$"{wins}–{inBucket.Count - wins}", $"avg gap {inBucket.Average(f => f.Gap):+0;-0;0}"]);
+        }).ToList();
+    }
+}

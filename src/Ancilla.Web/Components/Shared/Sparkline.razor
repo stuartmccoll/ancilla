@@ -1,0 +1,32 @@
+@*
+    A small trend line for stat tiles: de-emphasised line, the latest point in the accent colour,
+    an optional hairline reference (e.g. K/D 1.0). Each point has a native tooltip.
+*@
+
+@if (Values.Count >= 2)
+{
+    var lo = Math.Min(Values.Min(), Ref ?? double.MaxValue);
+    var hi = Math.Max(Values.Max(), Ref ?? double.MinValue);
+    if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+    double X(int i) => (double)i / (Values.Count - 1) * 100;
+    double Y(double v) => (hi - v) / (hi - lo) * 100;
+    <div class="spark" role="img" aria-label="@Label">
+        <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+            @if (Ref is { } r) { <line x1="0" x2="1000" y1="@Fmt.Css(Y(r) * 10)" y2="@Fmt.Css(Y(r) * 10)" class="ref" /> }
+            <polyline class="line" points="@string.Join(' ', Values.Select((v, i) => $"{Fmt.Css(X(i) * 10)},{Fmt.Css(Y(v) * 10)}"))" />
+        </svg>
+        <span class="end" style="left:100%;top:@Fmt.Css(Y(Values[^1]))%"></span>
+        <div class="hits" aria-hidden="true">
+            @for (var i = 0; i < Values.Count; i++)
+            {
+                <span title="@Values[i].ToString("F2")"></span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<double> Values { get; set; } = [];
+    [Parameter] public double? Ref { get; set; }
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+}

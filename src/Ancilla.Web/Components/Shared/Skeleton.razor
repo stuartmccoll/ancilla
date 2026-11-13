@@ -1,0 +1,10 @@
+<div class="sk" aria-busy="true" aria-label="Loading">
+    @for (var i = 0; i < Lines; i++)
+    {
+        <span class="skeleton" style="width:@(i % 3 == 2 ? 55 : i % 2 == 0 ? 90 : 75)%"></span>
+    }
+</div>
+
+@code {
+    [Parameter] public int Lines { get; set; } = 3;
+}

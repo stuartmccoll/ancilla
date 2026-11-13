@@ -1,0 +1,58 @@
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; margin: 0 0 .9rem; padding: 0; font-size: .85rem; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: .45rem; }
+.k-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+.k-dot.hollow { border: 2px solid; background: var(--surface); }
+.k-ref { display: inline-block; width: 1px; height: 12px; background: var(--viz-ref); }
+
+.dotplot { display: grid; grid-template-columns: minmax(7rem, 13rem) repeat(var(--panels), minmax(0, 1fr)); column-gap: 2rem; }
+.hdr { padding-bottom: .4rem; }
+.ptitle { font-size: .8rem; font-weight: 700; margin-bottom: .2rem; }
+.ptitle .muted { font-weight: 400; }
+.ticks { position: relative; height: 1rem; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.ticks span:first-child { transform: none; }
+.ticks span:last-child { transform: translateX(-100%); }
+
+/* Each row is a subgrid: a real box (focusable, anchors its tooltip) that still shares the columns. */
+.row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; position: relative; border-top: 1px solid var(--border); }
+.label-col { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .45rem 0; min-width: 0; }
+.rlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rcount { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.track { position: relative; min-height: 2rem; }
+.gl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--viz-grid); }
+.rl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--viz-ref); }
+.pt {
+    position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
+    transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--surface);
+}
+.pt.solid { background: var(--c); }
+.pt.hollow { background: var(--surface); border: 2px solid var(--c); }
+
+/* Row hover: the whole row is the hit target. */
+.row:hover, .row:focus-visible { background: color-mix(in srgb, var(--track) 60%, transparent); }
+.row:focus-visible { outline: none; box-shadow: inset 3px 0 0 var(--accent); }
+.tip {
+    display: none; position: absolute; z-index: 5; flex-direction: column; gap: .15rem;
+    top: calc(100% - 2px); left: 0;
+    min-width: 11rem; padding: .55rem .7rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 6px 18px rgba(0,0,0,.18);
+    font-size: .8rem; pointer-events: none;
+}
+.row:hover > .tip, .row:focus-visible > .tip { display: flex; }
+.tip-title { font-weight: 700; }
+.tip-row { font-variant-numeric: tabular-nums; }
+.tip-note { color: var(--muted); }
+
+.table-view { margin-top: .75rem; font-size: .85rem; }
+.table-view summary { cursor: pointer; color: var(--muted); }
+.table-wrap { overflow-x: auto; max-height: 20rem; overflow-y: auto; margin-top: .5rem; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: .35rem .6rem; text-align: right; white-space: nowrap; border-top: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+.l { text-align: left; }
+
+@media (max-width: 640px) {
+    .dotplot { grid-template-columns: repeat(var(--panels), minmax(0, 1fr)); column-gap: .9rem; }
+    .hdr.label-col { display: none; }
+    .row > .label-col { grid-column: 1 / -1; padding-bottom: 0; }
+}

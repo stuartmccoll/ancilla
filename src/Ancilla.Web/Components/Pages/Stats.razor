@@ -1,0 +1,155 @@
+@page "/stats"
+@inject HaloSession Session
+
+<PageTitle>Service record · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Service record</h1>
+        <p>Lifetime matchmade stats.</p>
+    </div>
+    <button class="secondary" @onclick="() => LoadAsync(true)" disabled="@_loading">@(_loading ? "Loading…" : "Refresh")</button>
+</div>
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
+
+@if (_sr is { } sr)
+{
+    var c = sr.CoreStats;
+    var played = sr.MatchesCompleted;
+    <section class="tiles">
+        <div class="tile"><span class="label">Matches</span><span class="value">@Fmt.N(played)</span>
+            <span class="note">@Fmt.N(sr.Wins)W · @Fmt.N(sr.Losses)L · @Fmt.N(sr.Ties)T</span></div>
+        <div class="tile"><span class="label">Win rate</span><span class="value">@Fmt.Pct(played == 0 ? 0 : 100.0 * sr.Wins / played)</span></div>
+        <div class="tile"><span class="label">Time played</span><span class="value">@Fmt.Duration(sr.TimePlayed)</span></div>
+        <div class="tile"><span class="label">K/D</span><span class="value">@c.KillDeathRatio.ToString("F2")</span>
+            <span class="note">@Fmt.N(c.Kills) / @Fmt.N(c.Deaths)</span></div>
+        <div class="tile"><span class="label">Avg KDA</span><span class="value">@((c.AverageKDA ?? 0).ToString("F2"))</span></div>
+        <div class="tile"><span class="label">Accuracy</span><span class="value">@Fmt.Pct(c.Accuracy)</span></div>
+    </section>
+
+    <section class="card">
+        <h2>Ranked</h2>
+        @if (_ranked is null)
+        {
+            <p class="muted">Checking ranked playlists…</p>
+        }
+        else if (_ranked.Count == 0)
+        {
+            <p class="muted">No ranked playlist data.</p>
+        }
+        else
+        {
+            <div class="ranked">
+                @foreach (var p in _ranked)
+                {
+                    <div class="ranked-row">
+                        <div class="ranked-name">@p.Name</div>
+                        <CsrCell Label="Current" Csr="p.Csr.Current" ShowPlacement="true" />
+                        <CsrCell Label="Season best" Csr="p.Csr.SeasonMax" />
+                        <CsrCell Label="All-time best" Csr="p.Csr.AllTimeMax" />
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    @if (_book is not null && c.Medals.Count > 0)
+    {
+        <section class="card">
+            <h2>Most earned medals</h2>
+            <div class="top-medals">
+                @foreach (var m in c.Medals.OrderByDescending(m => m.Count).Take(12))
+                {
+                    <div class="top-medal">
+                        <MedalIcon Book="_book" NameId="m.NameId" Size="56" />
+                        <span class="tm-count">@Fmt.N(m.Count)</span>
+                        <span class="tm-name">@(_book.ById.GetValueOrDefault(m.NameId)?.Name)</span>
+                    </div>
+                }
+            </div>
+            <p class="hint"><a href="stats/medals">All medals &rarr;</a></p>
+        </section>
+    }
+
+    <section class="card">
+        <h2>Combat</h2>
+        <dl class="kv">
+            @foreach (var (label, value) in Combat(c))
+            {
+                <div><dt>@label</dt><dd>@value</dd></div>
+            }
+        </dl>
+    </section>
+
+    <h2 class="section-title">By mode</h2>
+    <StatGroups Groups="sr.ModeStats" />
+}
+else if (_loading)
+{
+    <p class="muted">Loading service record…</p>
+}
+
+@code {
+    private ServiceRecord? _sr;
+    private IReadOnlyList<RankedPlaylist>? _ranked;
+    private MedalBook? _book;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync(false);
+
+    private async Task LoadAsync(bool refresh)
+    {
+        if (_loading) return;
+        _loading = true;
+        _error = null;
+        if (refresh) _ranked = null;
+        try
+        {
+            _sr = await Session.GetServiceRecordAsync(refresh);
+            StateHasChanged();
+            var book = Session.GetMedalBookAsync();
+            var ranked = Session.GetRankedAsync();
+            try { _book = await book; } catch (HttpRequestException) { }
+            StateHasChanged();
+            _ranked = await ranked;
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static IEnumerable<(string, string)> Combat(CoreStats c)
+    {
+        string Share(int n) => c.Kills == 0 ? "" : $" ({100.0 * n / c.Kills:F0}%)";
+        yield return ("Kills", Fmt.N(c.Kills));
+        yield return ("Deaths", Fmt.N(c.Deaths));
+        yield return ("Assists", Fmt.N(c.Assists));
+        yield return ("Headshot kills", Fmt.N(c.HeadshotKills) + Share(c.HeadshotKills));
+        yield return ("Melee kills", Fmt.N(c.MeleeKills) + Share(c.MeleeKills));
+        yield return ("Grenade kills", Fmt.N(c.GrenadeKills) + Share(c.GrenadeKills));
+        yield return ("Power weapon kills", Fmt.N(c.PowerWeaponKills) + Share(c.PowerWeaponKills));
+        yield return ("Damage dealt", Fmt.N(c.DamageDealt));
+        yield return ("Damage taken", Fmt.N(c.DamageTaken));
+        yield return ("Damage ratio", c.DamageTaken == 0 ? "—" : ((double)c.DamageDealt / c.DamageTaken).ToString("F2"));
+        yield return ("Shots fired", Fmt.N(c.ShotsFired));
+        yield return ("Shots hit", Fmt.N(c.ShotsHit));
+        yield return ("Best killing spree", Fmt.N(c.MaxKillingSpree));
+        yield return ("Callout assists", Fmt.N(c.CalloutAssists));
+        yield return ("Vehicles destroyed", Fmt.N(c.VehicleDestroys));
+        yield return ("Hijacks", Fmt.N(c.Hijacks));
+        yield return ("Driver assists", Fmt.N(c.DriverAssists));
+        yield return ("Objectives completed", Fmt.N(c.ObjectivesCompleted));
+        yield return ("Betrayals", Fmt.N(c.Betrayals));
+        yield return ("Suicides", Fmt.N(c.Suicides));
+    }
+}

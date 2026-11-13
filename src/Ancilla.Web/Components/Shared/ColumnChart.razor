@@ -1,0 +1,66 @@
+@*
+    Columns on a 0–100% scale with a reference line. Each column is its own hover/focus target;
+    the value sits on the cap; the sub-label (e.g. game count) sits under the axis label.
+*@
+
+@{
+    var ticks = new[] { 0.0, 25, 50, 75, 100 };
+}
+<div class="colchart" role="group" aria-label="@Title">
+    <div class="yaxis" aria-hidden="true">
+        @foreach (var t in ticks) { <span style="bottom:@Fmt.Css(t)%">@t%</span> }
+    </div>
+    <div class="plot" style="height:@(Height)px">
+        @foreach (var t in ticks) { <span class="gl" style="bottom:@Fmt.Css(t)%"></span> }
+        @if (Ref is { } r) { <span class="rl" style="bottom:@Fmt.Css(r)%"></span> }
+        <div class="cols" style="--n:@Buckets.Count">
+            @foreach (var b in Buckets)
+            {
+                <div class="col" tabindex="0" aria-label="@($"{b.Label}: {(b.Value is { } av ? Fmt.Pct(av, 0) : "no games")}. {string.Join(". ", b.Detail)}")">
+                    @if (b.Value is { } v)
+                    {
+                        <span class="colbar" style="height:@Fmt.Css(Math.Max(v, 0.5))%"><span class="cap">@Fmt.Pct(v, 0)</span></span>
+                    }
+                    else
+                    {
+                        <span class="none">no games</span>
+                    }
+                    <span class="tip" role="tooltip">
+                        <span class="tip-title">@b.Label</span>
+                        @if (b.Value is { } tv) { <span class="tip-row"><strong>@Fmt.Pct(tv, 0)</strong> <span class="muted">@ValueName</span></span> }
+                        @foreach (var d in b.Detail) { <span class="tip-note">@d</span> }
+                    </span>
+                </div>
+            }
+        </div>
+    </div>
+    <div></div>
+    <div class="xaxis" style="--n:@Buckets.Count" aria-hidden="true">
+        @foreach (var b in Buckets)
+        {
+            <span><span class="xl">@b.Label</span>@if (b.SubLabel is not null) { <span class="xs">@b.SubLabel</span> }</span>
+        }
+    </div>
+</div>
+
+<details class="table-view">
+    <summary>Show as table</summary>
+    <table>
+        <thead><tr><th class="l">@CategoryName</th><th>@ValueName</th><th class="l">Detail</th></tr></thead>
+        <tbody>
+            @foreach (var b in Buckets)
+            {
+                <tr><td class="l">@b.Label</td><td>@(b.Value is { } v ? Fmt.Pct(v, 0) : "—")</td><td class="l">@string.Join(" · ", b.Detail)</td></tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<ColumnBucket> Buckets { get; set; } = [];
+    [Parameter] public double? Ref { get; set; }
+    [Parameter] public string ValueName { get; set; } = "Value";
+    [Parameter] public string CategoryName { get; set; } = "Bucket";
+    [Parameter] public int Height { get; set; } = 200;
+}

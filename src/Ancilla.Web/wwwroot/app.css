@@ -1,0 +1,266 @@
+:root {
+    color-scheme: light;
+    --bg: #f3f5f7;
+    --surface: #ffffff;
+    --border: #dde2e7;
+    --text: #15202b;
+    --muted: #5b6b7a;
+    --accent: #2f7d4f;
+    --on-accent: #ffffff;
+    --track: #e6eaee;
+    --danger: #b3261e;
+    --win: #2f7d4f;
+    --loss: #b3261e;
+    --tie: #8a6d1a;
+    --left: #6b7785;
+    --hero-text: #ffffff;
+    /* Chart colours: validated pairs (CVD + normal-vision separation, 3:1 on the surface). */
+    --viz-1: #2a78d6;
+    --viz-2: #eb6834;
+    --viz-neg: #e34948;
+    --viz-grid: #e6eaee;
+    --viz-ref: #9aa6b1;
+
+    /* Shape and type. Themes override these as well as the colours. */
+    --radius-lg: 10px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
+    --radius-pill: 999px;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-display: var(--font-body);
+    --display-transform: none;
+    --display-spacing: normal;
+    --page-bg: var(--bg);
+}
+
+/* Basic follows the system light/dark setting; the other themes are always dark. */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --bg: #0e1418;
+        --surface: #161f25;
+        --border: #263139;
+        --text: #e6edf2;
+        --muted: #8fa1ae;
+        --accent: #5cc98a;
+        --on-accent: #0b1a12;
+        --track: #22303a;
+        --danger: #ff8a80;
+        --win: #5cc98a;
+        --loss: #ff8a80;
+        --tie: #e2c15c;
+        --left: #8fa1ae;
+        --viz-1: #3987e5;
+        --viz-2: #d95926;
+        --viz-neg: #e66767;
+        --viz-grid: #263139;
+        --viz-ref: #5d6d79;
+    }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+    background: var(--page-bg);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.45;
+}
+h1, h2, h3, .brand, .tile .value, .value, .big, .rank-title, .perf-val {
+    font-family: var(--font-display);
+}
+h1, .brand { text-transform: var(--display-transform); letter-spacing: var(--display-spacing); }
+img { max-width: 100%; }
+a { color: var(--accent); }
+
+input, button, select { font: inherit; color: inherit; }
+input[type=password], input[type=number], input[type=text], select {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem .65rem;
+}
+input:focus-visible, button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=checkbox] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+button {
+    background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--radius-sm);
+    padding: .55rem 1.2rem; font-weight: 600; cursor: pointer;
+}
+button.secondary { background: var(--track); color: var(--text); }
+button:disabled { opacity: .5; cursor: default; }
+code { font-size: .9em; background: var(--track); padding: .05rem .3rem; border-radius: 4px; }
+h1:focus { outline: none; }
+
+/* ---- Shared building blocks ---- */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.page-head h1 { margin: 0; font-size: 1.7rem; }
+.page-head p { margin: .2rem 0 0; color: var(--muted); }
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    min-width: 0;
+}
+.card > h2, .section-title {
+    margin: 0 0 1rem; font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700;
+}
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: .9rem 1.1rem; display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.tile .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.tile .value { font-size: 1.45rem; font-weight: 700; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tile .note { font-size: .78rem; color: var(--muted); }
+
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .1rem 1.5rem; margin: 0; }
+.kv > div { display: flex; justify-content: space-between; gap: 1rem; padding: .4rem 0; border-bottom: 1px solid var(--border); }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: .85rem; margin: .5rem 0 0; }
+.error { color: var(--danger); margin: .75rem 0 0; }
+
+.badge { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: .15rem .5rem; border-radius: 4px; color: var(--on-accent); background: var(--left); }
+.badge.win { background: var(--win); }
+.badge.loss { background: var(--loss); }
+.badge.tie { background: var(--tie); }
+.badge.left, .badge.unknown { background: var(--left); }
+@media (prefers-color-scheme: dark) { .badge { color: #0b1a12; } }
+
+.tag { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; padding: .1rem .45rem; border-radius: 4px; background: var(--accent); color: var(--on-accent); }
+.tag.dim { background: var(--track); color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip { background: var(--track); color: var(--text); border: 1px solid transparent; border-radius: var(--radius-pill); padding: .3rem .8rem; font-weight: 500; font-size: .85rem; text-transform: capitalize; }
+.chip.on { background: var(--accent); color: var(--on-accent); }
+
+.bar { height: 12px; background: var(--track); border-radius: var(--radius-pill); overflow: hidden; }
+.bar.small { height: 8px; }
+.fill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); transition: width .4s ease; }
+
+.pos { color: var(--win); }
+.neg { color: var(--loss); }
+
+.skeleton { background: var(--track); border-radius: 4px; display: inline-block; min-height: 1em; min-width: 4rem; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .skeleton, .fill { animation: none; transition: none; } }
+
+.blazor-error-boundary { background: #b32121; padding: 1rem; color: white; }
+.blazor-error-boundary::after { content: "An error has occurred."; }
+
+
+/* =====================================================================================
+   Themes. Each sets the same variables; chart colours (--viz-*) stay the same validated
+   blue / orange / red in every theme (re-stepped only for contrast on that theme's surface),
+   so a chart never changes meaning between themes. To add a theme: copy a block, pick colours,
+   run the palette + contrast check, and add it to Services/Themes.cs.
+   ===================================================================================== */
+
+/* ---- Halo: deep navy, cyan highlights, angular shapes, corner brackets ---- */
+:root[data-theme="halo"] {
+    color-scheme: dark;
+    --bg: #07111a;
+    --surface: #0e1b27;
+    --border: #1f3446;
+    --text: #e4eef5;
+    --muted: #8ea6b9;
+    --accent: #46c2e0;
+    --on-accent: #04131c;
+    --track: #172a3a;
+    --danger: #ff7b72;
+    --win: #5cc98a;
+    --loss: #ff7b72;
+    --tie: #e2c15c;
+    --left: #8ea6b9;
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-neg: #e66767;
+    --viz-grid: #1f3446;
+    --viz-ref: #5f7a8f;
+    --radius-lg: 2px;
+    --radius-md: 2px;
+    --radius-sm: 2px;
+    --radius-pill: 2px;
+    --font-display: "Rajdhani", var(--font-body);
+    --display-transform: uppercase;
+    --display-spacing: .06em;
+    --page-bg:
+        radial-gradient(1100px 520px at 50% -180px, rgba(70, 194, 224, .16), transparent 70%),
+        repeating-linear-gradient(0deg, rgba(70, 194, 224, .035) 0 1px, transparent 1px 48px),
+        repeating-linear-gradient(90deg, rgba(70, 194, 224, .035) 0 1px, transparent 1px 48px),
+        #07111a;
+}
+/* Corner brackets on panels, drawn as backgrounds so nothing gets clipped. */
+:root[data-theme="halo"] .card,
+:root[data-theme="halo"] .tile {
+    background:
+        linear-gradient(var(--accent), var(--accent)) top left / 16px 2px no-repeat,
+        linear-gradient(var(--accent), var(--accent)) top left / 2px 16px no-repeat,
+        linear-gradient(var(--accent), var(--accent)) bottom right / 16px 2px no-repeat,
+        linear-gradient(var(--accent), var(--accent)) bottom right / 2px 16px no-repeat,
+        var(--surface);
+}
+:root[data-theme="halo"] button:not(.theme-opt):not(.menu-item):not(.user-btn):not(.link):not(.backdrop),
+:root[data-theme="halo"] .chip,
+:root[data-theme="halo"] .badge,
+:root[data-theme="halo"] .tag {
+    font-family: var(--font-display); text-transform: uppercase; letter-spacing: .06em; font-weight: 700;
+}
+:root[data-theme="halo"] .page-head h1 { font-size: 2rem; }
+:root[data-theme="halo"] .appbar {
+    background: rgba(9, 21, 32, .92);
+    border-bottom-color: transparent;
+    box-shadow: 0 1px 0 rgba(70, 194, 224, .45), 0 6px 24px rgba(0, 0, 0, .35);
+}
+
+/* ---- XBOX (original): black with lime-green glow, rounded glossy pills ---- */
+:root[data-theme="xbox"] {
+    color-scheme: dark;
+    --bg: #040904;
+    --surface: #0b170a;
+    --border: #1f3a19;
+    --text: #e6f5da;
+    --muted: #97b886;
+    --accent: #8fd43f;
+    --on-accent: #0a1405;
+    --track: #142810;
+    --danger: #ff7a6b;
+    --win: #8fd43f;
+    --loss: #ff7a6b;
+    --tie: #e2c15c;
+    --left: #97b886;
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-neg: #e66767;
+    --viz-grid: #1f3a19;
+    --viz-ref: #5c7a4f;
+    --radius-lg: 18px;
+    --radius-md: 14px;
+    --radius-sm: 999px;
+    --radius-pill: 999px;
+    --font-display: "Exo 2", var(--font-body);
+    --display-transform: none;
+    --display-spacing: .01em;
+    --page-bg:
+        radial-gradient(900px 600px at 50% 0%, rgba(110, 190, 50, .22), transparent 70%),
+        radial-gradient(700px 500px at 100% 100%, rgba(60, 130, 30, .14), transparent 70%),
+        #040904;
+}
+:root[data-theme="xbox"] .card,
+:root[data-theme="xbox"] .tile {
+    background: linear-gradient(180deg, rgba(143, 212, 63, .07), transparent 40%), var(--surface);
+    box-shadow: inset 0 1px 0 rgba(200, 255, 140, .08), inset 0 0 36px rgba(143, 212, 63, .05), 0 0 0 1px rgba(143, 212, 63, .04);
+}
+:root[data-theme="xbox"] button:not(.secondary):not(.chip):not(.link):not(.user-btn):not(.menu-item):not(.backdrop):not(.theme-opt) {
+    background: linear-gradient(180deg, #b4ec6e 0%, #8fd43f 45%, #5ea322 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 14px rgba(143, 212, 63, .35);
+}
+:root[data-theme="xbox"] .chip.on { box-shadow: 0 0 12px rgba(143, 212, 63, .45); }
+:root[data-theme="xbox"] h1, :root[data-theme="xbox"] .brand { text-shadow: 0 0 18px rgba(143, 212, 63, .35); }
+:root[data-theme="xbox"] .appbar {
+    background: rgba(5, 12, 4, .9);
+    border-bottom-color: transparent;
+    box-shadow: 0 1px 0 rgba(143, 212, 63, .35), 0 8px 28px rgba(60, 130, 30, .18);
+}
+:root[data-theme="xbox"] .fill { background: linear-gradient(90deg, #5ea322, #8fd43f); box-shadow: 0 0 10px rgba(143, 212, 63, .5); }

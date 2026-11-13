@@ -1,0 +1,23 @@
+# Build output (contains absolute paths from the build machine)
+bin/
+obj/
+artifacts/
+*.nupkg
+
+# IDE and OS files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+.DS_Store
+
+# Local configuration and secrets - never commit a Spartan token
+.env
+.env.*
+appsettings.*.local.json
+secrets.json
+
+# Career snapshots, if the "Snapshots" setting ever points inside the repo
+snapshots.json

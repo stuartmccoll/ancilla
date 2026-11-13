@@ -1,0 +1,23 @@
+<div class="csr">
+    <span class="label">@Label</span>
+    @if (Csr.IsRanked)
+    {
+        <span class="tier tier-@Csr.Tier?.ToLowerInvariant()">@Csr.Display</span>
+        <span class="val">@Fmt.N(Csr.Value) CSR</span>
+    }
+    else if (ShowPlacement && Csr.MeasurementMatchesRemaining > 0)
+    {
+        <span class="tier">Unranked</span>
+        <span class="val">@Csr.MeasurementMatchesRemaining placement @(Csr.MeasurementMatchesRemaining == 1 ? "match" : "matches") left</span>
+    }
+    else
+    {
+        <span class="tier muted">—</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public Csr Csr { get; set; } = default!;
+    [Parameter] public bool ShowPlacement { get; set; }
+}
