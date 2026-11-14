@@ -1,3 +1,5 @@
 .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
 .group { margin: 0; }
-.zero { opacity: .45; }
+/* Zero values recede but stay readable: muted colour meets 4.5:1, unlike reduced opacity. */
+.zero dt, .zero dd { color: var(--muted); }
+.zero dd { font-weight: 400; }

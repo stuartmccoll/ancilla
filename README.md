@@ -1,7 +1,7 @@
 # Ancilla
 
 An unofficial Halo Infinite stats viewer, built with Blazor. It shows how many more matchmade games
-you need to finish your season passes and reach Hero, plus your service record, medals, match
+you need to finish your battle passes and reach Hero, plus your service record, medals, match
 history, trends, insights and the players you meet. It uses the services behind halowaypoint.com.
 
 ```
@@ -34,6 +34,22 @@ dotnet run --project src/Ancilla.Web --launch-profile http
 API calls run on the server, so there's no CORS and the token is never sent to the browser. The token
 is held in memory for that browser session only. Tokens expire after a few hours.
 
+### Hot reload while developing
+
+Use `dotnet watch` instead of `dotnet run` and saved changes are applied to the running app:
+
+```powershell
+$env:DOTNET_WATCH_RESTART_ON_RUDE_EDIT = 'true'   # restart without asking when a change can't be hot reloaded
+dotnet watch --project src/Ancilla.Web --launch-profile http
+```
+
+In bash or zsh, set the variable with `export DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true`.
+
+Markup, scoped CSS, `app.css` and most method-body edits apply in place, and you stay signed in.
+Some changes, such as adding a type, changing a record's parameters or editing `Program.cs`, need a
+restart. A restart clears a pasted token, so set `HALO_SPARTAN_TOKEN` to be signed back in
+automatically.
+
 ### Keep it local
 
 Ancilla is built to run on your own machine and listens on `localhost` only. Don't expose it to a
@@ -49,11 +65,16 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
 - **Home** (where you land): profile header plus an overview card per section: career and
   active-pass progress, headline stats and top medals, your last 10 results with a K/D sparkline
   and latest games, and the players you've seen most recently.
-- **Progress**: season passes and career rank (with rank icon), and games to go for each, plus a
-  **Road to Hero** forecast: recent XP pace from the saved snapshots, projected to a Hero date.
+- **Progress**: battle passes and career rank (with rank icon), and games to go for each, plus a
+  **Road to Hero** forecast: XP pace over the chosen window, from the saved snapshots, projected to a Hero date.
   The forecast needs snapshots at least a day apart.
-- **Service record**: lifetime stats, ranked CSR, top medals, combat breakdown and per-mode stats.
-- **Medals**: every medal with its icon and count, filterable by type, with unearned ones optional.
+- **Service record**: lifetime stats, ranked CSR, top medals, combat stats with per-match figures,
+  and a card per game mode (matches, win rate, K/D and that mode's own stats).
+  Shows PvP only by default (Firefight left out); filter to Firefight or everything, and to ranked
+  or unranked.
+- **Medals**: every medal with its icon and count. Its own PvP / Firefight / All and ranked filter,
+  search, earned / not earned yet / all, type pills showing how many of each you have, and a
+  collection strip by difficulty that filters the grid.
 - **History**: recent games (matchmaking, custom or all) with map, mode, score and your K/D/A.
   Select one for the full scoreboard, your medals, expected-vs-actual kills/deaths, MMR and CSR change.
 - **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,
@@ -105,8 +126,12 @@ To add a theme (e.g. Xbox 360):
 
 ### How XP per match is worked out
 
-The API gives no per-match XP figure. Once 5 or more games have been played since an earlier snapshot
-(within 60 days), the rate is measured from the difference. Until then the lifetime average is used,
+The API gives no per-match XP figure, so the rate is measured from the difference between an earlier
+snapshot and now. The Progress page lets you pick the window: the last 10 or 50 matches, the last 7, 30
+or 60 days (the default), the last 12 months, all recorded history, the lifetime average, or a figure
+you enter. Snapshots are only saved when progress loads, so the app uses the snapshot that best fits:
+for "last N matches", the latest one at least N matches back; for "last N days", the earliest one in
+those days. A baseline needs at least 5 matches since it. If none fits, the lifetime average is used,
 which is only a rough guide. It includes challenge XP, which is what you want: it's the real XP you
 get per game played.
 
@@ -124,7 +149,7 @@ response header.
 | Career rank progress* | `GET https://economy.svc.halowaypoint.com/hi/players/xuid({xuid})/rewardtracks/careerranks/careerrank1` |
 | All pass progress + active pass* | `GET https://economy.svc.halowaypoint.com/hi/players/xuid({xuid})/rewardtracks/operations` |
 | Track definition (XP per rank) | `GET https://gamecms-hacs.svc.halowaypoint.com/hi/Progression/file/{RewardTrackPath}` |
-| Service record (matches played) | `GET https://halostats.svc.halowaypoint.com/hi/players/xuid({xuid})/Matchmade/servicerecord` |
+| Service record (matches played; optional `?gameVariantCategory=` and `isRanked=`) | `GET https://halostats.svc.halowaypoint.com/hi/players/xuid({xuid})/Matchmade/servicerecord` |
 | Match history (max 25 per page; `type` = All, Matchmaking, Custom, Local) | `GET https://halostats.svc.halowaypoint.com/hi/players/xuid({xuid})/matches?start=0&count=25&type=All` |
 | Match scoreboard (all players, teams, medals, mode stats) | `GET https://halostats.svc.halowaypoint.com/hi/matches/{matchId}/stats` |
 | Match skill (MMR, CSR before/after, expected kills/deaths) | `GET https://skill.svc.halowaypoint.com/hi/matches/{matchId}/skill?players=xuid({xuid})` |
@@ -141,6 +166,15 @@ response header.
 Map/mode/playlist thumbnails (`Files.Prefix` + `images/thumbnail.jpg` or `images/hero.jpg`) are public.
 Everything on gamecms-hacs needs the token, images included. Display strings there are localised
 objects (`{"value": "...", "translations": {...}}`), read by `LocalizedStringConverter`.
+
+Service record filters: `gameVariantCategory={n}` narrows to one mode category and `isRanked=true|false`
+to ranked or unranked; the two combine. Categories partition every matchmade match (they sum to the
+total). Firefight is **42**. Others, matched to the stat groups they return: 6 Slayer, 7 Attrition,
+8 Elimination, 9 Fiesta, 11 Strongholds, 12 King of the Hill, 14 Total Control, 15 CTF, 17 Extraction,
+18 Oddball, 19 Stockpile, 22 Infection, 24 Gun Game, 39 Land Grab, 41 Minigame (9, 24 and 41 are
+best guesses: their stat groups don't pin them down). Repeating
+`gameVariantCategory` gives meaningless totals, so PvP is worked out as everything minus Firefight.
+`seasonId` is accepted but only accounts for some matches, and `playlistAssetId` returns 400.
 
 Match quirks: `Outcome` is 1 Tie, 2 Win, 3 Loss, 4 Left. In team modes a player's `Rank` is their
 team's placement, not their own. CSR `SubTier` is zero-based (1050 = Platinum 4). Medal `NameId`s

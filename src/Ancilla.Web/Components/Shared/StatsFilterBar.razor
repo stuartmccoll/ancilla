@@ -1,0 +1,49 @@
+@* PvP / Firefight / All and ranked pills, with a line saying what's included. Used by Stats and Medals. *@
+
+<section class="filter-bar" aria-label="Filter matches">
+    <div class="chips" role="group" aria-label="Match type">
+        @foreach (var (scope, label) in Scopes)
+        {
+            <button class="chip @(Filter.Scope == scope ? "on" : "")" aria-pressed="@(Filter.Scope == scope ? "true" : "false")"
+                    disabled="@Disabled" @onclick="() => Pick(Filter with { Scope = scope })">@label</button>
+        }
+    </div>
+    <div class="chips" role="group" aria-label="Ranked or unranked">
+        @foreach (var (ranked, label) in RankedOptions)
+        {
+            <button class="chip @(Filter.Ranked == ranked ? "on" : "")" aria-pressed="@(Filter.Ranked == ranked ? "true" : "false")"
+                    disabled="@Disabled" @onclick="() => Pick(Filter with { Ranked = ranked })">@label</button>
+        }
+    </div>
+    <p class="hint" aria-live="polite">@Describe(Filter)</p>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public StatsFilter Filter { get; set; } = new();
+    [Parameter] public EventCallback<StatsFilter> FilterChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private static readonly (StatsScope, string)[] Scopes =
+        [(StatsScope.PvP, "PvP"), (StatsScope.Firefight, "Firefight"), (StatsScope.All, "All matches")];
+    private static readonly (RankedFilter, string)[] RankedOptions =
+        [(RankedFilter.All, "Ranked and unranked"), (RankedFilter.Ranked, "Ranked"), (RankedFilter.Unranked, "Unranked")];
+
+    private Task Pick(StatsFilter f) => f == Filter ? Task.CompletedTask : FilterChanged.InvokeAsync(f);
+
+    public static string Describe(StatsFilter f)
+    {
+        var what = f.Scope switch
+        {
+            StatsScope.PvP => "PvP matches only. Firefight is left out because its AI kills would inflate the numbers.",
+            StatsScope.Firefight => "Firefight matches only.",
+            _ => "Every matchmade match, including Firefight.",
+        };
+        var ranked = f.Ranked switch
+        {
+            RankedFilter.Ranked => " Ranked playlists only.",
+            RankedFilter.Unranked => " Unranked playlists only.",
+            _ => "",
+        };
+        return what + ranked;
+    }
+}

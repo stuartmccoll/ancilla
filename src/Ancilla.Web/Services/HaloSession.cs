@@ -10,6 +10,8 @@ public sealed record MedalBook(MedalMetadata Meta, MedalSprite Sprite, string Sh
         m.DifficultyIndex >= 0 && m.DifficultyIndex < Meta.Difficulties.Count ? Meta.Difficulties[m.DifficultyIndex] : "";
 }
 
+public sealed record ModeRecord(int Category, ServiceRecord Record);
+
 public sealed record RankedPlaylist(string PlaylistId, string Name, PlaylistCsr Csr);
 
 /// <summary>A history entry with its full scoreboard.</summary>
@@ -65,7 +67,10 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     private readonly HashSet<MatchHistoryType> _historyComplete = [];
     private HaloWaypointClient? _client;
     private Task<ServiceRecord>? _serviceRecord;
+    // Filtered service records, keyed by (category, isRanked) for raw API calls.
+    private readonly ConcurrentDictionary<(int?, bool?), Task<ServiceRecord>> _filteredRecords = new();
     private Task<IReadOnlyList<RankedPlaylist>>? _ranked;
+    public const string UnnamedPlaylist = "Ranked playlist";
 
     public UserProfile? Me { get; private set; }
     public string? ServiceTag { get; private set; }
@@ -73,6 +78,16 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     public bool IsSignedIn => Me is not null;
 
     public ProgressReport? Report { get; set; }
+    /// <summary>When the service record was last fetched.</summary>
+    public DateTimeOffset? ServiceRecordFetchedAt { get; private set; }
+    /// <summary>The Stats page's filter, kept for this session.</summary>
+    public StatsFilter StatsFilter { get; set; } = new();
+    /// <summary>The Medals page's own filter, kept for this session.</summary>
+    public StatsFilter MedalsFilter { get; set; } = new();
+    /// <summary>The XP-per-match window picked on the Progress page, kept for this session.</summary>
+    public XpAverageWindow XpAverage { get; set; } = XpAverageWindow.Default;
+    /// <summary>A manual XP-per-match figure, which overrides <see cref="XpAverage"/> when set.</summary>
+    public double? XpOverride { get; set; }
     public MatchListState Matches { get; private set; } = new();
 
     /// <summary>Raised on sign-in/out.</summary>
@@ -122,6 +137,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         _history.Clear();
         _historyComplete.Clear();
         _serviceRecord = null;
+        _filteredRecords.Clear();
         _ranked = null;
         Matches = new();
     }
@@ -133,9 +149,64 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         if (refresh || _serviceRecord is null || _serviceRecord.IsFaulted)
         {
             _serviceRecord = Client.GetServiceRecordAsync(Xuid);
+            ServiceRecordFetchedAt = DateTimeOffset.Now;
             _ranked = null;
         }
         return _serviceRecord;
+    }
+
+    /// <summary>
+    /// The service record narrowed by <paramref name="filter"/>. PvP is everything minus Firefight,
+    /// because the API can filter to one mode category but not exclude one.
+    /// </summary>
+    public async Task<ServiceRecord> GetServiceRecordAsync(StatsFilter filter, bool refresh = false)
+    {
+        if (refresh)
+        {
+            _filteredRecords.Clear();
+            _ = GetServiceRecordAsync(true);   // also refreshes ranked CSR, which hangs off the full record
+        }
+        if (filter == StatsFilter.Everything) return await GetServiceRecordAsync();
+        var ranked = filter.IsRanked;
+        return filter.Scope switch
+        {
+            StatsScope.All => await RawRecord(null, ranked),
+            StatsScope.Firefight => await RawRecord(GameVariantCategories.Firefight, ranked),
+            _ => ServiceRecordMath.Subtract(
+                ranked is null ? await GetServiceRecordAsync() : await RawRecord(null, ranked),
+                await RawRecord(GameVariantCategories.Firefight, ranked),
+                "PveStats"),
+        };
+    }
+
+    /// <summary>
+    /// One record per game mode in <paramref name="filter"/>, for modes with matches. Cached with
+    /// the other filtered records, so <see cref="GetServiceRecordAsync(StatsFilter, bool)"/> with
+    /// refresh clears them too.
+    /// </summary>
+    public async Task<IReadOnlyList<ModeRecord>> GetModeRecordsAsync(StatsFilter filter)
+    {
+        IEnumerable<int> categories = filter.Scope switch
+        {
+            StatsScope.Firefight => [GameVariantCategories.Firefight],
+            StatsScope.PvP => GameVariantCategories.PvP,
+            _ => [.. GameVariantCategories.PvP, GameVariantCategories.Firefight],
+        };
+        var results = await Task.WhenAll(categories.Select(async c =>
+        {
+            await _throttle.WaitAsync();
+            try { return new ModeRecord(c, await RawRecord(c, filter.IsRanked)); }
+            catch (HttpRequestException) { return null; }   // one missing mode shouldn't hide the rest
+            finally { _throttle.Release(); }
+        }));
+        return results.OfType<ModeRecord>().Where(m => m.Record.MatchesCompleted > 0).ToList();
+    }
+
+    private Task<ServiceRecord> RawRecord(int? category, bool? isRanked)
+    {
+        var key = (category, isRanked);
+        if (_filteredRecords.TryGetValue(key, out var t) && !t.IsFaulted) return t;
+        return _filteredRecords[key] = Client.GetServiceRecordAsync(Xuid, category, isRanked);
     }
 
     /// <summary>CSR for every playlist in the service record that turns out to be ranked.</summary>
@@ -158,12 +229,30 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
             {
                 var r = await client.GetPlaylistCsrAsync(id, xuid);
                 var csr = r.Value.FirstOrDefault(v => v.ResultCode == 0)?.Result;
-                return csr is null ? null : new RankedPlaylist(id, _playlistNames.GetValueOrDefault(id, "Ranked playlist"), csr);
+                return csr is null ? null : new RankedPlaylist(id, _playlistNames.GetValueOrDefault(id, UnnamedPlaylist), csr);
             }
             catch (HttpRequestException) { return null; }   // unranked playlists answer 400/404
             finally { _throttle.Release(); }
         }));
-        return results.OfType<RankedPlaylist>().ToList();
+        var ranked = results.OfType<RankedPlaylist>().ToList();
+
+        // Playlist names can only be looked up with a version ID, which comes from match history.
+        // Check the most recent matchmade games (pages the Matches section shares) for unnamed ones.
+        var unnamed = ranked.Where(r => r.Name == UnnamedPlaylist).Select(r => r.PlaylistId).ToHashSet();
+        if (unnamed.Count > 0)
+        {
+            try
+            {
+                var refs = (await GetHistoryAsync(MatchHistoryType.Matchmaking, 100))
+                    .Select(e => e.MatchInfo.Playlist)
+                    .Where(p => p is not null && unnamed.Contains(p.AssetId))
+                    .DistinctBy(p => p!.AssetId);
+                await Task.WhenAll(refs.Select(p => GetPlaylistAsync(p)));
+                ranked = ranked.Select(r => r with { Name = _playlistNames.GetValueOrDefault(r.PlaylistId, UnnamedPlaylist) }).ToList();
+            }
+            catch (HttpRequestException) { }   // names are a nicety
+        }
+        return ranked;
     }
 
     /// <summary>

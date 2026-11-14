@@ -1,39 +1,51 @@
-.row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-.row button { margin-left: auto; }
-label.inline { display: flex; align-items: center; gap: .5rem; font-weight: 500; margin: 0; }
-label.inline input[type=number] { width: 7rem; }
+.head-actions { display: flex; align-items: center; gap: .75rem; }
+.updated { font-size: .85rem; }
+.based-on { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--muted); margin: .35rem 0 .15rem; flex-wrap: wrap; }
+.based-on select, .based-on input { padding: .25rem .4rem; font-size: .85rem; color: var(--text); }
+.based-on input { width: 6rem; }
+.sub { font-size: 1rem; margin: 1.5rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.ranks-done { margin-bottom: .75rem; }
+.reached { margin: .75rem 0 0; font-weight: 600; }
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; margin-bottom: 1rem; }
+.section-head .section-title { margin: 0; }
+.toggles { align-items: center; }
+.toggles .muted { font-size: .85rem; margin-right: .1rem; }
+.toggles .chip { text-transform: none; }
 
 .big { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .career-body { display: flex; gap: 1.5rem; align-items: center; }
 .rank-icon { width: 96px; height: auto; flex: none; }
 .career-main { flex: 1; min-width: 0; }
-.career-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
 .rank-title { font-size: 1.5rem; font-weight: 700; }
-.games { text-align: right; display: flex; flex-direction: column; }
 .bar-legend { display: flex; justify-content: space-between; font-size: .85rem; color: var(--muted); margin-top: .4rem; font-variant-numeric: tabular-nums; }
 
-.passes { display: flex; flex-direction: column; }
-.pass {
-    display: grid;
-    grid-template-columns: minmax(8rem, 1.4fr) 4.5rem minmax(4rem, 2fr) 9rem 6.5rem;
-    gap: .75rem; align-items: center;
-    padding: .65rem 0; border-top: 1px solid var(--border);
-    font-variant-numeric: tabular-nums;
-}
-.pass:first-child { border-top: none; }
-.pass.active .pass-name { color: var(--accent); }
-.pass.total { font-weight: 700; border-top: 2px solid var(--border); }
-.pass-name { font-weight: 600; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-.pass-ranks, .pass-xp { color: var(--muted); }
-.pass-xp, .pass-games { text-align: right; }
-.pass.total .pass-xp { color: inherit; }
+.table-wrap { overflow-x: auto; }
+table.passes { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.passes th, .passes td { padding: .6rem .75rem; text-align: right; white-space: nowrap; border-top: 1px solid var(--border); }
+.passes thead th { border-top: none; font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.passes .l { text-align: left; }
+.passes td.name { font-weight: 600; white-space: normal; min-width: 10rem; }
+.passes tr.active td.name { color: var(--accent); }
+.passes tr.done td { color: var(--muted); }
+.passes tfoot th, .passes tfoot td { font-weight: 700; border-top: 2px solid var(--border); color: var(--text); }
+.passes tfoot th { font-size: inherit; text-transform: none; letter-spacing: normal; }
+.tags { display: inline-flex; gap: .35rem; flex-wrap: wrap; }
+.progress { min-width: 9rem; }
+.progress .bar { display: inline-block; vertical-align: middle; width: calc(100% - 3.5rem); min-width: 4rem; }
+.progress .fill { display: block; }
+.progress .pct { display: inline-block; width: 3.25rem; text-align: right; }
+
+/* Header buttons inherit the header look; .link opts them out of the theme button styles. */
+button.sort { background: none; border: none; padding: 0; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+button.sort:hover { color: var(--text); }
+.passes th .arrow { font-size: .65rem; margin-left: .3rem; opacity: .45; }
+.passes th .arrow.on, button.sort:hover .arrow, button.sort:focus-visible .arrow { opacity: 1; }
+.hint.above { margin: 0 0 .75rem; }
 
 @media (max-width: 640px) {
     .career-body { align-items: flex-start; }
     .rank-icon { width: 64px; }
-    .pass { grid-template-columns: 1fr auto; row-gap: .35rem; }
-    .pass .bar { grid-column: 1 / -1; grid-row: 2; }
-    .pass-ranks { text-align: right; }
-    .pass-xp { text-align: left; }
-    .row button { margin-left: 0; width: 100%; }
+    .hide-sm { display: none; }
+    .passes th, .passes td { padding: .5rem .4rem; }
+    .progress { min-width: 7rem; }
 }

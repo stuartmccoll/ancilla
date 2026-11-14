@@ -9,7 +9,13 @@ token. See README.md for features, the API endpoint table and data quirks.
 ```powershell
 dotnet build                                                   # from the repo root (Ancilla.sln)
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
+dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
 ```
+
+With `dotnet watch`, some edits (new types, changed record parameters, `Program.cs`) can't be
+hot reloaded and force a restart. A restart drops every session, so the user signs in again unless
+`HALO_SPARTAN_TOKEN` is set. If you change a record's shape or other structure, tell the user
+a restart is coming.
 
 There is no test project. Verify changes by building with zero warnings and, for UI changes,
 running the app. Every page needs a real Spartan token, so you usually can't check pages end to

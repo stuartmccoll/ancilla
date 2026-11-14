@@ -25,7 +25,7 @@
             <h2>What it is</h2>
             <p>
                 Ancilla is an unofficial, personal stats viewer for Halo Infinite. It started as a way to answer
-                one question, <em>how many more games until I finish my season passes and reach Hero?</em>, and grew into
+                one question, <em>how many more games until I finish my battle passes and reach Hero?</em>, and grew into
                 a place to look back over your matches, medals and the people you play with.
             </p>
             <p>It runs on your own machine. There's no account, no server of ours, and nothing is shared with anyone else.</p>
@@ -40,7 +40,7 @@
             <ul>
                 <li><strong>Stats:</strong> your service record, match history and full scoreboards.</li>
                 <li><strong>Skill:</strong> CSR, MMR and the matchmaker's expected kills and deaths.</li>
-                <li><strong>Economy:</strong> career rank and season pass progress.</li>
+                <li><strong>Economy:</strong> career rank and battle pass progress.</li>
                 <li><strong>Content:</strong> names and images for maps, modes, playlists, medals and ranks.</li>
                 <li><strong>Profile:</strong> gamertags and gamerpics.</li>
             </ul>
@@ -80,16 +80,30 @@
         <section class="card" id="numbers">
             <h2>How the numbers are worked out</h2>
             <dl class="defs">
+                <dt>KDA</dt>
+                <dd>Halo's own measure: kills plus a third of your assists, minus deaths. Stats shows the average per match.</dd>
+                <dt>Per match</dt>
+                <dd>On the Stats page, a total divided by every match in the chosen filter, including matches you left early.</dd>
+                <dt>Medal rate</dt>
+                <dd>Matches in the chosen filter divided by how many times you've earned the medal, shown as "1 every N matches". Medals earned more than once a match show as "about N a match".</dd>
+                <dt>PvP stats</dt>
+                <dd>
+                    The services can show one game mode at a time but can't leave one out, so PvP figures are your full
+                    service record minus your Firefight record. Counts subtract exactly. Accuracy and average KDA are
+                    recalculated from what's left. Best killing spree can't be split, so it's the overall figure.
+                </dd>
                 <dt>XP per match</dt>
                 <dd>
                     The services don't report XP per game, so it's measured: the career XP gained between two snapshots,
-                    divided by the matches played in between. Until there's enough history, your lifetime average is used,
-                    which is only a rough guide.
+                    divided by the matches played in between. On the Progress page you choose what to average over, such as
+                    the last 50 matches or the last 30 days. Snapshots are only saved when that page loads, so the window
+                    starts at the nearest snapshot, and needs at least 5 matches since it. Without enough history, your
+                    lifetime average is used, which is only a rough guide.
                 </dd>
-                <dt>Games to go</dt>
+                <dt>Matches to go</dt>
                 <dd>XP still needed, divided by XP per match. Only the active pass earns XP, so passes are finished one after another.</dd>
                 <dt>Hero forecast</dt>
-                <dd>Your average career XP per day over the last 60 days of snapshots, extended in a straight line, counting days you didn't play.</dd>
+                <dd>Your average career XP per day, extended in a straight line, counting days you didn't play. It's measured over the same window as XP per match. If that window is under a day long, or you've entered a figure yourself, it uses the last 60 days instead.</dd>
                 <dt>Expected kills</dt>
                 <dd>The matchmaker's own prediction for a player of your skill in that lobby, straight from the skill service.</dd>
                 <dt>MMR gap</dt>

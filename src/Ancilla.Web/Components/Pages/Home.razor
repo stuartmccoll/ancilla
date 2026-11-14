@@ -209,7 +209,7 @@
     private async Task LoadProgressAsync()
     {
         // Same report the Progress page shows; building it also saves a forecast snapshot.
-        Session.Report ??= await new ProgressService(Session.Client, Snapshots).BuildReportAsync();
+        Session.Report ??= await new ProgressService(Session.Client, Snapshots).BuildReportAsync(Session.XpAverage, Session.XpOverride);
         Refresh();
         _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
     }
