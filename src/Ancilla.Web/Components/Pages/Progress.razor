@@ -9,63 +9,108 @@
         <h1>Progress</h1>
         <p>How many more matches until your passes are done and you hit Hero.</p>
     </div>
+    <div class="head-actions">
+        @if (Session.Report is { } loaded)
+        {
+            <span class="muted updated">Updated @loaded.LoadedAt.ToLocalTime().ToString("HH:mm")</span>
+        }
+        <button class="secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Loading…" : "Refresh")</button>
+    </div>
 </div>
 
-<section class="card controls">
-    <div class="row">
-        <label class="inline">
-            XP per match
-            <input type="number" min="1" step="1" placeholder="auto" @bind="_xpOverride" />
-        </label>
-        <label class="inline check">
-            <input type="checkbox" @bind="_includeUnowned" /> Include passes I don't own
-        </label>
-        <button @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Loading…" : "Refresh")</button>
-    </div>
-    @if (_error is not null)
-    {
-        <p class="error" role="alert">@_error</p>
-    }
-</section>
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+}
 
 @if (Session.Report is { } r)
 {
+    var c = r.Career;
+    // The Hero pace measures from the same snapshot as XP per match, so the two agree.
+    var from = _windowKey == Manual ? null
+        : ProgressMath.FindBaseline(r.History, c.XpEarned, r.MatchesCompleted, Session.XpAverage, out _);
+    var forecast = !c.IsHero && _snapshots is not null ? ProgressMath.ForecastHero(_snapshots, c.XpTotal, from) : null;
     <section class="tiles">
-        <div class="tile"><span class="label">Matchmade games</span><span class="value">@Fmt.N(r.MatchesCompleted)</span></div>
-        <div class="tile">
+        <div class="tile xp-tile">
             <span class="label">XP per match</span>
             <span class="value">@Fmt.N(r.Estimate.XpPerMatch)</span>
+            <label class="based-on">
+                <span>Based on</span>
+                <select value="@_windowKey" @onchange="OnWindowChanged">
+                    @foreach (var w in XpAverageWindow.All)
+                    {
+                        <option value="@w.Key">@OptionLabel(w, r)</option>
+                    }
+                    <option value="@Manual">A figure I enter</option>
+                </select>
+            </label>
+            @if (_windowKey == Manual)
+            {
+                <label class="based-on">
+                    <span>XP per match</span>
+                    <input type="number" min="1" step="1" value="@Session.XpOverride" @onchange="OnManualChanged" />
+                </label>
+            }
             <span class="note">@r.Estimate.Source</span>
         </div>
+        <div class="tile">
+            <span class="label">@(c.IsHero ? "Career rank" : "Matches to Hero")</span>
+            @if (c.IsHero)
+            {
+                <span class="value">Hero</span>
+                <span class="note">All @c.TotalRanks ranks done</span>
+            }
+            else
+            {
+                <span class="value">~@Fmt.N(r.GamesFor(c.XpRemaining))</span>
+                <span class="note">@Fmt.N(c.XpRemaining) XP to go</span>
+            }
+        </div>
+        @if (!c.IsHero)
+        {
+            <div class="tile">
+                <span class="label">Hero at this pace</span>
+                @if (forecast is null)
+                {
+                    <span class="value">—</span>
+                    <span class="note">Needs snapshots at least a day apart. See below.</span>
+                }
+                else
+                {
+                    <span class="value">@(forecast.Eta is { } eta ? eta.ToLocalTime().ToString("MMM yyyy") : "—")</span>
+                    <span class="note">
+                        @(forecast.Eta is null ? "More than 30 years away" : $"In about {CareerForecast.Humanize(forecast.DaysToHero)}"),
+                        at @Fmt.N(forecast.XpPerDay) XP a day since @forecast.WindowStart.TakenAt.ToLocalTime().ToString("d MMM")
+                    </span>
+                }
+            </div>
+        }
     </section>
 
-    var c = r.Career;
     <section class="card career">
         <h2>Career rank</h2>
         <div class="career-body">
             @if (_rankIcon is not null)
             {
-                <img class="rank-icon" src="@_rankIcon" alt="@c.NextRankTitle" />
+                <img class="rank-icon" src="@_rankIcon" alt="@(c.IsHero ? "Hero rank icon" : $"Rank icon for {c.NextRankTitle}")" />
             }
             <div class="career-main">
                 @if (c.IsHero)
                 {
-                    <p class="big">Hero reached.</p>
+                    <div class="rank-title">Hero</div>
+                    <div class="muted">All @c.TotalRanks ranks done · @Fmt.N(c.XpTotal) career XP</div>
+                    @if (HeroReachedBy(c.XpTotal) is { } by)
+                    {
+                        <p class="reached">You reached Hero by @by.ToLocalTime().ToString("d MMMM yyyy"). Nice work.</p>
+                    }
                 }
                 else
                 {
                     var pct = 100.0 * c.XpEarned / c.XpTotal;
-                    <div class="career-head">
-                        <div>
-                            <div class="rank-title">@c.NextRankTitle</div>
-                            <div class="muted">@c.RanksCompleted / @c.TotalRanks ranks done</div>
-                        </div>
-                        <div class="games">
-                            <span class="big">~@Fmt.N(r.GamesFor(c.XpRemaining))</span>
-                            <span class="muted">games to Hero</span>
-                        </div>
-                    </div>
-                    <div class="bar" role="progressbar" aria-valuenow="@pct.ToString("F1")" aria-valuemin="0" aria-valuemax="100">
+                    <div class="muted">Next rank</div>
+                    <div class="rank-title">@c.NextRankTitle</div>
+                    <div class="muted ranks-done">@c.RanksCompleted / @c.TotalRanks ranks done</div>
+                    <div class="bar" role="progressbar" aria-label="Career XP towards Hero" aria-valuenow="@pct.ToString("F1")" aria-valuemin="0" aria-valuemax="100">
                         <div class="fill" style="width:@Fmt.Css(pct)%"></div>
                     </div>
                     <div class="bar-legend">
@@ -73,65 +118,172 @@
                         <span>@Fmt.Pct(pct)</span>
                     </div>
                 }
-                <p class="hint">Career XP is earned at the same time as pass XP, not after it.</p>
+                @if (!c.IsHero)
+                {
+                    <p class="hint">Every match earns career XP and battle pass XP at once, so the matches to Hero and the matches for your passes overlap. Don't add them together.</p>
+                }
             </div>
         </div>
+
+        @if (!c.IsHero && _snapshots is not null)
+        {
+            <h3 class="sub">Road to Hero</h3>
+            <CareerForecast Snapshots="_snapshots" XpTotal="c.XpTotal" From="from" ShowTiles="false" />
+        }
     </section>
 
-    @if (!c.IsHero && _snapshots is not null)
-    {
-        <section class="card">
-            <h2>Road to Hero</h2>
-            <CareerForecast Snapshots="_snapshots" XpTotal="c.XpTotal" />
-        </section>
-    }
-
-    var passes = r.RemainingPasses(_includeUnowned).ToList();
+    var passes = r.ListedPasses(_includeUnowned, _includeCompleted).ToList();
+    var unfinished = passes.Count(p => !p.IsComplete);
     var passXp = passes.Sum(p => (long)p.XpRemaining);
     <section class="card">
-        <h2>@(_includeUnowned ? "Unfinished passes" : "Unfinished passes you own")</h2>
-        @if (passes.Count == 0)
+        <div class="section-head">
+            <h2 class="section-title">Battle passes</h2>
+            <div class="chips toggles" role="group" aria-label="Also show">
+                <span class="muted">Also show</span>
+                <button class="chip @(_includeUnowned ? "on" : "")" aria-pressed="@(_includeUnowned ? "true" : "false")"
+                        @onclick="() => _includeUnowned = !_includeUnowned">
+                    @if (_includeUnowned) { <span aria-hidden="true">✓ </span> }Free-track-only passes
+                </button>
+                <button class="chip @(_includeCompleted ? "on" : "")" aria-pressed="@(_includeCompleted ? "true" : "false")"
+                        @onclick="() => _includeCompleted = !_includeCompleted">
+                    @if (_includeCompleted) { <span aria-hidden="true">✓ </span> }Completed passes
+                </button>
+            </div>
+        </div>
+        <p class="hint above">XP only goes to your active pass, so you finish passes one after another and the total is their sum.</p>
+        @if (unfinished == 0)
         {
             <p class="big">All done.</p>
+            <p class="muted">@(_includeUnowned ? "Every pass is finished." : "Every pass with the premium track is finished.")</p>
         }
-        else
+        @if (passes.Count > 0)
         {
-            <div class="passes">
-                @foreach (var p in passes)
-                {
-                    var pp = p.XpTotal == 0 ? 0 : 100.0 * p.XpEarned / p.XpTotal;
-                    <div class="pass @(p.IsActive ? "active" : "")">
-                        <div class="pass-name">
-                            @p.Name
-                            @if (p.IsActive) { <span class="tag">Active</span> }
-                            @if (!p.IsOwned) { <span class="tag dim">Not owned</span> }
-                        </div>
-                        <div class="pass-ranks">@p.RanksCompleted / @p.TotalRanks</div>
-                        <div class="bar small"><div class="fill" style="width:@Fmt.Css(pp)%"></div></div>
-                        <div class="pass-xp">@Fmt.N(p.XpRemaining) XP left</div>
-                        <div class="pass-games">~@Fmt.N(r.GamesFor(p.XpRemaining)) games</div>
-                    </div>
-                }
-                <div class="pass total">
-                    <div class="pass-name">Total</div>
-                    <div class="pass-ranks"></div>
-                    <div></div>
-                    <div class="pass-xp">@Fmt.N(passXp) XP left</div>
-                    <div class="pass-games">~@Fmt.N(r.GamesFor(passXp)) games</div>
-                </div>
+            var rows = Sorted(passes, r);
+            <div class="table-wrap">
+                <table class="passes">
+                    <thead>
+                        <tr>
+                            @foreach (var col in Columns)
+                            {
+                                <th class="@col.Css" aria-sort="@AriaSort(col.Key)">
+                                    <button class="link sort" @onclick="() => SortBy(col.Key)">
+                                        @col.Label<span class="arrow @(_sortKey == col.Key ? "on" : "")" aria-hidden="true">@Arrow(col.Key)</span>
+                                    </button>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in rows)
+                        {
+                            var pp = Percent(p);
+                            <tr class="@(p.IsActive ? "active" : "") @(p.IsComplete ? "done" : "")">
+                                <td class="l name">@p.Name</td>
+                                <td class="l status">
+                                    <span class="tags">
+                                        @if (p.IsActive) { <span class="tag">Active</span> }
+                                        @if (p.IsComplete) { <span class="tag dim">Completed</span> }
+                                        @if (p.IsNotStarted) { <span class="tag dim">Not started</span> }
+                                        @if (!p.IsOwned) { <span class="tag dim">Free track only</span> }
+                                    </span>
+                                </td>
+                                <td class="hide-sm">@p.RanksCompleted / @p.TotalRanks</td>
+                                <td class="progress">
+                                    <span class="bar small" role="presentation"><span class="fill" style="width:@Fmt.Css(pp)%"></span></span>
+                                    <span class="pct">@Fmt.Pct(pp)</span>
+                                </td>
+                                <td class="hide-sm">@Fmt.N(p.XpRemaining)</td>
+                                <td>@(p.IsComplete ? "Done" : $"~{Fmt.N(r.GamesFor(p.XpRemaining))}")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    @if (unfinished > 0)
+                    {
+                        <tfoot>
+                            <tr>
+                                <th class="l" scope="row">Total</th>
+                                <td></td>
+                                <td class="hide-sm"></td>
+                                <td></td>
+                                <td class="hide-sm">@Fmt.N(passXp)</td>
+                                <td>~@Fmt.N(r.GamesFor(passXp))</td>
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
             </div>
         }
-        <p class="hint">Only the active pass earns XP, so these add up one after another.</p>
     </section>
 }
 else if (_loading)
 {
-    <p class="muted">Loading your progress…</p>
+    <section class="tiles" aria-hidden="true">
+        @for (var i = 0; i < 3; i++)
+        {
+            <div class="tile"><Skeleton Lines="3" /></div>
+        }
+    </section>
+    <section class="card" aria-hidden="true"><Skeleton Lines="4" /></section>
+    <section class="card" aria-hidden="true"><Skeleton Lines="5" /></section>
+    <p class="visually-hidden" role="status">Loading your progress…</p>
 }
 
 @code {
-    private double? _xpOverride;
+    private const string Manual = "manual";
+
+    private sealed record Column(string Key, string Label, string Css);
+    private static readonly Column[] Columns =
+    [
+        new("name", "Pass", "l"),
+        new("status", "Status", "l"),
+        new("ranks", "Ranks", "hide-sm"),
+        new("progress", "Progress", ""),
+        new("xp", "XP left", "hide-sm"),
+        new("games", "Matches", ""),
+    ];
+
+    // Clicking a header sorts ascending, then descending, then back to the default order
+    // (unfinished first, then as the API lists them).
+    private string? _sortKey;
+    private bool _sortDesc;
+
+    private void SortBy(string key)
+    {
+        if (_sortKey != key) { _sortKey = key; _sortDesc = false; }
+        else if (!_sortDesc) _sortDesc = true;
+        else { _sortKey = null; _sortDesc = false; }
+    }
+
+    private string AriaSort(string key) => _sortKey != key ? "none" : _sortDesc ? "descending" : "ascending";
+    private string Arrow(string key) => _sortKey != key ? "↕" : _sortDesc ? "▼" : "▲";
+
+    private static double Percent(TrackStatus p) => p.XpTotal == 0 ? 0 : 100.0 * p.XpEarned / p.XpTotal;
+
+    // Active, then in progress (premium before free track), then not started, then completed.
+    private static int StatusOrder(TrackStatus p) =>
+        p.IsComplete ? 5 : p.IsActive ? 0 : p.IsNotStarted ? (p.IsOwned ? 3 : 4) : p.IsOwned ? 1 : 2;
+
+    private IEnumerable<TrackStatus> Sorted(List<TrackStatus> passes, ProgressReport r)
+    {
+        if (_sortKey is null) return passes;
+        IComparable Key(TrackStatus p) => _sortKey switch
+        {
+            "name" => p.Name,
+            "status" => StatusOrder(p),
+            "ranks" => p.RanksCompleted,
+            "progress" => Percent(p),
+            "xp" => p.XpRemaining,
+            _ => r.GamesFor(p.XpRemaining),
+        };
+        var cmp = _sortKey == "name" ? (IComparer<IComparable>)Comparer<IComparable>.Create((a, b) =>
+            StringComparer.CurrentCultureIgnoreCase.Compare((string)a, (string)b)) : Comparer<IComparable>.Default;
+        // OrderBy is stable, so ties keep the default order.
+        return _sortDesc ? passes.OrderByDescending(Key, cmp) : passes.OrderBy(Key, cmp);
+    }
+
+    private string _windowKey = "";
     private bool _includeUnowned;
+    private bool _includeCompleted;
     private bool _loading;
     private string? _error;
     private string? _rankIcon;
@@ -139,12 +291,54 @@ else if (_loading)
 
     protected override async Task OnInitializedAsync()
     {
+        _windowKey = Session.XpOverride is > 0 ? Manual : Session.XpAverage.Key;
         if (Session.Report is null) await LoadAsync();
         else
         {
             _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
             _snapshots = (await Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
         }
+    }
+
+    // Each window's figure, so the choice can be compared before picking.
+    private static string OptionLabel(XpAverageWindow w, ProgressReport r)
+    {
+        var c = r.Career;
+        if (!w.Lifetime && ProgressMath.FindBaseline(r.History, c.XpEarned, r.MatchesCompleted, w, out _) is null)
+            return $"{w.Label} (not enough history yet)";
+        var est = ProgressMath.EstimateXpPerMatch(r.History, c.XpEarned, r.MatchesCompleted, w);
+        return $"{w.Label}: {Fmt.N(est.XpPerMatch)} XP";
+    }
+
+    // The first snapshot at Hero, if an earlier one shows it wasn't reached yet (otherwise we can't say when).
+    private DateTimeOffset? HeroReachedBy(long xpTotal)
+    {
+        if (_snapshots is null) return null;
+        var i = _snapshots.ToList().FindIndex(s => s.CareerXpEarned >= xpTotal);
+        return i > 0 ? _snapshots[i].TakenAt : null;
+    }
+
+    private double? ManualXp => _windowKey == Manual ? Session.XpOverride : null;
+
+    private void OnWindowChanged(ChangeEventArgs e)
+    {
+        _windowKey = e.Value as string ?? "";
+        if (_windowKey != Manual) Session.XpAverage = XpAverageWindow.Find(_windowKey);
+        Recalculate();
+    }
+
+    private void OnManualChanged(ChangeEventArgs e)
+    {
+        Session.XpOverride = double.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 0 ? v : null;
+        Recalculate();
+    }
+
+    // The snapshot history is already in the report, so switching windows needs no API calls.
+    private void Recalculate()
+    {
+        if (_windowKey != Manual && Session.XpOverride is not null) Session.XpOverride = null;
+        if (Session.Report is { } r)
+            Session.Report = ProgressMath.WithEstimate(r, Session.XpAverage, ManualXp);
     }
 
     private async Task LoadAsync()
@@ -156,7 +350,7 @@ else if (_loading)
         try
         {
             Session.Report = await new ProgressService(Session.Client, Snapshots)
-                .BuildReportAsync(_xpOverride is > 0 ? _xpOverride : null);
+                .BuildReportAsync(Session.XpAverage, ManualXp);
             _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
             _snapshots = (await Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
         }

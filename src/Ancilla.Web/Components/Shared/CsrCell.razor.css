@@ -2,9 +2,9 @@
 .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
 .tier { font-weight: 700; font-size: 1.1rem; }
 .val { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tier-bronze { color: #b0743f; }
-.tier-silver { color: #8e9aa6; }
-.tier-gold { color: #c99a1e; }
-.tier-platinum { color: #8f86c9; }
-.tier-diamond { color: #3fa3d6; }
+.tier-bronze { color: var(--tier-bronze); }
+.tier-silver { color: var(--tier-silver); }
+.tier-gold { color: var(--tier-gold); }
+.tier-platinum { color: var(--tier-platinum); }
+.tier-diamond { color: var(--tier-diamond); }
 .tier-onyx { color: var(--text); }

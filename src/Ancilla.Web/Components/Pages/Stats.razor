@@ -1,4 +1,5 @@
 @page "/stats"
+@using System.Text.Json
 @inject HaloSession Session
 
 <PageTitle>Service record · Ancilla</PageTitle>
@@ -8,7 +9,13 @@
         <h1>Service record</h1>
         <p>Lifetime matchmade stats.</p>
     </div>
-    <button class="secondary" @onclick="() => LoadAsync(true)" disabled="@_loading">@(_loading ? "Loading…" : "Refresh")</button>
+    <div class="head-actions">
+        @if (Session.ServiceRecordFetchedAt is { } at && _sr is not null)
+        {
+            <span class="muted updated">Updated @at.ToString("HH:mm")</span>
+        }
+        <button class="secondary" @onclick="() => LoadAsync(true)" disabled="@_loading">@(_loading ? "Loading…" : "Refresh")</button>
+    </div>
 </div>
 
 @if (_error is not null)
@@ -16,35 +23,50 @@
     <p class="error" role="alert">@_error</p>
 }
 
-@if (_sr is { } sr)
+<StatsFilterBar Filter="_filter" FilterChanged="SetFilterAsync" />
+
+@if (_sr is { MatchesCompleted: 0 })
+{
+    <section class="card"><p class="muted">No matches for this filter yet.</p></section>
+}
+else if (_sr is { } sr)
 {
     var c = sr.CoreStats;
     var played = sr.MatchesCompleted;
+    var noResult = Math.Max(0, played - sr.Wins - sr.Losses - sr.Ties);
+    <div class="results @(_loading ? "stale" : "")" aria-busy="@(_loading ? "true" : "false")">
     <section class="tiles">
         <div class="tile"><span class="label">Matches</span><span class="value">@Fmt.N(played)</span>
-            <span class="note">@Fmt.N(sr.Wins)W · @Fmt.N(sr.Losses)L · @Fmt.N(sr.Ties)T</span></div>
-        <div class="tile"><span class="label">Win rate</span><span class="value">@Fmt.Pct(played == 0 ? 0 : 100.0 * sr.Wins / played)</span></div>
+            <span class="note">
+                @Fmt.N(sr.Wins) wins · @Fmt.N(sr.Losses) losses@(sr.Ties > 0 ? $" · {Fmt.N(sr.Ties)} ties" : "")@(noResult > 0 ? $" · {Fmt.N(noResult)} left early" : "")
+            </span></div>
+        <div class="tile"><span class="label">Win rate</span><span class="value">@Fmt.Pct(played == 0 ? 0 : 100.0 * sr.Wins / played)</span>
+            <span class="note">Wins out of every match@(noResult > 0 ? ", including ones you left" : "")</span></div>
         <div class="tile"><span class="label">Time played</span><span class="value">@Fmt.Duration(sr.TimePlayed)</span></div>
         <div class="tile"><span class="label">K/D</span><span class="value">@c.KillDeathRatio.ToString("F2")</span>
-            <span class="note">@Fmt.N(c.Kills) / @Fmt.N(c.Deaths)</span></div>
-        <div class="tile"><span class="label">Avg KDA</span><span class="value">@((c.AverageKDA ?? 0).ToString("F2"))</span></div>
-        <div class="tile"><span class="label">Accuracy</span><span class="value">@Fmt.Pct(c.Accuracy)</span></div>
+            <span class="note">@Fmt.N(c.Kills) kills, @Fmt.N(c.Deaths) deaths</span></div>
+        <div class="tile"><span class="label">KDA</span><span class="value">@((c.AverageKDA ?? 0).ToString("F2"))</span>
+            <span class="note">Average per match. <a href="about#numbers">What's KDA?</a></span></div>
+        <div class="tile"><span class="label">Accuracy</span><span class="value">@Fmt.Pct(c.Accuracy)</span>
+            <span class="note">@Fmt.N(c.ShotsHit) of @Fmt.N(c.ShotsFired) shots hit</span></div>
     </section>
 
+    @if (_filter.Scope != StatsScope.Firefight)
+    {
     <section class="card">
         <h2>Ranked</h2>
         @if (_ranked is null)
         {
-            <p class="muted">Checking ranked playlists…</p>
+            <Skeleton Lines="2" />
         }
-        else if (_ranked.Count == 0)
+        else if (_ranked.Count(Played) == 0)
         {
-            <p class="muted">No ranked playlist data.</p>
+            <p class="muted">You haven't played any ranked matches yet.</p>
         }
         else
         {
             <div class="ranked">
-                @foreach (var p in _ranked)
+                @foreach (var p in _ranked.Where(Played).OrderByDescending(RankOrder))
                 {
                     <div class="ranked-row">
                         <div class="ranked-name">@p.Name</div>
@@ -54,102 +76,294 @@
                     </div>
                 }
             </div>
+            var notPlayed = _ranked.Count(p => !Played(p));
+            @if (notPlayed > 0)
+            {
+                <p class="hint">@notPlayed other ranked @(notPlayed == 1 ? "playlist" : "playlists") not played yet.</p>
+            }
         }
+        <p class="hint">Rank is the same whichever filter is chosen.</p>
     </section>
+    }
 
-    @if (_book is not null && c.Medals.Count > 0)
+    @if (_book is null && !_bookFailed)
+    {
+        <section class="card" aria-hidden="true">
+            <h2>Most earned medals</h2>
+            <div class="top-medals">
+                @for (var i = 0; i < 12; i++) { <div class="top-medal"><span class="skeleton medal-sk"></span></div> }
+            </div>
+        </section>
+    }
+    else if (_book is not null && c.Medals.Count > 0)
     {
         <section class="card">
-            <h2>Most earned medals</h2>
+            <div class="card-head">
+                <h2 class="section-title">Most earned medals</h2>
+                <a class="card-link" href="stats/medals">All medals &rarr;</a>
+            </div>
             <div class="top-medals">
                 @foreach (var m in c.Medals.OrderByDescending(m => m.Count).Take(12))
                 {
                     <div class="top-medal">
-                        <MedalIcon Book="_book" NameId="m.NameId" Size="56" />
+                        <MedalIcon Book="_book" NameId="m.NameId" Size="56" Decorative="true" />
                         <span class="tm-count">@Fmt.N(m.Count)</span>
                         <span class="tm-name">@(_book.ById.GetValueOrDefault(m.NameId)?.Name)</span>
                     </div>
                 }
             </div>
-            <p class="hint"><a href="stats/medals">All medals &rarr;</a></p>
         </section>
     }
 
-    <section class="card">
-        <h2>Combat</h2>
-        <dl class="kv">
-            @foreach (var (label, value) in Combat(c))
-            {
-                <div><dt>@label</dt><dd>@value</dd></div>
-            }
-        </dl>
-    </section>
+    <h2 class="section-title">Combat</h2>
+    <div class="combat">
+        @foreach (var g in CombatGroups(sr, _filter))
+        {
+            <section class="card combat-group">
+                <h3 class="section-title">@g.Title</h3>
+                <table class="combat-table">
+                    <thead>
+                        <tr><th scope="col" class="l"><span class="visually-hidden">Stat</span></th><th scope="col">Total</th><th scope="col">Per match</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in g.Rows)
+                        {
+                            <tr class="@(row.Total == 0 ? "zero" : "")">
+                                <th scope="row" class="l">
+                                    @row.Label
+                                    @if (row.Note is not null) { <span class="row-note">@row.Note</span> }
+                                </th>
+                                <td>@(row.Display ?? Fmt.N((long)row.Total))</td>
+                                <td>@(row.PerMatch && played > 0 ? PerMatch(row.Total / played) : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        }
+    </div>
 
     <h2 class="section-title">By mode</h2>
-    <StatGroups Groups="sr.ModeStats" />
+    @if (_modes is null)
+    {
+        <div class="modes" aria-hidden="true">
+            @for (var i = 0; i < 3; i++) { <section class="card mode"><Skeleton Lines="5" /></section> }
+        </div>
+    }
+    else if (_modes.Count == 0)
+    {
+        <p class="muted">No per-mode breakdown is available for this filter.</p>
+    }
+    else
+    {
+        <div class="modes">
+            @foreach (var mode in _modes.OrderByDescending(m => m.Record.MatchesCompleted))
+            {
+                var r = mode.Record;
+                var mc = r.CoreStats;
+                var n = r.MatchesCompleted;
+                <section class="card mode">
+                    <div class="mode-head">
+                        <h3 class="section-title">@GameVariantCategories.Name(mode.Category)</h3>
+                        <span class="muted">@Fmt.N(n) @(n == 1 ? "match" : "matches")</span>
+                    </div>
+                    <dl class="mode-summary">
+                        <div><dt>Win rate</dt><dd>@Fmt.Pct(100.0 * r.Wins / n, 0)</dd></div>
+                        <div><dt>K/D</dt><dd>@mc.KillDeathRatio.ToString("F2")</dd></div>
+                        <div><dt>Kills a match</dt><dd>@PerMatch((double)mc.Kills / n)</dd></div>
+                        <div><dt>Deaths a match</dt><dd>@PerMatch((double)mc.Deaths / n)</dd></div>
+                    </dl>
+                    @{ var groups = ModeGroups(r).ToList(); }
+                    @if (groups.Count > 0)
+                    {
+                        <table class="combat-table">
+                            <thead>
+                                <tr><th scope="col" class="l"><span class="visually-hidden">Stat</span></th><th scope="col">Total</th><th scope="col">Per match</th></tr>
+                            </thead>
+                            @foreach (var (key, fields) in groups)
+                            {
+                                <tbody>
+                                    @if (groups.Count > 1)
+                                    {
+                                        <tr class="sub"><th colspan="3" scope="rowgroup" class="l">@Fmt.GroupTitle(key)</th></tr>
+                                    }
+                                    @foreach (var f in fields)
+                                    {
+                                        <tr>
+                                            <th scope="row" class="l">@Fmt.StatLabel(f.Name)</th>
+                                            <td>@Fmt.Json(f.Value)</td>
+                                            <td>@FieldPerMatch(f, n)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            }
+                        </table>
+                    }
+                </section>
+            }
+        </div>
+        var other = sr.MatchesCompleted - _modes.Sum(m => m.Record.MatchesCompleted);
+        @if (other > 0)
+        {
+            <p class="hint">@Fmt.N(other) more @(other == 1 ? "match" : "matches") in modes Ancilla doesn't know about yet.</p>
+        }
+    }
+    </div>
 }
 else if (_loading)
 {
-    <p class="muted">Loading service record…</p>
+    <section class="tiles" aria-hidden="true">
+        @for (var i = 0; i < 6; i++) { <div class="tile"><Skeleton Lines="2" /></div> }
+    </section>
+    <section class="card" aria-hidden="true"><Skeleton Lines="3" /></section>
+    <section class="card" aria-hidden="true"><Skeleton Lines="4" /></section>
+    <p class="visually-hidden" role="status">Loading your service record…</p>
 }
 
 @code {
     private ServiceRecord? _sr;
+    private bool _bookFailed;
+    private IReadOnlyList<ModeRecord>? _modes;
+
+    // Each mode's own stat groups, without zeros and without the kills/deaths/assists the summary already shows.
+    private static IEnumerable<(string Key, List<JsonProperty> Fields)> ModeGroups(ServiceRecord r) =>
+        r.ModeStats
+            .Where(g => g.Key != "PvpStats" && g.Value.ValueKind == JsonValueKind.Object)
+            .Select(g => (g.Key, g.Value.EnumerateObject()
+                .Where(f => f.Name is not ("Kills" or "Deaths" or "Assists"))
+                .Where(f => f.Value.ValueKind is JsonValueKind.Number or JsonValueKind.String && !Fmt.IsZero(f.Value))
+                .ToList()))
+            .Where(g => g.Item2.Count > 0);
+
+    private static string FieldPerMatch(JsonProperty f, int matches)
+    {
+        if (matches == 0 || GameVariantCategories.IsMaximum(f.Name)) return "";
+        if (f.Value.ValueKind == JsonValueKind.Number) return PerMatch(f.Value.GetDouble() / matches);
+        return IsoDuration.TryParse(f.Value.GetString(), out var t) ? Fmt.Duration(t / matches) : "";
+    }
+
+    // A playlist counts as played once it has any rank or placement progress.
+    private static bool Played(RankedPlaylist p) =>
+        p.Csr.Current.IsRanked || p.Csr.SeasonMax.IsRanked || p.Csr.AllTimeMax.IsRanked
+        || p.Csr.Current.MeasurementMatchesRemaining < p.Csr.Current.InitialMeasurementMatches;
+
+    // Ranked now first (highest CSR first), then in placements, then only a past best.
+    private static (int, int) RankOrder(RankedPlaylist p) =>
+        p.Csr.Current.IsRanked ? (2, p.Csr.Current.Value)
+        : p.Csr.Current.MeasurementMatchesRemaining > 0 ? (1, -p.Csr.Current.MeasurementMatchesRemaining)
+        : (0, p.Csr.AllTimeMax.Value);
+    private StatsFilter _filter = new();
+
+    private async Task SetFilterAsync(StatsFilter filter)
+    {
+        if (filter == _filter) return;
+        _filter = Session.StatsFilter = filter;
+        await LoadAsync(false);
+    }
     private IReadOnlyList<RankedPlaylist>? _ranked;
     private MedalBook? _book;
     private bool _loading;
     private string? _error;
 
-    protected override Task OnInitializedAsync() => LoadAsync(false);
+    protected override Task OnInitializedAsync()
+    {
+        _filter = Session.StatsFilter;
+        return LoadAsync(false);
+    }
+
+    // Bumped by every load, so a newer filter choice wins over a load still in flight.
+    private int _loadVersion;
 
     private async Task LoadAsync(bool refresh)
     {
-        if (_loading) return;
+        var version = ++_loadVersion;
+        var filter = _filter;
         _loading = true;
         _error = null;
         if (refresh) _ranked = null;
+        _modes = null;
         try
         {
-            _sr = await Session.GetServiceRecordAsync(refresh);
+            var sr = await Session.GetServiceRecordAsync(filter, refresh);
+            if (version != _loadVersion) return;
+            _sr = sr;
+            _loading = false;   // the rest fills in behind the main figures
             StateHasChanged();
             var book = Session.GetMedalBookAsync();
             var ranked = Session.GetRankedAsync();
-            try { _book = await book; } catch (HttpRequestException) { }
+            try { _book = await book; } catch (HttpRequestException) { _bookFailed = true; }
             StateHasChanged();
             _ranked = await ranked;
+            StateHasChanged();
+            var modes = await Session.GetModeRecordsAsync(filter);
+            if (version == _loadVersion) _modes = modes;
         }
         catch (Exception ex)
         {
-            _error = SignIn.Explain(ex);
+            if (version == _loadVersion) _error = SignIn.Explain(ex);
         }
         finally
         {
-            _loading = false;
+            if (version == _loadVersion) _loading = false;
         }
     }
 
-    private static IEnumerable<(string, string)> Combat(CoreStats c)
+    private sealed record StatRow(string Label, double Total, bool PerMatch = true, string? Note = null, string? Display = null);
+    private sealed record StatGroup(string Title, StatRow[] Rows);
+
+    // Small numbers keep a decimal place so 0.4 headshots a match doesn't round to 0.
+    private static string PerMatch(double v) => v >= 100 ? Fmt.N(v) : Fmt.N(v, 1);
+
+    private static StatGroup[] CombatGroups(ServiceRecord sr, StatsFilter filter)
     {
-        string Share(int n) => c.Kills == 0 ? "" : $" ({100.0 * n / c.Kills:F0}%)";
-        yield return ("Kills", Fmt.N(c.Kills));
-        yield return ("Deaths", Fmt.N(c.Deaths));
-        yield return ("Assists", Fmt.N(c.Assists));
-        yield return ("Headshot kills", Fmt.N(c.HeadshotKills) + Share(c.HeadshotKills));
-        yield return ("Melee kills", Fmt.N(c.MeleeKills) + Share(c.MeleeKills));
-        yield return ("Grenade kills", Fmt.N(c.GrenadeKills) + Share(c.GrenadeKills));
-        yield return ("Power weapon kills", Fmt.N(c.PowerWeaponKills) + Share(c.PowerWeaponKills));
-        yield return ("Damage dealt", Fmt.N(c.DamageDealt));
-        yield return ("Damage taken", Fmt.N(c.DamageTaken));
-        yield return ("Damage ratio", c.DamageTaken == 0 ? "—" : ((double)c.DamageDealt / c.DamageTaken).ToString("F2"));
-        yield return ("Shots fired", Fmt.N(c.ShotsFired));
-        yield return ("Shots hit", Fmt.N(c.ShotsHit));
-        yield return ("Best killing spree", Fmt.N(c.MaxKillingSpree));
-        yield return ("Callout assists", Fmt.N(c.CalloutAssists));
-        yield return ("Vehicles destroyed", Fmt.N(c.VehicleDestroys));
-        yield return ("Hijacks", Fmt.N(c.Hijacks));
-        yield return ("Driver assists", Fmt.N(c.DriverAssists));
-        yield return ("Objectives completed", Fmt.N(c.ObjectivesCompleted));
-        yield return ("Betrayals", Fmt.N(c.Betrayals));
-        yield return ("Suicides", Fmt.N(c.Suicides));
+        var c = sr.CoreStats;
+        string? Share(int n) => c.Kills == 0 ? null : $"{100.0 * n / c.Kills:F0}% of kills";
+        return
+        [
+            new("Kills",
+            [
+                new("Kills", c.Kills),
+                new("Headshots", c.HeadshotKills, Note: Share(c.HeadshotKills)),
+                new("Melee", c.MeleeKills, Note: Share(c.MeleeKills)),
+                new("Grenades", c.GrenadeKills, Note: Share(c.GrenadeKills)),
+                new("Power weapons", c.PowerWeaponKills, Note: Share(c.PowerWeaponKills)),
+                new("Best killing spree", c.MaxKillingSpree, PerMatch: false,
+                    Note: filter.Scope == StatsScope.PvP ? "Across all matches, including Firefight" : null),
+            ]),
+            new("Survival",
+            [
+                new("Deaths", c.Deaths),
+                new("Suicides", c.Suicides),
+                new("Betrayals", c.Betrayals, Note: "Team kills"),
+            ]),
+            new("Damage and accuracy",
+            [
+                new("Damage dealt", c.DamageDealt),
+                new("Damage taken", c.DamageTaken),
+                new("Damage ratio", c.DamageTaken == 0 ? 0 : (double)c.DamageDealt / c.DamageTaken, PerMatch: false,
+                    Note: "Dealt ÷ taken", Display: c.DamageTaken == 0 ? "—" : ((double)c.DamageDealt / c.DamageTaken).ToString("F2")),
+                new("Shots fired", c.ShotsFired),
+                new("Shots hit", c.ShotsHit),
+            ]),
+            new("Teamwork",
+            [
+                new("Assists", c.Assists),
+                new("Callout assists", c.CalloutAssists, Note: "Enemies you marked that a teammate killed"),
+                new("EMP assists", c.EmpAssists),
+            ]),
+            new("Vehicles",
+            [
+                new("Vehicles destroyed", c.VehicleDestroys),
+                new("Hijacks", c.Hijacks),
+                new("Driver assists", c.DriverAssists, Note: "Kills by passengers while you drive"),
+            ]),
+            new("Score and objectives",
+            [
+                new("Personal score", c.PersonalScore),
+                new("Objectives completed", c.ObjectivesCompleted),
+                new("Rounds won", c.RoundsWon),
+                new("Rounds lost", c.RoundsLost),
+            ]),
+        ];
     }
 }

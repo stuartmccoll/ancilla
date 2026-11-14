@@ -15,14 +15,17 @@
 }
 else
 {
+    @if (ShowTiles)
+    {
     <div class="fc-tiles">
         <div><span class="label">Hero at this pace</span><span class="value">@(f.Eta is { } eta ? eta.ToLocalTime().ToString("MMM yyyy") : "—")</span>
             <span class="note">@(f.Eta is null ? "more than 30 years away" : $"in about {Humanize(f.DaysToHero)}")</span></div>
         <div><span class="label">XP per day</span><span class="value">@Fmt.N(f.XpPerDay)</span>
             <span class="note">average over the last @Humanize(f.WindowDays)</span></div>
-        <div><span class="label">Games per day</span><span class="value">@f.GamesPerDay.ToString("0.#")</span>
-            <span class="note">@Fmt.N(f.XpPerGame) XP per game</span></div>
+        <div><span class="label">Matches per day</span><span class="value">@f.MatchesPerDay.ToString("0.#")</span>
+            <span class="note">@Fmt.N(f.XpPerMatch) XP per match</span></div>
     </div>
+    }
 
     <ul class="legend">
         <li><span class="k-line"></span>Career XP</li>
@@ -49,8 +52,12 @@ else
         </section>
     </div></div>
     <p class="hint">
-        The pace is your average daily XP over the last @Humanize(f.WindowDays), including days you didn't play,
-        extended in a straight line. A snapshot is saved each time this page loads, so the more often you open it,
+        The pace is your average daily XP since @f.WindowStart.TakenAt.ToLocalTime().ToString("d MMM yyyy") (@Humanize(f.WindowDays)),
+        including days you didn't play, extended in a straight line.
+        @if (f.IsFallback)
+        {
+            <text>Your chosen XP window covers less than a day of snapshots, so this uses the last @Humanize(WindowDays) instead.</text>
+        } A snapshot is saved each time this page loads, so the more often you open it,
         the better the history it has to go on.
     </p>
 
@@ -76,28 +83,16 @@ else
     [Parameter, EditorRequired] public long XpTotal { get; set; }
     /// <summary>How far back the pace is measured.</summary>
     [Parameter] public int WindowDays { get; set; } = 60;
-
-    private sealed record ForecastResult(ProgressSnapshot WindowStart, double XpPerDay, double GamesPerDay, double XpPerGame,
-        double WindowDays, double DaysToHero, DateTimeOffset? Eta);
+    /// <summary>Measure the pace from this snapshot when it works; otherwise the last <see cref="WindowDays"/>.</summary>
+    [Parameter] public ProgressSnapshot? From { get; set; }
+    /// <summary>Show the Hero date, XP per day and matches per day above the charts.</summary>
+    [Parameter] public bool ShowTiles { get; set; } = true;
 
     private sealed record Spec(string Aria, IReadOnlyList<ProgressSnapshot> Points, DateTimeOffset Start, DateTimeOffset End,
         double YMin, double YMax, double[] YTicks,
         (DateTimeOffset T, double Xp) PaceFrom, (DateTimeOffset T, double Xp) PaceTo, bool HeroLine, DateTimeOffset? EndMarker);
 
-    private ForecastResult? Forecast()
-    {
-        if (Snapshots.Count < 2) return null;
-        var last = Snapshots[^1];
-        var first = Snapshots.FirstOrDefault(s => s.TakenAt >= last.TakenAt.AddDays(-WindowDays)) ?? Snapshots[0];
-        var days = (last.TakenAt - first.TakenAt).TotalDays;
-        var xp = last.CareerXpEarned - first.CareerXpEarned;
-        if (days < 1 || xp <= 0) return null;
-        var games = last.MatchesCompleted - first.MatchesCompleted;
-        var perDay = xp / days;
-        var toHero = Math.Max(0, XpTotal - last.CareerXpEarned) / perDay;
-        DateTimeOffset? eta = toHero <= 365 * 30 ? last.TakenAt.AddDays(toHero) : null;
-        return new ForecastResult(first, perDay, games / days, games == 0 ? 0 : (double)xp / games, days, toHero, eta);
-    }
+    private HeroForecast? Forecast() => ProgressMath.ForecastHero(Snapshots, XpTotal, From, WindowDays);
 
     private RenderFragment Plot(Spec s) => __builder =>
     {
@@ -154,7 +149,7 @@ else
         </div>
     };
 
-    private static string Humanize(double days) =>
+    public static string Humanize(double days) =>
         days >= 730 ? $"{days / 365:0.#} years" : days >= 60 ? $"{days / 30.4:0} months" : days >= 2 ? $"{days:0} days" : "a day";
 
     private static string Compact(double v) =>

@@ -1,6 +1,32 @@
-.filters { display: flex; flex-direction: column; gap: .9rem; }
-.filter-row { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; }
-.filter-row label { display: flex; align-items: center; gap: .5rem; }
+/* Collection strip: one button per difficulty, earned / total with a bar. */
+.collection { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.seg {
+    display: flex; flex-direction: column; gap: .45rem; text-align: left;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: .7rem .85rem; font-weight: 400; cursor: pointer;
+}
+.seg:hover { border-color: var(--muted); }
+.seg.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.seg-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.seg-head .diff { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+.seg-count { font-weight: 700; font-variant-numeric: tabular-nums; }
+.seg .bar { display: block; width: 100%; }
+.seg .fill { display: block; }
+.fill-heroic { background: var(--diff-heroic); }
+.fill-legendary { background: var(--diff-legendary); }
+.fill-mythic { background: var(--diff-mythic); }
+button.link.clear { background: none; border: none; padding: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+@media (max-width: 560px) { .collection { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.controls { display: flex; flex-direction: column; gap: .9rem; }
+.search { width: 100%; max-width: 28rem; }
+.control-row { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; align-items: center; }
+.controls .chips { align-items: center; }
+.controls .chip { text-transform: none; }
+.group-label { font-size: .85rem; margin-right: .1rem; }
+.chip-count { font-variant-numeric: tabular-nums; font-weight: 400; margin-left: .2rem; }
+.controls .hint { margin: 0; }
+.results.stale { opacity: .6; transition: opacity .15s; }
 
 .medal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .75rem; }
 .medal-card {
@@ -8,7 +34,9 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: .8rem;
     min-width: 0;
 }
-.medal-card.unearned { opacity: .75; }
+/* Unearned cards recede with a dashed border and the greyed icon; their text stays fully readable. */
+.medal-card.unearned { border-style: dashed; background: transparent; }
+.medal-card.unearned .mc-count { color: var(--muted); font-weight: 600; font-size: .85rem; }
 .mc-body { min-width: 0; flex: 1; }
 .mc-head { display: flex; justify-content: space-between; gap: .5rem; align-items: baseline; }
 .mc-name { font-weight: 700; }
@@ -16,6 +44,8 @@
 .mc-desc { font-size: .82rem; color: var(--muted); line-height: 1.3; margin: .15rem 0 .35rem; }
 .mc-meta { display: flex; gap: .5rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .diff { font-weight: 700; }
-.diff-heroic { color: #3fa3d6; }
-.diff-legendary { color: #a77be0; }
-.diff-mythic { color: #d9a520; }
+.diff-heroic { color: var(--diff-heroic); }
+.diff-legendary { color: var(--diff-legendary); }
+.diff-mythic { color: var(--diff-mythic); }
+.mc-rate { font-size: .8rem; font-variant-numeric: tabular-nums; margin-bottom: .35rem; }
+.medal-sk { width: 64px; height: 64px; min-width: 0; border-radius: 50%; flex: none; }
