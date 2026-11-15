@@ -8,6 +8,8 @@ token. See README.md for features, the API endpoint table and data quirks.
 
 ```powershell
 dotnet build                                                   # from the repo root (Ancilla.sln)
+dotnet test                                                    # tests/Ancilla.Theater.Tests
+.github/scripts/privacy-check.sh                               # no tokens, XUIDs, film data or machine paths
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
 dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
 ```
@@ -17,9 +19,13 @@ hot reloaded and force a restart. A restart drops every session, so the user sig
 `HALO_SPARTAN_TOKEN` is set. If you change a record's shape or other structure, tell the user
 a restart is coming.
 
-There is no test project. Verify changes by building with zero warnings and, for UI changes,
-running the app. Every page needs a real Spartan token, so you usually can't check pages end to
-end yourself. Say so rather than claiming a page works.
+`tests/Ancilla.Theater.Tests` (xUnit) covers `Ancilla.Theater` and the Core pieces it uses. Its films
+are synthetic, built bit by bit in `Synthetic.cs`: never add real film data or real gamertags or
+XUIDs as fixtures. Core and Web otherwise have no tests. Verify changes by building with zero
+warnings, running the tests and, for UI changes, running the app. CI (`.github/workflows/ci.yml`)
+runs the privacy check, then builds with warnings as errors and runs the tests on Ubuntu and
+Windows, for every pull request and every push to `main`. Every page needs a real Spartan token,
+so you usually can't check pages end to end yourself. Say so rather than claiming a page works.
 
 ## Layout
 
@@ -33,6 +39,13 @@ end yourself. Say so rather than claiming a page works.
   - `Services/Themes.cs` and `wwwroot/app.css`: the theme catalogue and its CSS variables.
   - `Components/Pages`: one page per route. `Components/Shared`: charts and widgets.
     Each component has a `.razor.css` scoped stylesheet.
+- `tests/Ancilla.Theater.Tests`: unit tests on synthetic films (see Commands).
+- `src/Ancilla.Theater`: decodes Theater films into match analysis (see its `README.md` and
+  `FORMAT.md`). For now it's a console app used to research the format. It references
+  `Ancilla.Core`, and the web app doesn't reference it yet; it will once Theater data feeds the
+  app's analysis. Films contain every player's gamertag and XUID: keep them in its cache outside
+  the repo, and never commit film data or paste other players' gamertags into code, docs or
+  commit messages.
 
 ## Architecture rules
 

@@ -8,8 +8,11 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Halo API calls run on the server, so the Spartan token never reaches the browser
-// and there are no CORS issues with halowaypoint.com.
+// and there are no CORS issues with halowaypoint.com. Automatic redirects are off: a
+// redirected request would carry the token's header to whatever host it was sent to.
 builder.Services.AddHttpClient();
+builder.Services.ConfigureHttpClientDefaults(http =>
+    http.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
 builder.Services.AddSingleton(new SnapshotStore(builder.Configuration["Snapshots"] ?? SnapshotStore.DefaultPath));
 builder.Services.AddSingleton<HaloCache>();
 builder.Services.AddSingleton<AssetCache>();
