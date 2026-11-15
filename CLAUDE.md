@@ -24,7 +24,8 @@ are synthetic, built bit by bit in `Synthetic.cs`: never add real film data or r
 XUIDs as fixtures. Core and Web otherwise have no tests. Verify changes by building with zero
 warnings, running the tests and, for UI changes, running the app. CI (`.github/workflows/ci.yml`)
 runs the privacy check, then builds with warnings as errors and runs the tests on Ubuntu and
-Windows, for every pull request and every push to `main`. Every page needs a real Spartan token,
+Windows, for every pull request and every push to `main`. Dependabot (`.github/dependabot.yml`) opens weekly PRs
+updating NuGet packages and the Actions CI uses; minor and patch updates come grouped. Every page needs a real Spartan token,
 so you usually can't check pages end to end yourself. Say so rather than claiming a page works.
 
 ## Layout
