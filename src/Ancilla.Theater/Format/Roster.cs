@@ -30,7 +30,7 @@ public static class Roster
     private static readonly int[] KnownFirstCopyOffsets = [936, 11_896, 12_267, 12_342];
 
     // Xbox Live XUIDs for real accounts are 0x0009_xxxx_xxxx_xxxx. An earlier, tighter upper bound
-    // (2535999999999999) missed a real player whose XUID starts 2703…
+    // (2_535_999_999_999_999) missed a real player whose XUID starts 2703…
     private const ulong XuidMin = 0x0009_0000_0000_0000UL;
     private const ulong XuidMax = 0x0009_FFFF_FFFF_FFFFUL;
 
