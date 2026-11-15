@@ -111,6 +111,17 @@ public sealed class HaloWaypointClient
     private Task<UgcAsset> GetUgcAsync(string kind, AssetRef a, CancellationToken ct) =>
         GetAsync<UgcAsset>($"{Discovery}/hi/{kind}/{HaloIds.RequireGuid(a.AssetId, "asset ID")}/versions/{HaloIds.RequireGuid(a.VersionId, "version ID")}", needsClearance: false, ct);
 
+    /// <summary>
+    /// The Theater film manifest for a match, as raw JSON: chunk list, sizes and the blob storage
+    /// prefix. Chunks themselves are public blobs and need no token, so they aren't fetched here.
+    /// </summary>
+    public async Task<string> GetFilmManifestJsonAsync(string matchId, CancellationToken ct = default)
+    {
+        using var res = await SendAsync($"{Discovery}/hi/films/matches/{HaloIds.RequireGuid(matchId, nameof(matchId))}/spectate",
+            needsClearance: false, ct, accept: "application/json");
+        return await res.Content.ReadAsStringAsync(ct);
+    }
+
     public Task<MedalMetadata> GetMedalMetadataAsync(CancellationToken ct = default) =>
         GetAsync<MedalMetadata>($"{GameCms}/hi/Waypoint/file/medals/metadata.json", needsClearance: false, ct);
 

@@ -17,20 +17,23 @@ public sealed class SnapshotStore(string path)
     /// <see cref="FilePath"/> with the user's home folder shown as <c>~</c>, so pages don't display
     /// the account name.
     /// </summary>
-    public string DisplayPath
+    public string DisplayPath => HomeRelative(path);
+
+    /// <summary>
+    /// <paramref name="path"/> with the user's home folder shown as <c>~</c> (compared without case
+    /// on Windows), or unchanged when it isn't under the home folder.
+    /// </summary>
+    public static string HomeRelative(string path)
     {
-        get
-        {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrEmpty(home)) return path;
-            var full = Path.GetFullPath(path);
-            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            if (full.Equals(home, comparison)) return "~";
-            var prefix = Path.EndsInDirectorySeparator(home) ? home : home + Path.DirectorySeparatorChar;
-            return full.StartsWith(prefix, comparison)
-                ? "~" + Path.DirectorySeparatorChar + full[prefix.Length..]
-                : path;
-        }
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home)) return path;
+        var full = Path.GetFullPath(path);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (full.Equals(home, comparison)) return "~";
+        var prefix = Path.EndsInDirectorySeparator(home) ? home : home + Path.DirectorySeparatorChar;
+        return full.StartsWith(prefix, comparison)
+            ? "~" + Path.DirectorySeparatorChar + full[prefix.Length..]
+            : path;
     }
 
     public static string DefaultPath

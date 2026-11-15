@@ -5,8 +5,10 @@ you need to finish your season passes and reach Hero, plus your service record, 
 history, trends, insights and the players you meet. It uses the services behind halowaypoint.com.
 
 ```
-src/Ancilla.Core   API client, models, calculations, caching, snapshot store (no NuGet deps)
-src/Ancilla.Web    Blazor Web App (interactive server rendering)
+src/Ancilla.Core     API client, models, calculations, caching, snapshot store (no NuGet deps)
+src/Ancilla.Web      Blazor Web App (interactive server rendering)
+src/Ancilla.Theater  Theater film decoding and match analysis (see src/Ancilla.Theater/README.md)
+tests/               unit tests for Ancilla.Theater, on synthetic films (dotnet test)
 ```
 
 ## Run
@@ -135,6 +137,8 @@ response header.
 | Career rank icons (`RankIcon` paths in the career track) | `GET https://gamecms-hacs.svc.halowaypoint.com/hi/images/file/{path}` |
 | Gamertags and gamerpics (batch) | `GET https://profile.svc.halowaypoint.com/users?xuids={xuid},{xuid},...` |
 | Service tag* | `GET https://economy.svc.halowaypoint.com/hi/players/xuid({xuid})/customization/appearance` |
+| Theater film manifest (chunk list, blob prefix; used by Ancilla.Theater) | `GET https://discovery-infiniteugc.svc.halowaypoint.com/hi/films/matches/{matchId}/spectate` |
+| Theater film chunks (zlib; public on `blobs-infiniteugc.svc.halowaypoint.com`, sent without the token) | `GET {BlobStoragePathPrefix}filmChunk{n}` (the prefix is a full URL from the manifest) |
 
 \* needs `343-clearance`.
 
