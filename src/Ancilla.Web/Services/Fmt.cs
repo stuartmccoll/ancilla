@@ -66,6 +66,23 @@ public static partial class Fmt
     public static string GroupTitle(string key) =>
         GroupTitles.TryGetValue(key, out var t) ? t : Humanize(key.EndsWith("Stats") ? key[..^5] : key);
 
+    // API field names that don't read well when simply split into words.
+    private static readonly Dictionary<string, string> FieldLabels = new()
+    {
+        ["SkullScoringTicks"] = "Points scored with the skull",
+        ["ZoneScoringTicks"] = "Points scored from zones",
+        ["TotalZoneOccupationTime"] = "Time in zones",
+        ["FlagSecures"] = "Flags secured",
+        ["SuccessfulExtractions"] = "Extractions",
+        ["SpartansInfectedAsAlpha"] = "Spartans infected as alpha zombie",
+        ["RoundsAsAlpha"] = "Rounds as alpha zombie",
+        ["AlphasKilled"] = "Alpha zombies killed",
+        ["EnemyRevivesDenied"] = "Enemy revives stopped",
+    };
+
+    /// <summary>A readable label for a per-mode stat field.</summary>
+    public static string StatLabel(string field) => FieldLabels.TryGetValue(field, out var l) ? l : Humanize(field);
+
     /// <summary>"FlagCaptureAssists" → "Flag capture assists"; acronyms like KDA are kept.</summary>
     public static string Humanize(string name)
     {

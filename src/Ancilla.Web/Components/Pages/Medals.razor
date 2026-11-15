@@ -9,7 +9,7 @@
         <h1>Medals</h1>
         @if (_book is not null && _sr is not null)
         {
-            <p>@Fmt.N(_earned.Values.Sum()) medals earned · @_earned.Count of @_book.ById.Count different medals</p>
+            <p>@Fmt.N(_earned.Values.Sum()) medals earned · @EarnedKinds(_book) of @_book.ById.Count different medals</p>
         }
     </div>
 </div>
@@ -19,90 +19,232 @@
     <p class="error" role="alert">@_error</p>
 }
 
+<StatsFilterBar Filter="_filter" FilterChanged="SetFilterAsync" />
+
 @if (_book is { } book && _sr is not null)
 {
-    <section class="card filters">
+    <section class="collection" aria-label="Collection by difficulty">
+        @foreach (var d in book.Meta.Difficulties)
+        {
+            var all = book.ById.Values.Where(m => book.DifficultyOf(m) == d).ToList();
+            var got = all.Count(m => _earned.GetValueOrDefault(m.NameId) > 0);
+            var pct = all.Count == 0 ? 0 : 100.0 * got / all.Count;
+            var on = _difficulty == d;
+            <button class="link seg @(on ? "on" : "")" aria-pressed="@(on ? "true" : "false")"
+                    aria-label="@($"{TypeLabel(d)}: {got} of {all.Count} earned. {(on ? "Showing only these; select to show all." : "Select to show only these.")}")"
+                    @onclick="() => _difficulty = on ? null : d">
+                <span class="seg-head">
+                    <span class="diff diff-@d">@TypeLabel(d)</span>
+                    <span class="seg-count">@got/@all.Count</span>
+                </span>
+                <span class="bar small"><span class="fill fill-@d" style="width:@Fmt.Css(pct)%"></span></span>
+            </button>
+        }
+    </section>
+
+    <section class="card controls">
+        <input type="search" class="search" placeholder="Search by name or description" aria-label="Search medals"
+               @bind="_search" @bind:event="oninput" />
+
+        <div class="control-row">
+            <div class="chips" role="group" aria-label="Show">
+                @foreach (var (key, label) in Views)
+                {
+                    <button class="chip @(_view == key ? "on" : "")" aria-pressed="@(_view == key ? "true" : "false")" @onclick="() => _view = key">@label</button>
+                }
+            </div>
+            <div class="chips" role="group" aria-label="Sort">
+                <span class="muted group-label">Sort</span>
+                @foreach (var (key, label) in Sorts)
+                {
+                    <button class="chip @(_sort == key ? "on" : "")" aria-pressed="@(_sort == key ? "true" : "false")" @onclick="() => _sort = key">@label</button>
+                }
+            </div>
+        </div>
+
         <div class="chips" role="group" aria-label="Medal type">
-            <button class="chip @(_type is null ? "on" : "")" @onclick="() => _type = null">All</button>
+            <button class="chip @(_type is null ? "on" : "")" aria-pressed="@(_type is null ? "true" : "false")" @onclick="() => _type = null">
+                All types <span class="chip-count">@EarnedKinds(book)/@book.ById.Count</span>
+            </button>
             @foreach (var t in book.Meta.Types)
             {
-                <button class="chip @(_type == t ? "on" : "")" @onclick="() => _type = t">@t</button>
+                var inType = book.ById.Values.Where(m => book.TypeOf(m) == t).ToList();
+                <button class="chip @(_type == t ? "on" : "")" aria-pressed="@(_type == t ? "true" : "false")" @onclick="() => _type = t">
+                    @TypeLabel(t) <span class="chip-count">@inType.Count(m => _earned.GetValueOrDefault(m.NameId) > 0)/@inType.Count</span>
+                </button>
             }
         </div>
-        <div class="filter-row">
-            <label>
-                Sort
-                <select @bind="_sort">
-                    <option value="count">Most earned</option>
-                    <option value="difficulty">Hardest first</option>
-                    <option value="name">Name</option>
-                </select>
-            </label>
-            <label class="check"><input type="checkbox" @bind="_showUnearned" /> Show medals I haven't earned</label>
-        </div>
+        @if (_type is not null && TypeDescriptions.TryGetValue(_type, out var about))
+        {
+            <p class="hint">@about</p>
+        }
+        @if (_difficulty is not null)
+        {
+            <p class="hint">
+                Showing @TypeLabel(_difficulty) medals only.
+                <button class="link clear" @onclick="() => _difficulty = null">Show every difficulty</button>
+            </p>
+        }
     </section>
 
     var list = Visible(book).ToList();
-    @if (list.Count == 0)
-    {
-        <p class="muted">No medals match.</p>
-    }
-    <div class="medal-grid">
-        @foreach (var (m, count) in list)
+    <div class="results @(_loading ? "stale" : "")" aria-busy="@(_loading ? "true" : "false")">
+        @if (list.Count == 0)
         {
-            var diff = book.DifficultyOf(m);
-            <div class="medal-card @(count == 0 ? "unearned" : "")">
-                <MedalIcon Book="book" NameId="m.NameId" Size="64" Dim="count == 0" />
-                <div class="mc-body">
-                    <div class="mc-head">
-                        <span class="mc-name">@m.Name</span>
-                        <span class="mc-count">@(count == 0 ? "—" : "×" + Fmt.N(count))</span>
-                    </div>
-                    <div class="mc-desc">@m.Description</div>
-                    <div class="mc-meta">
-                        <span class="diff diff-@diff">@diff</span>
-                        <span>@book.TypeOf(m)</span>
+            <p class="muted">@EmptyMessage()</p>
+        }
+        <div class="medal-grid">
+            @foreach (var (m, count) in list)
+            {
+                var diff = book.DifficultyOf(m);
+                <div class="medal-card @(count == 0 ? "unearned" : "")">
+                    <MedalIcon Book="book" NameId="m.NameId" Size="64" Dim="count == 0" Decorative="true" />
+                    <div class="mc-body">
+                        <div class="mc-head">
+                            <span class="mc-name">@m.Name</span>
+                            <span class="mc-count">@(count == 0 ? "Not earned" : "×" + Fmt.N(count))</span>
+                        </div>
+                        <div class="mc-desc">@m.Description</div>
+                        @if (count > 0 && Rate(count) is { } rate)
+                        {
+                            <div class="mc-rate">@rate</div>
+                        }
+                        <div class="mc-meta">
+                            <span class="diff diff-@diff">@TypeLabel(diff)</span>
+                            <span aria-hidden="true">·</span>
+                            <span>@TypeLabel(book.TypeOf(m)) medal</span>
+                        </div>
                     </div>
                 </div>
-            </div>
+            }
+        </div>
+        @if (_view != "unearned" && _type is null && _difficulty is null && _search.Trim().Length == 0 && Unrecognised(book) is { Kinds: > 0 } u)
+        {
+            <p class="hint">
+                Plus @Fmt.N(u.Total) @(u.Total == 1 ? "medal" : "medals") of @u.Kinds @(u.Kinds == 1 ? "kind" : "kinds")
+                that Ancilla can't name yet, usually ones added to the game since its medal list was last updated.
+            </p>
         }
     </div>
 }
 else if (_error is null)
 {
-    <p class="muted">Loading medals…</p>
+    <div class="medal-grid" aria-hidden="true">
+        @for (var i = 0; i < 9; i++)
+        {
+            <div class="medal-card"><span class="skeleton medal-sk"></span><div class="mc-body"><Skeleton Lines="3" /></div></div>
+        }
+    </div>
+    <p class="visually-hidden" role="status">Loading medals…</p>
 }
 
 @code {
     private ServiceRecord? _sr;
     private MedalBook? _book;
     private Dictionary<long, int> _earned = [];
+    private StatsFilter _filter = new();
+    private bool _loading;
     private string? _error;
     private string? _type;
+    private string? _difficulty;
+    private string _view = "earned";
     private string _sort = "count";
-    private bool _showUnearned;
+    private string _search = "";
+    private int _loadVersion;
+
+    private static readonly (string, string)[] Views = [("earned", "Earned"), ("unearned", "Not earned yet"), ("all", "All")];
+    private static readonly (string, string)[] Sorts = [("count", "Most earned"), ("difficulty", "Hardest first"), ("name", "A–Z")];
+
+    // One line on what each of the metadata's medal types covers.
+    private static readonly Dictionary<string, string> TypeDescriptions = new()
+    {
+        ["spree"] = "Kills, or driver assists, in a row without dying, and ending someone else's spree.",
+        ["mode"] = "Objective plays and big wins in particular modes, such as flag kills or a flawless Elimination round.",
+        ["multikill"] = "Several kills in quick succession, from a Double Kill up to a Killionaire.",
+        ["proficiency"] = "Reaching a target in one match, such as 5 kills with one weapon type or 10 assists.",
+        ["skill"] = "Clever use of equipment and abilities, such as a Grapple or a well-placed Drop Wall.",
+        ["style"] = "Showy kills and trick plays, such as a 360 or a kill after you've died.",
+    };
+
+    private static string TypeLabel(string t) => t.Length == 0 ? t : char.ToUpperInvariant(t[0]) + t[1..];
+
+    // "1 every 12 matches" reads better than a small decimal; medals earned more than once a
+    // match read better the other way round ("2.3 a match").
+    private string? Rate(int count)
+    {
+        var matches = _sr?.MatchesCompleted ?? 0;
+        if (matches == 0) return null;
+        var every = (double)matches / count;
+        if (every <= 1)
+        {
+            var per = (double)count / matches;
+            return per < 1.05 ? "About 1 a match" : $"About {per:0.#} a match";
+        }
+        return $"1 every {(every < 10 ? every.ToString("0.#") : Fmt.N(every))} matches";
+    }
+
+    private (int Kinds, int Total) Unrecognised(MedalBook book)
+    {
+        var unknown = _earned.Where(e => e.Value > 0 && !book.ById.ContainsKey(e.Key)).ToList();
+        return (unknown.Count, unknown.Sum(e => e.Value));
+    }
+
+    private int EarnedKinds(MedalBook book) => book.ById.Keys.Count(id => _earned.GetValueOrDefault(id) > 0);
 
     protected override async Task OnInitializedAsync()
     {
+        _filter = Session.MedalsFilter;
+        try { _book = await Session.GetMedalBookAsync(); }
+        catch (Exception ex) { _error = SignIn.Explain(ex); return; }
+        await LoadAsync();
+    }
+
+    private async Task SetFilterAsync(StatsFilter filter)
+    {
+        if (filter == _filter) return;
+        _filter = Session.MedalsFilter = filter;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var version = ++_loadVersion;
+        _loading = true;
+        _error = null;
         try
         {
-            var sr = Session.GetServiceRecordAsync();
-            _book = await Session.GetMedalBookAsync();
-            _sr = await sr;
-            _earned = _sr.CoreStats.Medals.GroupBy(m => m.NameId).ToDictionary(g => g.Key, g => g.Sum(m => m.Count));
+            var sr = await Session.GetServiceRecordAsync(_filter);
+            if (version != _loadVersion) return;
+            _sr = sr;
+            _earned = sr.CoreStats.Medals.GroupBy(m => m.NameId).ToDictionary(g => g.Key, g => g.Sum(m => m.Count));
         }
         catch (Exception ex)
         {
-            _error = SignIn.Explain(ex);
+            if (version == _loadVersion) _error = SignIn.Explain(ex);
+        }
+        finally
+        {
+            if (version == _loadVersion) _loading = false;
         }
     }
 
+    private string EmptyMessage() =>
+        _search.Trim().Length > 0 ? $"No medals match \"{_search.Trim()}\"."
+        : _view == "unearned" ? "You've earned every medal here. Impressive."
+        : _view == "earned" ? "No medals earned with these filters yet."
+        : "No medals match.";
+
     private IEnumerable<(MedalDefinition Medal, int Count)> Visible(MedalBook book)
     {
+        var q = _search.Trim();
         var items = book.ById.Values
             .Select(m => (Medal: m, Count: _earned.GetValueOrDefault(m.NameId)))
-            .Where(x => _showUnearned || x.Count > 0)
-            .Where(x => _type is null || book.TypeOf(x.Medal) == _type);
+            .Where(x => _view switch { "earned" => x.Count > 0, "unearned" => x.Count == 0, _ => true })
+            .Where(x => _type is null || book.TypeOf(x.Medal) == _type)
+            .Where(x => _difficulty is null || book.DifficultyOf(x.Medal) == _difficulty)
+            .Where(x => q.Length == 0
+                || (x.Medal.Name?.Contains(q, StringComparison.CurrentCultureIgnoreCase) ?? false)
+                || (x.Medal.Description?.Contains(q, StringComparison.CurrentCultureIgnoreCase) ?? false));
         return _sort switch
         {
             "difficulty" => items.OrderByDescending(x => x.Medal.DifficultyIndex).ThenByDescending(x => x.Count).ThenBy(x => x.Medal.Name),

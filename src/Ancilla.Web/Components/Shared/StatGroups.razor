@@ -22,7 +22,7 @@
                     @foreach (var f in fields)
                     {
                         <div class="@(Fmt.IsZero(f.Value) ? "zero" : "")">
-                            <dt>@Fmt.Humanize(f.Name)</dt>
+                            <dt>@Fmt.StatLabel(f.Name)</dt>
                             <dd>@Fmt.Json(f.Value)</dd>
                         </div>
                     }

@@ -4,7 +4,8 @@
 {
     var col = d.SpriteIndex % Book.Sprite.Columns;
     var row = d.SpriteIndex / Book.Sprite.Columns;
-    <span class="medal @(Dim ? "dim" : "")" role="img" aria-label="@d.Name" title="@($"{d.Name}: {d.Description}")"
+    <span class="medal @(Dim ? "dim" : "")" role="@(Decorative ? null : "img")" aria-label="@(Decorative ? null : d.Name)"
+          aria-hidden="@(Decorative ? "true" : null)" title="@(Decorative ? null : $"{d.Name}: {d.Description}")"
           style="width:@(Size)px;height:@(Size)px;background-image:url('@Book.SheetUrl');background-size:@(Book.Sprite.Columns * Size)px;background-position:-@(col * Size)px -@(row * Size)px">
         @if (Count is > 1)
         {
@@ -23,6 +24,8 @@ else
     [Parameter] public int Size { get; set; } = 48;
     [Parameter] public int? Count { get; set; }
     [Parameter] public bool Dim { get; set; }
+    /// <summary>The medal's name is shown as text beside it, so screen readers skip the icon.</summary>
+    [Parameter] public bool Decorative { get; set; }
 
     private MedalDefinition? Def => Book.ById.GetValueOrDefault(NameId);
 }

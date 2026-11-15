@@ -66,6 +66,9 @@ public sealed record TrackStatus(
     bool IsActive)
 {
     public int XpRemaining => Math.Max(0, XpTotal - XpEarned);
+
+    /// <summary>No XP earned on this pass yet, whether or not its premium track is owned.</summary>
+    public bool IsNotStarted => !IsComplete && XpEarned == 0;
 }
 
 public sealed record CareerStatus(
@@ -87,10 +90,19 @@ public sealed record ProgressReport(
     int MatchesCompleted,
     CareerStatus Career,
     IReadOnlyList<TrackStatus> Passes,
-    XpPerMatchEstimate Estimate)
+    XpPerMatchEstimate Estimate,
+    IReadOnlyList<ProgressSnapshot> History)
 {
+    /// <summary>When the data was fetched. Kept by <c>with</c> copies.</summary>
+    public DateTimeOffset LoadedAt { get; init; } = DateTimeOffset.UtcNow;
+
     public IEnumerable<TrackStatus> RemainingPasses(bool includeUnowned) =>
         Passes.Where(p => !p.IsComplete && (includeUnowned || p.IsOwned));
+
+    /// <summary>Passes to list: unfinished ones first, then (optionally) finished ones.</summary>
+    public IEnumerable<TrackStatus> ListedPasses(bool includeUnowned, bool includeCompleted) =>
+        Passes.Where(p => (includeCompleted || !p.IsComplete) && (includeUnowned || p.IsOwned))
+            .OrderBy(p => p.IsComplete);
 
     public int GamesFor(long xp) =>
         xp <= 0 ? 0 : (int)Math.Ceiling(xp / Math.Max(1, Estimate.XpPerMatch));

@@ -11,15 +11,21 @@ dotnet build                                                   # from the repo r
 dotnet test                                                    # tests/Ancilla.Theater.Tests
 .github/scripts/privacy-check.sh                               # no tokens, XUIDs, film data or machine paths
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
+dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
 ```
+
+With `dotnet watch`, some edits (new types, changed record parameters, `Program.cs`) can't be
+hot reloaded and force a restart. A restart drops every session, so the user signs in again unless
+`HALO_SPARTAN_TOKEN` is set. If you change a record's shape or other structure, tell the user
+a restart is coming.
 
 `tests/Ancilla.Theater.Tests` (xUnit) covers `Ancilla.Theater` and the Core pieces it uses. Its films
 are synthetic, built bit by bit in `Synthetic.cs`: never add real film data or real gamertags or
 XUIDs as fixtures. Core and Web otherwise have no tests. Verify changes by building with zero
 warnings, running the tests and, for UI changes, running the app. CI (`.github/workflows/ci.yml`)
 runs the privacy check, then builds with warnings as errors and runs the tests on Ubuntu and
-Windows, for every pull request and every push to `main`. Every page needs a real Spartan token, so you usually can't check pages end to
-end yourself. Say so rather than claiming a page works.
+Windows, for every pull request and every push to `main`. Every page needs a real Spartan token,
+so you usually can't check pages end to end yourself. Say so rather than claiming a page works.
 
 ## Layout
 

@@ -83,7 +83,21 @@ public sealed class HaloWaypointClient
         GetAsync<RewardTrackDefinition>($"{GameCms}/hi/Progression/file/{rewardTrackPath}", needsClearance: false, ct);
 
     public Task<ServiceRecord> GetServiceRecordAsync(string xuid, CancellationToken ct = default) =>
-        GetAsync<ServiceRecord>($"{Stats}/hi/players/xuid({HaloIds.RequireXuid(xuid)})/Matchmade/servicerecord", needsClearance: false, ct);
+        GetServiceRecordAsync(xuid, null, null, ct);
+
+    /// <summary>
+    /// The matchmade service record, optionally narrowed to one game mode category
+    /// (<see cref="GameVariantCategories"/>) and/or ranked or unranked matches. Both filters can be
+    /// combined. Only one category can be given: repeating the parameter gives meaningless totals.
+    /// </summary>
+    public Task<ServiceRecord> GetServiceRecordAsync(string xuid, int? gameVariantCategory, bool? isRanked, CancellationToken ct = default)
+    {
+        var query = new List<string>();
+        if (gameVariantCategory is { } c) query.Add($"gameVariantCategory={c}");
+        if (isRanked is { } r) query.Add($"isRanked={(r ? "true" : "false")}");
+        var qs = query.Count == 0 ? "" : "?" + string.Join('&', query);
+        return GetAsync<ServiceRecord>($"{Stats}/hi/players/xuid({HaloIds.RequireXuid(xuid)})/Matchmade/servicerecord{qs}", needsClearance: false, ct);
+    }
 
     /// <param name="count">The service caps this at 25.</param>
     public Task<MatchHistory> GetMatchHistoryAsync(string xuid, int start = 0, int count = 25,
