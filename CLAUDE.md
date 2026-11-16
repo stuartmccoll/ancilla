@@ -40,6 +40,9 @@ so you usually can't check pages end to end yourself. Say so rather than claimin
   - `Services/Themes.cs` and `wwwroot/app.css`: the theme catalogue and its CSS variables.
   - `Components/Pages`: one page per route. `Components/Shared`: charts and widgets.
     Each component has a `.razor.css` scoped stylesheet.
+- `branding/`: source logo and the full favicon suite. The icons the app uses are copied into
+  `src/Ancilla.Web/wwwroot`, and the navbar logo is inlined in `Components/Shared/Logo.razor`
+  (charcoal parts use `currentColor` so it follows each theme).
 - `tests/Ancilla.Theater.Tests`: unit tests on synthetic films (see Commands).
 - `src/Ancilla.Theater`: decodes Theater films into match analysis (see its `README.md` and
   `FORMAT.md`). For now it's a console app used to research the format. It references
