@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Ancilla favicon"><rect width="512" height="512" rx="105" fill="#152936"/>
+        <g>
+          <path d="M 142 154 A 155 155 0 0 1 370 154" fill="none" stroke="#9DB4C6" stroke-width="31" stroke-linecap="round"/>
+          <path d="M 142 358 A 155 155 0 0 0 370 358" fill="none" stroke="#9DB4C6" stroke-width="31" stroke-linecap="round"/>
+          <path d="M114 187 L153 207 L153 305 L114 325 Q83 256 114 187 Z" fill="#E6F1F6"/>
+          <path d="M398 187 L359 207 L359 305 L398 325 Q429 256 398 187 Z" fill="#E6F1F6"/>
+          <circle cx="256" cy="256" r="108" fill="#E6F1F6"/>
+          <circle cx="256" cy="256" r="46" fill="#46B5F4"/>
+          <rect x="246" y="98" width="20" height="38" rx="4" fill="#46B5F4"/>
+          <rect x="246" y="376" width="20" height="38" rx="4" fill="#46B5F4"/>
+          <path d="M256 153 V205 M256 307 V359 M153 256 H205 M307 256 H359" stroke="#152936" stroke-width="11"/>
+        </g></svg>

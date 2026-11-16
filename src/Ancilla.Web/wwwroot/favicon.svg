@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Ancilla favicon">
+  <!-- Light tile by default; the dark tile (from branding/favicon-suite/dark) when the browser is in dark mode. -->
+  <style>
+    .tile { fill: #F4F8FB; } .arc { stroke: #AFBAC6; } .body { fill: #303D47; } .core { fill: #4EAEEF; } .cross { stroke: #F4F8FB; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #152936; } .arc { stroke: #9DB4C6; } .body { fill: #E6F1F6; } .core { fill: #46B5F4; } .cross { stroke: #152936; }
+    }
+  </style>
+  <rect class="tile" width="512" height="512" rx="105"/>
+  <path class="arc" d="M 142 154 A 155 155 0 0 1 370 154" fill="none" stroke-width="31" stroke-linecap="round"/>
+  <path class="arc" d="M 142 358 A 155 155 0 0 0 370 358" fill="none" stroke-width="31" stroke-linecap="round"/>
+  <path class="body" d="M114 187 L153 207 L153 305 L114 325 Q83 256 114 187 Z"/>
+  <path class="body" d="M398 187 L359 207 L359 305 L398 325 Q429 256 398 187 Z"/>
+  <circle class="body" cx="256" cy="256" r="108"/>
+  <circle class="core" cx="256" cy="256" r="46"/>
+  <rect class="core" x="246" y="98" width="20" height="38" rx="4"/>
+  <rect class="core" x="246" y="376" width="20" height="38" rx="4"/>
+  <path class="cross" d="M256 153 V205 M256 307 V359 M153 256 H205 M307 256 H359" stroke-width="11"/>
+</svg>
