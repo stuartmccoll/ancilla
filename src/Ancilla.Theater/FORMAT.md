@@ -197,8 +197,8 @@ bits 29–36  tick counter, u8, +1 per tick, wraps at 256
 ### Entity records and player positions
 
 Type-0 records update one entity each, addressed by its **type-1 slot**, and list the components
-they carry by their index in the header registry's block for that entity class (research-script
-checks on ten PvP films; not yet in `inspect`):
+they carry by their index in the header registry's block for that entity class
+(`Format/EntityRecords.cs`; `inspect` runs the position checks below on every PvP film):
 
 ```
 [1]        record start (1 in 99.7% of biped records)
@@ -226,7 +226,7 @@ data       per component, in list order. Component 0, position:
   15 bits is the only split whose steps match F1's; F3's lowest bit is always 0. Each biped updates
   every few ticks (about 2.7 position records per tick in an 8-player film).
 
-**Player positions** (checked by a research script on ten PvP films; nine pass every check):
+**Player positions** (checked on ten PvP films by `inspect`, which prints the respawn timing without checking it):
 
 | Check | Result |
 |---|---|
@@ -493,8 +493,7 @@ guessed to be a timed map event such as a power weapon.
 3. ~~Work out code 5.~~ Done: objective events (see above). Next: label CTF flag actions with a
    flag-state model per team, checked against per-player steals, returns and captures; and see
    what code 5 means in other modes (Oddball, Strongholds).
-4. Replication stream: port the entity-record parser and the position checks into `inspect`;
-   chain lives into per-player tracks; decode velocity (component 1), aiming (21) and command tick
+4. Replication stream: chain lives into per-player tracks; decode velocity (component 1), aiming (21) and command tick
    (25). A controlled recording (walk a known line) would fix the coordinate scale and axes.
 
 ## Prior art

@@ -90,6 +90,53 @@ public class SlotTableTests
         Assert.False(SlotTable.Parse(new byte[SlotTable.PayloadBytes - 1]).LayoutOk);
 }
 
+public class EntityRecordsTests
+{
+    private static void Biped(BitWriter w, int slot, int[] components, (int X, int Y, int Z) p) =>
+        Header(w, slot, components).Write(0, 2).Write((ulong)p.X, 18).Write((ulong)p.Y, 15).Write((ulong)p.Z, 18);
+
+    private static BitWriter Header(BitWriter w, int slot, int[] components)
+    {
+        w.Write(1, 1).Write((ulong)slot, 13).Write(0, 1).Write(1, 1).Write((ulong)components.Length, 5);
+        foreach (var c in components) w.Write((ulong)c, 6);
+        return w;
+    }
+
+    [Fact]
+    public void Finds_biped_and_dropped_object_positions_at_any_bit_offset()
+    {
+        var w = new BitWriter().Write(0b101, 3);
+        Biped(w, 600, [0, 1, 25], (16_000, 18_000, 231_038));
+        Header(w, 1500, [0, 1, 2, 3]).Write(16_010, 18).Write(18_020, 15).Write(231_100, 18);
+        var (bipeds, objects) = EntityRecords.Find(w.Write(0, 8).ToArray());
+        Assert.Contains(new EntityPosition(600, new FilmPosition(16_000, 18_000, 231_038)), bipeds);
+        Assert.Contains(new EntityPosition(1500, new FilmPosition(16_010, 18_020, 231_100)), objects);
+    }
+
+    [Theory]
+    [InlineData(300, new[] { 0, 1 })]   // not a biped slot
+    [InlineData(600, new[] { 1, 25 })]  // no position component
+    [InlineData(600, new[] { 0, 25, 1 })] // components not ascending
+    public void Ignores_headers_that_are_not_biped_positions(int slot, int[] components)
+    {
+        var w = new BitWriter();
+        Biped(w, slot, components, (1, 2, 4));
+        Assert.DoesNotContain(EntityRecords.Find(w.Write(0, 8).ToArray()).Bipeds, b => b.Slot == slot);
+    }
+
+    [Fact]
+    public void Filtering_keeps_slots_with_enough_records_inside_the_dropped_objects_range()
+    {
+        var objects = Enumerable.Range(0, 400).Select(i => (i, new EntityPosition(2000, new FilmPosition(10_000 + i * 10, 15_000 + i * 5, 230_000 + i * 2)))).ToList();
+        var bipeds = Enumerable.Range(0, 40).Select(i => (i, new EntityPosition(520, new FilmPosition(12_000 + i, 16_000, 231_000))))
+            .Concat(Enumerable.Range(0, 5).Select(i => (i, new EntityPosition(530, new FilmPosition(12_000, 16_000, 231_000)))))    // too few
+            .Concat(Enumerable.Range(0, 40).Select(i => (i, new EntityPosition(540, new FilmPosition(200_000, 16_000, 231_000)))))   // out of range
+            .ToList();
+        var kept = EntityRecords.FilterBipeds(bipeds, objects);
+        Assert.Equal([520], kept.Select(k => k.Record.Slot).Distinct());
+    }
+}
+
 public class TickMarkerTests
 {
     private static byte[] Marker(int?[] slots, int extraZeroBytes = 0, bool strayTailBit = false)

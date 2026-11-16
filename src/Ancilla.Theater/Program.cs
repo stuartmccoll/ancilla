@@ -231,6 +231,90 @@ void InspectReplication(Action<bool, string> check, List<SlotTable> tables, List
     }
 }
 
+// Checks that type-0 biped records carry player positions, against the summary's deaths. PvP only:
+// in Firefight the AI share the biped slots and AI deaths aren't in the summary.
+void InspectPositions(Action<bool, string> check, List<SummaryEvent> events, IReadOnlyList<int> teamOf, List<(double Ms, int Bytes)> tickData,
+    List<(int Tick, EntityPosition Record)> bipeds, List<(int Tick, EntityPosition Record)> objects)
+{
+    Console.WriteLine("\nPositions (type-0 entity records)");
+    var deaths = events.Where(e => e.Kind == SummaryEventKind.Death).ToList();
+    var slots = bipeds.GroupBy(r => r.Record.Slot).ToDictionary(g => g.Key, g => g.ToList());
+    Console.WriteLine($"  {bipeds.Count:N0} biped position records in {slots.Count} slots; {objects.Count:N0} dropped-object records");
+    if (deaths.Count < 20 || slots.Count < 8) { Console.WriteLine("  too few deaths or bipeds to check"); return; }
+
+    var times = tickData.Select(x => x.Ms).ToList();
+    int TickOf(double ms) => (times.BinarySearch(ms) is var b && b >= 0 ? b + 1 : ~b) - 1;   // last tick at or before
+    var deathTick = deaths.Select(d => TickOf(d.TimeMs)).ToList();
+    var first = slots.ToDictionary(s => s.Key, s => s.Value[0]);
+    var last = slots.ToDictionary(s => s.Key, s => s.Value[^1]);
+
+    // (a) Each death ends one slot's track within 3 ticks; deaths shifted by 2 s give the baseline.
+    Dictionary<int, int> Match(int shift)
+    {
+        var used = new HashSet<int>(); var got = new Dictionary<int, int>();
+        for (var n = 0; n < deaths.Count; n++)
+        {
+            var dk = deathTick[n] + shift;
+            var best = slots.Keys.Where(s => !used.Contains(s) && Math.Abs(last[s].Tick - dk) <= 3)
+                .OrderBy(s => Math.Abs(last[s].Tick - dk)).ThenBy(s => s).Select(s => (int?)s).FirstOrDefault();
+            if (best is { } s2) { used.Add(s2); got[n] = s2; }
+        }
+        return got;
+    }
+    var matched = Match(0); var shifted = Match(120);
+    check(matched.Count * 10 >= deaths.Count * 9 && shifted.Count * 10 <= deaths.Count,
+        $"deaths end a biped slot's track within 3 ticks: {matched.Count} of {deaths.Count} (deaths shifted 2 s: {shifted.Count})");
+
+    // Respawn, for information: a new slot first seen lo–hi ms after each matched death.
+    int Respawns(double lo, double hi)
+    {
+        var used = new HashSet<int>(); var n = 0;
+        foreach (var d in matched.Keys.OrderBy(k => deaths[k].TimeMs))
+        {
+            var s = slots.Keys.Where(s => !used.Contains(s) && times[first[s].Tick] - deaths[d].TimeMs is var gap && gap >= lo && gap <= hi)
+                .OrderBy(s => times[first[s].Tick]).Select(s => (int?)s).FirstOrDefault();
+            if (s is { } s2) { used.Add(s2); n++; }
+        }
+        return n;
+    }
+    Console.WriteLine($"  [--] a new slot starts 7.95–8.25 s after {Respawns(7950, 8250)} of {matched.Count} matched deaths " +
+                      $"(7.95–9 s: {Respawns(7950, 9000)}; 3.95–4.25 s: {Respawns(3950, 4250)}). CTF respawn is 8 s; one film spreads to 9 s.");
+
+    // (b) Objects dropped 0–300 ms after a death land on the victim's last position.
+    var objectFirst = objects.GroupBy(o => o.Record.Slot).Select(g => g.First()).ToList();
+    var drops = new Dictionary<int, List<FilmPosition>>();
+    foreach (var (tick, rec) in objectFirst)
+    {
+        var j = deathTick.FindLastIndex(dk => dk <= tick);
+        if (j >= 0 && times[tick] - deaths[j].TimeMs is >= 0 and < 300) (drops.TryGetValue(j, out var l) ? l : drops[j] = []).Add(rec.Position);
+    }
+    var keys = matched.Keys.Where(drops.ContainsKey).ToList();
+    if (keys.Count >= 10)
+    {
+        double Nearest(int death, int dropsOf) => drops[dropsOf].Min(p => last[matched[death]].Record.Position.HorizontalDistance(p));
+        var real = keys.Select(n => Nearest(n, n)).Order().ToList();
+        var other = keys.Select((n, i) => Nearest(n, keys[(i + 1) % keys.Count])).Order().ToList();
+        double real50 = real[real.Count / 2], other50 = other[other.Count / 2];
+        check(real50 <= 0.2 * other50, $"objects dropped at a death land on the victim: median {real50:F0} units horizontally, against {other50:F0} for another death's ({keys.Count} deaths)");
+    }
+
+    // (c) Steps between consecutive ticks are small (Z counts half).
+    var steps = slots.Values.SelectMany(v => v.Zip(v.Skip(1)).Where(x => x.Second.Tick == x.First.Tick + 1)
+        .Select(x => (x.First.Record.Position, x.Second.Record.Position) is var (a, b)
+            ? Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2) + Math.Pow((a.Z - b.Z) / 2.0, 2)) : 0)).ToList();
+    var small = steps.Count(s => s <= 6);
+    check(steps.Count > 0 && small * 10 >= steps.Count * 9, $"biped positions move smoothly: {small:N0} of {steps.Count:N0} tick-to-tick steps are 6 units or less");
+
+    // (e) A new life starts at the team's base: the first eight slots' first positions form two
+    // clusters (the bases), and each team's matched slots should start at one of them.
+    var firstEight = slots.Keys.OrderBy(s => first[s].Tick).Take(8).ToList();
+    var c0 = first[firstEight[0]].Record.Position;
+    var c1 = first[firstEight.MaxBy(s => first[s].Record.Position.HorizontalDistance(c0))].Record.Position;
+    int BaseOf(int s) => first[s].Record.Position.HorizontalDistance(c0) <= first[s].Record.Position.HorizontalDistance(c1) ? 0 : 1;
+    var byTeam = matched.GroupBy(m => teamOf[deaths[m.Key].Player]).Select(g => g.CountBy(m => BaseOf(m.Value)).Max(x => x.Value)).Sum();
+    check(byTeam * 10 >= matched.Count * 9, $"each team's lives start at one base: {byTeam} of {matched.Count} matched slots");
+}
+
 string ResolveMatch(string? matchId) =>
     matchId is not null
         ? HaloIds.RequireGuid(matchId, nameof(matchId))
@@ -270,6 +354,8 @@ int Inspect(string matchId)
     var type6Ok = true; var type12Ok = true; var type8MaxCount = 0u;
     int tickMarkers = 0, tickLayoutMisses = 0, tickFollowedByType0 = 0, maxPresentSlots = 0;
     var tickData = new List<(double Ms, int Bytes)>();   // type-0 packets: film time and size
+    var bipedCandidates = new List<(int Tick, EntityPosition Record)>();
+    var objectCandidates = new List<(int Tick, EntityPosition Record)>();
     foreach (var c in chunks.Where(c => c.ChunkType != 1).OrderBy(c => c.Index))
     {
         var data = cache.LoadChunk(matchId, c);
@@ -296,6 +382,9 @@ int Inspect(string matchId)
                 switch (p.Type)
                 {
                     case 0:
+                        var (found, objects) = EntityRecords.Find(span1);
+                        bipedCandidates.AddRange(found.Select(r => (tickData.Count, r)));
+                        objectCandidates.AddRange(objects.Select(r => (tickData.Count, r)));
                         tickData.Add(((p.TimestampUs - firstStart.Value.Us) / 1000.0, p.Payload.Length));
                         break;
                     case 1:
@@ -523,6 +612,9 @@ int Inspect(string matchId)
 
     InspectReplication(Check, slotTables, events, board, humans.Count,
         (type6Ok, type12Ok, type8MaxCount), (tickMarkers, tickLayoutMisses, tickFollowedByType0, maxPresentSlots), tickData);
+    if (board is not null && board.MatchInfo.GameVariantCategory != GameVariantFirefight)
+        InspectPositions(Check, events, filmPlayers.Select(x => x.Row.LastTeamId).ToList(), tickData,
+            EntityRecords.FilterBipeds(bipedCandidates, objectCandidates), objectCandidates);
 
     Console.WriteLine(failures == 0 ? "\nAll checks passed." : $"\n{failures} check(s) failed.");
     return failures == 0 ? 0 : 2;
