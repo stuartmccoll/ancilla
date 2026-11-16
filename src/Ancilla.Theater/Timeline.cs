@@ -228,6 +228,11 @@ public static class Timeline
         o.WriteLine($"  {"".PadRight(w)}  lives  spawns   death-to-death med/max    est. time alive med/max  avg life (scoreboard)");
         foreach (var line in lifeLines) o.WriteLine(line);
 
+        // ---- Positions ----
+        // PvP only: in Firefight the AI share the biped slots and their deaths aren't in the summary.
+        if (board.MatchInfo.GameVariantCategory != FirefightCategory)
+            WritePositions(o, FilmPositions.Load(cache, matchId), events, players, L);
+
         // ---- Calibration ----
         o.WriteLine("\nCalibration (estimates)");
         if (events.Count > 0)
@@ -249,6 +254,89 @@ public static class Timeline
         }
         o.WriteLine($"  used here: respawn {RespawnEstimateMs / 1000} s, first spawn about {FirstSpawnEstimateMs / 1000} s on the event clock (fits across five CTF films)");
         return 0;
+    }
+
+    private const int FirefightCategory = 42;
+    public const int MapWidth = 60, MapHeight = 22;
+
+    /// <summary>
+    /// Per-player movement and kill distances, and a map of where each team died, from biped
+    /// positions chained into lives (see <see cref="Lives"/>). Units are film units: scale and axes
+    /// are unknown, so distances only compare within a film (and maps across films on one map).
+    /// </summary>
+    private static void WritePositions(TextWriter o, FilmPositions pos, List<SummaryEvent> events, List<Player> players, Func<Player, string> L)
+    {
+        var tracks = Lives.Tracks(pos.Bipeds);
+        var deathIdx = events.Select((e, i) => (e, i)).Where(x => x.e.Kind == SummaryEventKind.Death).Select(x => x.i).ToList();
+        var deaths = deathIdx.Select(i => events[i]).ToList();
+        o.WriteLine("\nPositions (film units: scale and axes unknown; Z is height, not used here)");
+        if (tracks.Count < 8 || deaths.Count == 0) { o.WriteLine("  too few biped positions or deaths to place players"); return; }
+
+        var deathTicks = deaths.Select(d => pos.TickAt(d.TimeMs)).ToList();
+        var matched = Lives.MatchDeaths(deathTicks, tracks);
+        var respawns = Lives.Respawns(deaths.Select(d => (double)d.TimeMs).ToList(), matched.Keys, tracks, pos.TickMs);
+        var lives = Lives.Chain(deaths.Select(d => d.Player).ToList(), matched, respawns, tracks);
+
+        // Where a player was at a tick: the last position at or before it in the life covering it.
+        FilmPosition? At(int player, int tick)
+        {
+            foreach (var slot in lives.GetValueOrDefault(player) ?? [])
+            {
+                var t = tracks[slot];
+                if (tick < t.FirstTick || tick > t.LastTick + 3) continue;
+                var i = t.Points.FindLastIndex(p => p.Tick <= tick);
+                return i >= 0 ? t.Points[i].Position : null;
+            }
+            return null;
+        }
+
+        // Kill distance: the killer's position against the victim's last position, at the death.
+        var killDistances = new Dictionary<int, List<double>>();
+        for (var n = 0; n < deaths.Count; n++)
+        {
+            var i = deathIdx[n];
+            if (i == 0 || events[i - 1] is not { Kind: SummaryEventKind.PlayerKill, Victim: { } v } kill || v != deaths[n].Player) continue;
+            if (!matched.TryGetValue(n, out var victimSlot) || At(kill.Player, deathTicks[n]) is not { } killerAt) continue;
+            (killDistances.TryGetValue(kill.Player, out var l) ? l : killDistances[kill.Player] = []).Add(tracks[victimSlot].Points[^1].Position.HorizontalDistance(killerAt));
+        }
+
+        o.WriteLine($"  {"".PadRight(L(players[0]).Length)}  lives found  distance moved  kill distance med (kills placed)");
+        foreach (var p in players)
+        {
+            var mine = lives.GetValueOrDefault(p.Index) ?? [];
+            var moved = mine.Sum(s => tracks[s].Points.Zip(tracks[s].Points.Skip(1)).Sum(x => x.First.Position.HorizontalDistance(x.Second.Position)));
+            var kd = killDistances.GetValueOrDefault(p.Index)?.Order().ToList() ?? [];
+            o.WriteLine($"  {L(p)}  {$"{mine.Count}/{p.Row.Stats?.CoreStats.Spawns}",11}  {moved,14:N0}  " +
+                        (kd.Count == 0 ? "–" : $"{kd[kd.Count / 2],17:N0} ({kd.Count})"));
+        }
+        o.WriteLine($"  lives found / scoreboard spawns: a life is placed when a death ends it or it follows one; {matched.Count} of {deaths.Count} deaths placed");
+
+        // Death map: every biped position marks the arena; each placed death marks its team.
+        var all = pos.Bipeds.Select(b => b.Record.Position).ToList();
+        int minX = all.Min(p => p.X), maxX = all.Max(p => p.X), minY = all.Min(p => p.Y), maxY = all.Max(p => p.Y);
+        (int Col, int Row) Cell(FilmPosition p) =>
+            ((int)((long)(p.X - minX) * (MapWidth - 1) / Math.Max(1, maxX - minX)), (int)((long)(maxY - p.Y) * (MapHeight - 1) / Math.Max(1, maxY - minY)));
+        var visited = all.Select(Cell).ToHashSet();
+        var teams = players.Select(p => p.Team).Distinct().Order().Take(2).ToList();
+        var deathsAt = new Dictionary<(int, int), int[]>();
+        foreach (var (n, slot) in matched)
+        {
+            var team = teams.IndexOf(players[deaths[n].Player].Team);
+            if (team < 0) continue;
+            var c = Cell(tracks[slot].Points[^1].Position);
+            (deathsAt.TryGetValue(c, out var a) ? a : deathsAt[c] = new int[2])[team]++;
+        }
+        o.WriteLine($"\nDeath map (X across, Y up; · = where players went; {(teams.Count > 0 ? $"a = T{teams[0]}" : "")}" +
+                    $"{(teams.Count > 1 ? $", b = T{teams[1]}" : "")} died here, A/B = 3 or more, * = both teams)");
+        for (var row = 0; row < MapHeight; row++)
+        {
+            var line = new char[MapWidth];
+            for (var col = 0; col < MapWidth; col++)
+                line[col] = deathsAt.TryGetValue((col, row), out var d)
+                    ? d[0] > 0 && d[1] > 0 ? '*' : d[0] > 0 ? (d[0] >= 3 ? 'A' : 'a') : (d[1] >= 3 ? 'B' : 'b')
+                    : visited.Contains((col, row)) ? '·' : ' ';
+            o.WriteLine($"  |{new string(line)}|");
+        }
     }
 
     private static long Ms(string iso) => (long)IsoDuration.Parse(iso).TotalMilliseconds;

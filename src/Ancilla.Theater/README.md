@@ -85,6 +85,11 @@ are `T{team} P{roster index}`; the index is scoreboard order among humans.
   traded kills (died within 3 s after a kill) and revenge kills (killed their last killer). The
   longest streak equals the scoreboard's `maxKillingSpree` for all 40 roster players in the five PvP
   films.
+- **Positions** (PvP only): per player, the lives found against scoreboard spawns, the distance
+  moved, and the median kill distance (killer's position against the victim's last position).
+  Then a text **death map**: where players went (`·`) and where each team died. Distances are in
+  film units, whose scale and axes are unknown, so compare them only within a film, or maps
+  across films on the same map. Lives come from `Lives` (see FORMAT.md, "Which player is which").
 - **Lives:** death-to-death times, and **estimated** time alive (death-to-death minus the respawn
   estimate), next to the scoreboard's average life.
 
@@ -121,7 +126,8 @@ at a time, and skips chunks already cached.
 | File | Role |
 |---|---|
 | `Program.cs` | Commands. `Inspect` is a list of `Check(bool, description)` calls grouped by chunk type; add a check for every new finding. |
-| `Timeline.cs` | The `timeline` command: a prototype of the match-timeline feature, built on the decoded summary. `AssignMedals` links each medal to the same player's nearest kill. |
+| `Timeline.cs` | The `timeline` command: a prototype of the match-timeline feature, built on the decoded summary. `AssignMedals` links each medal to the same player's nearest kill. `WritePositions` adds distances and the death map. |
+| `FilmPositions.cs` | Loads a cached film's biped and dropped-object positions, with each tick's time on the event clock. |
 | `FilmSource.cs` | Manifest parsing and chunk download (public, so no token; host and path are validated). The manifest itself comes from `HaloWaypointClient.GetFilmManifestJsonAsync`. |
 | `FilmCache.cs` | Cache folder for each match: `manifest.json`, `scoreboard.json`, `chunkNNN-typeT.zlib`. `LoadChunk` decompresses. `medals.json` (medal metadata, saved once by `fetch`) sits in the cache root. |
 | `Format/Packets.cs` | `PacketReader.Read`: the 16-byte packet layer of type-2 and type-3 chunks. |
@@ -201,9 +207,15 @@ In order of value:
 4. **Replication stream.** Type 1 (entity slots), type 10 and the match-time mapping are decoded,
    and `inspect` checks them. Player positions are found: type 0 records are addressed by type 1
    slot and carry a component list (see FORMAT.md), and `inspect` checks them; `Lives` chains them
-   into each player's lives. Next: show tracks and death locations in `timeline`, fill the lives
-   chaining misses from the end-of-packet per-player list, and decode velocity and aim. A controlled
-   recording (short custom game, walk a straight line) would fix scale and axes.
+   into each player's lives, and `timeline` shows distances and a death map. **To do:**
+   - [ ] **Fill the lives chaining misses** (players who never died, a quitter's last life; 64 of
+     84 PvP players are complete) from the end-of-packet per-player list: a player's entry is
+     missing exactly while they're dead, and its index is the roster index in most films (see
+     FORMAT.md, "Per-player list"). Its parser isn't in the repo yet.
+   - [ ] **Decode velocity (component 1) and aim (component 21)** in biped records. They follow
+     position in the record, in component-list order. Velocity against the change in position may
+     give the coordinate scale without a custom game.
+   - [ ] A controlled recording (short custom game, walk a straight line) would fix scale and axes.
 5. **Bring it into the web app.** Split the decoder and analysis into a library the web app
    references, and keep the research commands as a separate console entry point. A match timeline
    (kill feed and who killed whom) is the first app feature it enables; `Ancilla.Theater timeline`

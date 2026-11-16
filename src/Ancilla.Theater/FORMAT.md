@@ -497,8 +497,8 @@ guessed to be a timed map event such as a power weapon.
 3. ~~Work out code 5.~~ Done: objective events (see above). Next: label CTF flag actions with a
    flag-state model per team, checked against per-player steals, returns and captures; and see
    what code 5 means in other modes (Oddball, Strongholds).
-4. Replication stream: show per-player tracks and death locations in `timeline`; fill the
-   remaining lives from the end-of-packet per-player list; decode velocity (component 1), aiming (21) and command tick
+4. Replication stream: fill the remaining lives from the end-of-packet per-player list
+   (`timeline` already shows distances and a death map from the lives found); decode velocity (component 1), aiming (21) and command tick
    (25). A controlled recording (walk a known line) would fix the coordinate scale and axes.
 
 ## Prior art
