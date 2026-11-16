@@ -242,9 +242,13 @@ Spartan runs about 7 world units a second, 1 unit ≈ 0.05 world units (guess). 
 a known line would settle it; so might decoding velocity (component 1) against the change in
 position.
 
-**Which player is which:** chain each life's slot to the next through deaths and 8-second respawns,
-using the end-of-packet per-player list (below) or the team base to identify lives that don't end
-in a death. Not built yet.
+**Which player is which** (`Format/Lives.cs`, checked by `inspect`): a life that ends in a death is
+the slot that death ends; the life after a player's last death is the new slot nearest 8 s after
+it. No player ever gets more lives than their scoreboard spawns, and 64 of 84 PvP players get
+exactly as many; the rest are short, mostly a life with no death at either end (a player who never
+died, a quitter). Pairing every death with the new slot nearest 8 s later agrees with the slot the
+player's next death ends in 85–100% of cases per film, so deaths are trusted first. Not yet used:
+the end-of-packet per-player list (below), which could identify the remaining lives.
 
 *Correction:* a "second record family" thought to carry coordinates after prefixes ending
 `0101100100` was the tail of biped component lists. Tracking it without the slot ID failed.
@@ -493,7 +497,8 @@ guessed to be a timed map event such as a power weapon.
 3. ~~Work out code 5.~~ Done: objective events (see above). Next: label CTF flag actions with a
    flag-state model per team, checked against per-player steals, returns and captures; and see
    what code 5 means in other modes (Oddball, Strongholds).
-4. Replication stream: chain lives into per-player tracks; decode velocity (component 1), aiming (21) and command tick
+4. Replication stream: show per-player tracks and death locations in `timeline`; fill the
+   remaining lives from the end-of-packet per-player list; decode velocity (component 1), aiming (21) and command tick
    (25). A controlled recording (walk a known line) would fix the coordinate scale and axes.
 
 ## Prior art

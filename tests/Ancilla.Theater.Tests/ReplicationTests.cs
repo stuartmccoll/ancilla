@@ -137,6 +137,40 @@ public class EntityRecordsTests
     }
 }
 
+public class LivesTests
+{
+    private static BipedTrack Track(int slot, int first, int last) =>
+        new(slot, Enumerable.Range(first, last - first + 1).Select(t => (t, new FilmPosition(t, 0, 0))).ToList());
+
+    [Fact]
+    public void Chains_each_players_lives_through_deaths_and_8_second_respawns()
+    {
+        // Ticks are 1 s apart for simplicity. Player 0 dies at 10 s and 30 s; player 1 at 12 s.
+        var tickMs = Enumerable.Range(0, 60).Select(t => t * 1000.0).ToList();
+        var tracks = new[] { Track(512, 0, 10), Track(513, 0, 12), Track(514, 18, 30), Track(515, 20, 59), Track(516, 38, 59) }
+            .ToDictionary(t => t.Slot);
+        int[] deathTicks = [10, 12, 30], deathPlayers = [0, 1, 0];
+        var deathMs = deathTicks.Select(t => t * 1000.0).ToList();
+
+        var matched = Lives.MatchDeaths(deathTicks, tracks);
+        Assert.Equal(new Dictionary<int, int> { [0] = 512, [1] = 513, [2] = 514 }, matched);
+        var respawns = Lives.Respawns(deathMs, matched.Keys, tracks, tickMs);
+        Assert.Equal(new Dictionary<int, int> { [0] = 514, [1] = 515, [2] = 516 }, respawns);
+
+        var lives = Lives.Chain(deathPlayers, matched, respawns, tracks);
+        Assert.Equal([512, 514, 516], lives[0]);
+        Assert.Equal([513, 515], lives[1]);
+    }
+
+    [Fact]
+    public void A_death_with_no_track_ending_nearby_is_not_matched()
+    {
+        var tracks = new[] { Track(512, 0, 10) }.ToDictionary(t => t.Slot);
+        Assert.Empty(Lives.MatchDeaths([20], tracks));
+        Assert.Single(Lives.MatchDeaths([12], tracks));   // within 3 ticks
+    }
+}
+
 public class TickMarkerTests
 {
     private static byte[] Marker(int?[] slots, int extraZeroBytes = 0, bool strayTailBit = false)

@@ -25,7 +25,7 @@ into the app's match analysis; the web app doesn't reference it yet.
 | Summary: event code 5 | Objective events (CTF flag actions, Firefight objective awards); checked against CTF stats |
 | Replication chunk leading packets: type 1 entity slot table, types 6, 8, 12 | Type 1 decoded and checked; 8 and 12 partly |
 | Type 10 tick markers, and packet time = summary event time | Decoded and checked |
-| Replication stream: type 0 entity records and player positions | Positions decoded and checked against deaths; per-player tracks, scale, aim and weapons not yet |
+| Replication stream: type 0 entity records and player positions | Positions decoded and checked against deaths; lives chained per player (most, not all); scale, aim and weapons not yet |
 
 **Verified on eleven version-41 films:** one Firefight (4 players) and ten PvP Capture the Flag
 (8 players, mode category 9, with quitters, late joiners and bots). `inspect` passes every check on all eleven. Run
@@ -134,6 +134,7 @@ at a time, and skips chunks already cached.
 | `Format/SlotTable.cs` | The type-1 packet: the entity slot table (in use, generation, value per slot; pool cursors). |
 | `Format/TickMarker.cs` | The type-10 packet: one 6-bit value per present player slot. |
 | `Format/EntityRecords.cs` | Type-0 entity records: biped and dropped-object positions, found by their headers. |
+| `Format/Lives.cs` | Biped tracks per slot, matched to deaths and chained into each player's lives. |
 | `Format/BitReader.cs` | MSB-first bit reader. |
 | `Format/ShiftedBits.cs` | The data shifted by 0–7 bits, so a byte pattern at any bit offset can be found with `IndexOf`. Much faster than reading bit by bit. |
 
@@ -199,8 +200,9 @@ In order of value:
    other modes.
 4. **Replication stream.** Type 1 (entity slots), type 10 and the match-time mapping are decoded,
    and `inspect` checks them. Player positions are found: type 0 records are addressed by type 1
-   slot and carry a component list (see FORMAT.md), and `inspect` checks them. Next: chain lives
-   into per-player tracks, and decode velocity and aim. A controlled
+   slot and carry a component list (see FORMAT.md), and `inspect` checks them; `Lives` chains them
+   into each player's lives. Next: show tracks and death locations in `timeline`, fill the lives
+   chaining misses from the end-of-packet per-player list, and decode velocity and aim. A controlled
    recording (short custom game, walk a straight line) would fix scale and axes.
 5. **Bring it into the web app.** Split the decoder and analysis into a library the web app
    references, and keep the research commands as a separate console entry point. A match timeline
