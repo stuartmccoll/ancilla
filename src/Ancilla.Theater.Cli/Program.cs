@@ -21,6 +21,7 @@ try
         "list" => List(),
         "inspect" => Inspect(ResolveMatch(rest.FirstOrDefault())),
         "timeline" => Timeline.Run(cache, ResolveMatch(rest.FirstOrDefault()), showNames, !args.Contains("--no-feed"), Console.Out),
+        "track" => Track(ResolveMatch(rest.FirstOrDefault())),
         "dump" => Dump(ResolveMatch(rest.FirstOrDefault()), rest.Length > 1 ? ParseNumber(rest[1], "chunk index") : 0),
         _ => Help(),
     };
@@ -50,6 +51,7 @@ int Help()
                               --pvp          latest matchmade match that isn't Firefight
                               --count=N      the latest N (of your last 25), one per mode category first
                               --start=N      skip your N most recent matches first (to reach older modes)
+                              --custom       look in your custom games instead of matchmade ones
         Ancilla.Theater list                   films in the cache
         Ancilla.Theater inspect [matchId]      decode what is understood so far and check it (default: newest cached)
                                 --show-names   include gamertags in the roster output
@@ -57,6 +59,7 @@ int Help()
         Ancilla.Theater timeline [matchId]     kill feed, score flow, head-to-head and per-player lives (default: newest cached)
                                 --show-names   label players with gamertags instead of T0 P1
                                 --no-feed      leave out the kill feed
+        Ancilla.Theater track [matchId]        biped positions as CSV (tick, ms, slot, x, y, z), for controlled tests
         Ancilla.Theater dump [matchId] [index] write chunk <index> decompressed, for hex tools
         """);
     Console.WriteLine($"Cache: {cache.DisplayRoot}");
@@ -84,7 +87,8 @@ async Task<int> FetchManyAsync(string? matchId)
     // --start pages further back through match history, to reach modes the latest 25 don't cover.
     var start = NumberOption("--start", 0);
     var me = await client.GetMeAsync();
-    var history = await client.GetMatchHistoryAsync(me.Xuid, start, 25, MatchHistoryType.Matchmaking);
+    var custom = args.Contains("--custom");
+    var history = await client.GetMatchHistoryAsync(me.Xuid, start, 25, custom ? MatchHistoryType.Custom : MatchHistoryType.Matchmaking);
     // --pvp skips Firefight (mode category 42).
     var candidates = history.Results
         .Where(r => !args.Contains("--pvp") || r.MatchInfo.GameVariantCategory != GameVariantFirefight)
@@ -93,7 +97,7 @@ async Task<int> FetchManyAsync(string? matchId)
     // Newest match of each mode category first, then the rest newest first, so a batch covers more modes.
     var firstOfEach = candidates.GroupBy(r => r.MatchInfo.GameVariantCategory).Select(g => g.First()).ToList();
     var picks = firstOfEach.Concat(candidates.Except(firstOfEach)).Take(count).ToList();
-    if (picks.Count == 0) throw new InvalidDataException($"No matching matchmade match in matches {start + 1}–{start + 25} of your history.");
+    if (picks.Count == 0) throw new InvalidDataException($"No matching {(custom ? "custom" : "matchmade")} match in matches {start + 1}–{start + 25} of your history.");
 
     var failed = 0;
     foreach (var r in picks)
@@ -318,6 +322,29 @@ string ResolveMatch(string? matchId) =>
     matchId is not null
         ? HaloIds.RequireGuid(matchId, nameof(matchId))
         : cache.NewestMatch() ?? throw new InvalidDataException("No films cached. Run 'Ancilla.Theater fetch' first.");
+
+// Every biped candidate in a slot seen at least 30 times, unfiltered by coordinate range: a solo
+// custom game may drop no objects, which is where FilterBipeds takes its range from.
+int Track(string matchId)
+{
+    var m = cache.LoadManifest(matchId);
+    var ticks = new List<double>();
+    var bipeds = new List<(int Tick, EntityPosition Record)>();
+    ulong? firstUs = null;
+    foreach (var c in m.CustomData.Chunks.Where(c => c.ChunkType == 2).OrderBy(c => c.Index))
+        foreach (var p in PacketReader.Read(cache.LoadChunk(matchId, c), out _))
+        {
+            firstUs ??= p.TimestampUs;
+            if (p.Type != 0) continue;
+            bipeds.AddRange(EntityRecords.Find(p.Payload.Span).Bipeds.Select(r => (ticks.Count, r)));
+            ticks.Add((p.TimestampUs - firstUs.Value) / 1000.0);
+        }
+    var perSlot = bipeds.CountBy(b => b.Record.Slot).ToDictionary();
+    Console.WriteLine("tick,ms,slot,x,y,z");
+    foreach (var (tick, (slot, pos)) in bipeds.Where(b => perSlot[b.Record.Slot] >= 30))
+        Console.WriteLine($"{tick},{ticks[tick]:F1},{slot},{pos.X},{pos.Y},{pos.Z}");
+    return 0;
+}
 
 int Dump(string matchId, int index)
 {

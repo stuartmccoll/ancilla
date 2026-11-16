@@ -32,12 +32,27 @@ public class FilmSourceTests
             FilmSource.ChunkUri(m, m.CustomData.Chunks[1]).ToString());
     }
 
+    [Fact]
+    public void Custom_game_chunks_come_from_halos_azure_storage()
+    {
+        var m = FilmSource.ParseManifest(ManifestJson(MatchId)) with
+        {
+            BlobStoragePathPrefix = "https://s3infiniteugcsessions.blob.core.windows.net/x/",
+        };
+        var chunk = m.CustomData.Chunks[1] with { FileRelativePath = "/filmChunk1?sv=2025-01-05&sp=rl&sig=abc%3D" };
+        Assert.Equal("https://s3infiniteugcsessions.blob.core.windows.net/x/filmChunk1?sv=2025-01-05&sp=rl&sig=abc%3D",
+            FilmSource.ChunkUri(m, chunk).ToString());
+    }
+
     [Theory]
     [InlineData("http://blobs-infiniteugc.svc.halowaypoint.com/x/", "/filmChunk1")]   // not HTTPS
     [InlineData("https://example.com/x/", "/filmChunk1")]                            // not Halo's blob host
+    [InlineData("https://someoneelse.blob.core.windows.net/x/", "/filmChunk1")]      // another Azure account
     [InlineData("not a url", "/filmChunk1")]
     [InlineData("https://blobs-infiniteugc.svc.halowaypoint.com/x/", "/../secret")]   // not a chunk path
     [InlineData("https://blobs-infiniteugc.svc.halowaypoint.com/x/", "https://example.com/filmChunk1")]
+    [InlineData("https://blobs-infiniteugc.svc.halowaypoint.com/x/", "/filmChunk1?a=/../b")]  // query with a path in it
+    [InlineData("https://blobs-infiniteugc.svc.halowaypoint.com/x/", "/filmChunk1#frag")]
     public void Chunk_urls_outside_halos_blob_storage_are_refused(string prefix, string path)
     {
         var m = FilmSource.ParseManifest(ManifestJson(MatchId)) with { BlobStoragePathPrefix = prefix };

@@ -20,9 +20,9 @@ Confidence levels:
 | Step | Detail | Confidence |
 |---|---|---|
 | Manifest | `GET discovery-infiniteugc.svc.halowaypoint.com/hi/films/matches/{matchId}/spectate`, needs the Spartan token | Checked |
-| Chunks | `{BlobStoragePathPrefix}{FileRelativePath}` on `blobs-infiniteugc.svc.halowaypoint.com`. **Served without the token**, so anyone with the URL can download a film | Observed |
+| Chunks | `{BlobStoragePathPrefix}{FileRelativePath}` on `blobs-infiniteugc.svc.halowaypoint.com` (matchmade) or `s3infiniteugcsessions.blob.core.windows.net` (custom games). **Served without the token**, so anyone with the URL can download a film. Custom game paths carry a read-only Azure SAS query string valid for about a day (`/filmChunk1?sv=…&sig=…`) | Observed |
 | Compression | Each chunk is a zlib stream (`78 5E` header) | Checked |
-| Chunk types | 1 = header (one, at the start), 2 = replication (about 20 s each), 3 = summary (one, at the end) | Observed |
+| Chunk types | 1 = header (one, at the start), 2 = replication (about 20 s each), 3 = summary (one, at the end). A custom game whose manifest says `HasGameEnded: false` had no summary chunk | Observed |
 | Version | `CustomData.FilmMajorVersion` is 41, and the header's first u32 agrees | Checked |
 
 ## Packet layer (type 2 and 3 chunks)
@@ -226,6 +226,26 @@ data       per component, in list order. Component 0, position:
   15 bits is the only split whose steps match F1's; F3's lowest bit is always 0. Each biped updates
   every few ticks (about 2.7 position records per tick in an 8-player film).
 
+**Biped component widths** (research scripts, 2026-11-16; not yet in `EntityRecords`). The command
+tick works as a marker: its value is predictable, so finding it shows where the components before it
+end. Every common component list lands on these sums (one CTF film, 10 lists checked):
+
+| Component | Bits | Notes |
+|---|---|---|
+| 0 position | 54 | `[00]` + 51 coordinate bits + 1 bit, always 0 when nothing follows but the tick. The custom game's is 57 |
+| 1 velocity | 31 | not decoded |
+| 5 shield vitality | 29 | not decoded |
+| 21 aim | 25 | not decoded; a custom game looking up, down and in 90° turns would show the split |
+| 25 command tick | 9 | `[1] [tick:8]`, the game tick mod 256 |
+
+- **Command tick (checked on all 12 matchmade films):** in every (0, 25) record the 8 bits equal
+  the type-0 packet count plus a per-film offset. The offset steps up by 1–4 a few times in most
+  films. Those are probably ticks missing from the film, so the command tick can repair its clock.
+  With the widths above, the tick lands where expected in 99% of records carrying an ammo
+  component (14 misses in 4,236 in one film).
+- **The custom game's position is 3 bits longer**: its command tick sits 3 bits later. The extra
+  bits are 2 that vary and a 0, so its split is probably about 20/17/17, not 20/17/14.
+
 **Player positions** (checked on ten PvP films by `inspect`, which prints the respawn timing without checking it):
 
 | Check | Result |
@@ -236,6 +256,54 @@ data       per component, in list order. Component 0, position:
 | Tick-to-tick steps of 6 units or fewer | 93–96% |
 | Bipeds with positions per second ≈ humans present minus the recently dead | within 25% |
 | A new slot's first position is at the dying player's team base | 93–100% |
+
+**Field widths depend on the map or the game type (observed, one custom game).** In a one-player
+custom game on Bazaar, a map none of the cached films use, the 51 bits split as about **F1 20, F2 17, F3 14**, not 18/15/18:
+read as 18/15/18, F2 jumps by multiples of 2^13 and F3 by multiples of 2^14 in 80% of steps,
+while F1's top 18 bits stay smooth. The 2-bit prefix was still `00`. The 12 cached matchmade
+films (9 maps, CTF and Firefight) all need F1 = 18 exactly, so the widths vary, by map or by
+custom versus matchmade (the component is `object-position-dynamic-precision`). Bazaar is a small
+map, so "bigger map, more bits" doesn't fit; a matchmade film on Bazaar, or a custom game on a
+map already cached, would tell the two apart. Where they come from
+isn't known yet; the header is the place to look. Smoothness pins F1 (20, possibly 21) but not the
+F2/F3 boundary within a bit or two, because the spare high bits barely change over a short walk.
+Read as 20/17/14, the recording shows (`track` exports it):
+
+| Time | What the track does |
+|---|---|
+| 16.8–20.8 s | walks along −F1 at about 295 units/s; F3 drops 65 units at 18.9–19.6 s: the player dropped from a ledge |
+| 22.7–24.2 s | walks back along +F1 |
+| 26.1–28.7 s | walks along +F2 at about 244 units/s |
+| 30.0–32.7 s | walks back along −F2 |
+| 33.4–39.8 s | walks along −F1 at about 275 units/s while jumping 4 times: F3 rises 24–26 units over takeoff and lands about 1.1–1.2 s later, on ground falling about 23 units |
+| 39.8–41.0 s | reverses along +F1 |
+| 41–51.4 s | stands still (only a position record every 0.3–0.5 s, unchanged) and fires the Assault Rifle in 8 bursts of 3, 44.6–50.3 s |
+| 51.5–55.3 s | swings ±100 units along F1 |
+| 55.3–57.4 s | walks along +F1 at about 245 units/s |
+| 62–65 s | walks along −F1, then curves round and stops |
+
+So F3 is vertical (jump arcs) and F1/F2 horizontal. If the walks along F1 and F2 were at the same
+speed, F1 and F2 units differ by about 1.2×, as they would if each axis is quantised over its own
+extent. The player confirmed Bazaar, outdoors throughout, and the ledge; they don't remember the
+moves in order, so the walking directions can't be checked against their account.
+
+**Ammo (component 30, `weapon-state-ammo`, observed).** Firing shows as 24 biped records carrying
+component 30, one per round. The 8 bits ending 4 bits before a constant 26-bit tail
+(`10000000011010111110111110`) count down by one per record, 35 to 12: a full 36-round magazine
+after its first shot. Components 21 (aim) and 25 (command tick) come before it in most of these
+records and vary in length (34–36 bits together), so neither is decoded yet.
+
+*In matchmade films (12 films, 72 players whose lives all chain):* skipping the components
+before it with the widths above, ammo data starting `00` holds `[00] [count:8]`. The count goes
+down by one per round (e.g. 29, 28 … 9, four ticks apart). Data starting `01` holds a value that
+rises slowly by about 0x333 at a time, perhaps an energy weapon's charge (guess). Summing each
+player's drops gives a median 0.74× the scoreboard's shots fired. That includes shots hidden by
+reloads and before a life's first update, with each magazine taken as the largest count seen.
+Only 18 of 72 players are within 20%, so the count is real but not yet a reliable total. The
+gaps: magazines are guessed, energy weapons are skipped, components 30/33/36/39 seem to be
+inventory slots whose weapon can change, and it isn't known how the scoreboard counts burst or
+multi-pellet weapons. The value 36 (Assault Rifle and Battle Rifle magazine) never shows as a refill,
+so updates are sparse after reloads.
 
 **Scale and axes are unknown.** F3 is vertical (small range; objects settle at a floor value). If a
 Spartan runs about 7 world units a second, 1 unit ≈ 0.05 world units (guess). A custom game walking
@@ -500,6 +568,8 @@ guessed to be a timed map event such as a power weapon.
 4. Replication stream: fill the remaining lives from the end-of-packet per-player list
    (`timeline` already shows distances and a death map from the lives found); decode velocity (component 1), aiming (21) and command tick
    (25). A controlled recording (walk a known line) would fix the coordinate scale and axes.
+   One exists (see "Field widths depend on the map"); next, find where the per-map widths come
+   from, so `EntityRecords` stops assuming 18/15/18, and match the track to the player's account.
 
 ## Prior art
 Others who have worked on this format:

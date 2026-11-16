@@ -41,11 +41,13 @@ dotnet run --project src/Ancilla.Theater.Cli -- fetch                 # your lat
 dotnet run --project src/Ancilla.Theater.Cli -- fetch --pvp           # latest one that isn't Firefight
 dotnet run --project src/Ancilla.Theater.Cli -- fetch --pvp --count=5 # latest 5 of your last 25, one per mode first
 dotnet run --project src/Ancilla.Theater.Cli -- fetch --pvp --count=5 --start=25  # the same, from matches 26–50
+dotnet run --project src/Ancilla.Theater.Cli -- fetch --custom        # your latest custom game
 dotnet run --project src/Ancilla.Theater.Cli -- fetch <matchId>
 dotnet run --project src/Ancilla.Theater.Cli -- list
 dotnet run --project src/Ancilla.Theater.Cli -- inspect               # newest cached film
 dotnet run --project src/Ancilla.Theater.Cli -- inspect <matchId> --learn --roster
 dotnet run --project src/Ancilla.Theater.Cli -- timeline <matchId>   # kill feed, score flow, head-to-head, lives
+dotnet run --project src/Ancilla.Theater.Cli -- track <matchId> > track.csv   # raw biped positions, for controlled tests
 dotnet run --project src/Ancilla.Theater.Cli -- dump <matchId> <chunkIndex>
 ```
 

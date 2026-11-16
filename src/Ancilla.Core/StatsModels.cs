@@ -105,7 +105,7 @@ public sealed record MatchInfo(
     AssetRef? MapVariant = null,
     AssetRef? UgcGameVariant = null,
     AssetRef? Playlist = null,
-    int PlaylistExperience = 0,
+    int? PlaylistExperience = null,
     bool TeamsEnabled = false);
 
 /// <summary>GET halostats.svc.halowaypoint.com/hi/matches/{matchId}/stats</summary>
