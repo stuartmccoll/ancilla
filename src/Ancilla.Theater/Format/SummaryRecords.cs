@@ -1,8 +1,12 @@
 
 namespace Ancilla.Theater.Format;
 
-/// <summary>One summary record, found by walking the payload rather than by searching for a known name.</summary>
-public sealed record SummaryRecord(long StartBit, long NameBit, string Gamertag, int Code, uint TimeMs, bool IsMedal, int MedalCode);
+/// <summary>
+/// One summary record, found by walking the payload rather than by searching for a known name.
+/// <see cref="TypeByte"/> is the byte at +472: the medal code for medals, otherwise the record type
+/// (<see cref="Summary.RecordTypeOf"/>).
+/// </summary>
+public sealed record SummaryRecord(long StartBit, long NameBit, string Gamertag, int Code, uint TimeMs, bool IsMedal, int MedalCode, int TypeByte);
 
 /// <summary>
 /// Walks the summary's type-9 payload record by record, with no roster needed. Checked on six v41
@@ -44,9 +48,10 @@ public static class SummaryRecords
             if (at + NameAndEventBits + SeparatorBits > r.Length) break;
             ulong Read(int offset, int n) { r.Position = at + offset; return r.Read(n); }
             var medal = Read(Summary.MedalFlagOffset, 1) == 1;
+            var typeByte = (int)Read(Summary.MedalCodeOffset, Summary.MedalCodeBits);
             records.Add(new SummaryRecord(start, at, found.Name,
                 (int)Read(Summary.CodeOffset, Summary.CodeBits), (uint)Read(Summary.TimeOffset, Summary.TimeBits),
-                medal, medal ? (int)Read(Summary.MedalCodeOffset, Summary.MedalCodeBits) : -1));
+                medal, medal ? typeByte : -1, typeByte));
             separatorsOk &= Read(NameAndEventBits, SeparatorBits) == Separator;
             start = at + NameAndEventBits + SeparatorBits;
         }

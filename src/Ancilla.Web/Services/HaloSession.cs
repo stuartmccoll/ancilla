@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Ancilla.Core;
+using Ancilla.Theater;
 
 namespace Ancilla.Web.Services;
 
@@ -51,8 +52,9 @@ public sealed class MatchListState
 /// (finished matches, maps, medals) goes through the shared <see cref="HaloCache"/>.
 /// The token lives only inside the client object, in server memory.
 /// </summary>
-public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, IConfiguration config)
+public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config)
 {
+    private readonly ConcurrentDictionary<string, Task<MatchTimeline>> _timelines = new();
     // The ranked-playlist list isn't discoverable by name without a version ID, so seed the common one.
     private static readonly Dictionary<string, string> KnownPlaylists = new()
     {
@@ -386,6 +388,53 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
                 .Select(t => t.Stats.CoreStats.Score.ToString("N0")));
         }
         return me is null ? null : Fmt.Ordinal(me.Rank);
+    }
+
+    // ---- Theater films ------------------------------------------------------------------
+
+    /// <summary>Whether this match's film is already on disk, so its timeline needs no download.</summary>
+    public bool IsFilmCached(string matchId) => films.HasFilm(matchId);
+
+    /// <summary>Where films are cached, with the home folder shown as ~.</summary>
+    public string FilmFolder => films.DisplayRoot;
+
+    /// <summary>
+    /// The match's timeline from its Theater film, downloading the film first if it isn't cached.
+    /// The manifest needs the token (it goes through the client); chunks are public blobs and are
+    /// fetched without it. A failed load isn't kept, so it can be retried.
+    /// </summary>
+    public Task<MatchTimeline> GetTimelineAsync(string matchId, Action<int, int>? progress = null)
+    {
+        var task = _timelines.GetOrAdd(matchId, id => LoadTimelineAsync(id, progress));
+        _ = task.ContinueWith(t => _timelines.TryRemove(new(matchId, t)), TaskContinuationOptions.NotOnRanToCompletion);
+        return task;
+    }
+
+    private async Task<MatchTimeline> LoadTimelineAsync(string matchId, Action<int, int>? progress)
+    {
+        var board = await GetMatchAsync(matchId);
+        if (!films.HasFilm(matchId))
+        {
+            var raw = await Client.GetFilmManifestJsonAsync(matchId);
+            var manifest = FilmSource.ParseManifest(raw);
+            films.SaveManifest(matchId, raw);
+            films.SaveScoreboard(matchId, board);
+            var source = new FilmSource(httpFactory.CreateClient());
+            var chunks = manifest.CustomData.Chunks;
+            var done = 0;
+            await Task.WhenAll(chunks.Select(async c =>
+            {
+                if (!films.HasChunk(matchId, c))
+                {
+                    await _throttle.WaitAsync();
+                    try { films.SaveChunk(matchId, c, await source.GetChunkAsync(manifest, c)); }
+                    finally { _throttle.Release(); }
+                }
+                progress?.Invoke(Interlocked.Increment(ref done), chunks.Count);
+            }));
+        }
+        // Decoding reads every chunk (a few seconds for a long match), so keep it off the circuit's thread.
+        return await Task.Run(() => MatchTimeline.Build(films, matchId, board));
     }
 
     // ---- Shared, immutable data (cached for everyone) ---------------------------------

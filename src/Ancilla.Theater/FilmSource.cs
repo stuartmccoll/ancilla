@@ -22,7 +22,9 @@ public sealed record FilmChunkInfo(
 /// </summary>
 public sealed class FilmSource(HttpClient http)
 {
-    private const string BlobHost = "blobs-infiniteugc.svc.halowaypoint.com";
+    // Matchmade films are on Halo's blob host; custom game films are on its Azure storage account.
+    private static readonly HashSet<string> BlobHosts =
+        ["blobs-infiniteugc.svc.halowaypoint.com", "s3infiniteugcsessions.blob.core.windows.net"];
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     /// <summary>Parses a manifest's raw JSON, as returned by the spectate endpoint.</summary>
@@ -39,15 +41,16 @@ public sealed class FilmSource(HttpClient http)
     }
 
     /// <summary>
-    /// Where a chunk is stored. Only Halo's blob host over HTTPS and only <c>/filmChunkN</c> paths
-    /// are accepted, whatever the manifest says.
+    /// Where a chunk is stored. Only Halo's blob hosts over HTTPS and only <c>/filmChunkN</c> paths (with an optional
+    /// query string) are accepted, whatever the manifest says.
     /// </summary>
     public static Uri ChunkUri(FilmManifest manifest, FilmChunkInfo chunk)
     {
         if (!Uri.TryCreate(manifest.BlobStoragePathPrefix.TrimEnd('/') + "/", UriKind.Absolute, out var prefix)
-            || prefix.Scheme != Uri.UriSchemeHttps || prefix.Host != BlobHost)
+            || prefix.Scheme != Uri.UriSchemeHttps || !BlobHosts.Contains(prefix.Host))
             throw new InvalidDataException("Unexpected film storage host.");
-        if (!System.Text.RegularExpressions.Regex.IsMatch(chunk.FileRelativePath, @"^/filmChunk\d+$"))
+        // Custom game chunks carry a read-only Azure SAS query string; it's allowed, but nothing else is.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(chunk.FileRelativePath, @"^/filmChunk\d+(\?[A-Za-z0-9%&=._~-]*)?$"))
             throw new InvalidDataException("Unexpected film chunk path.");
         return new Uri(prefix, chunk.FileRelativePath.TrimStart('/'));
     }

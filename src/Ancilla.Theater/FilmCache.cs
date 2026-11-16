@@ -60,6 +60,14 @@ public sealed class FilmCache(string root)
     public bool HasChunk(string matchId, FilmChunkInfo c) =>
         File.Exists(ChunkPath(matchId, c)) && new FileInfo(ChunkPath(matchId, c)).Length == c.ChunkSize;
 
+    /// <summary>Whether a match's manifest and every chunk it lists are cached.</summary>
+    public bool HasFilm(string matchId)
+    {
+        if (!File.Exists(Path.Combine(MatchDir(matchId), "manifest.json"))) return false;
+        try { return LoadManifest(matchId).CustomData.Chunks.All(c => HasChunk(matchId, c)); }
+        catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException) { return false; }
+    }
+
     public FilmManifest LoadManifest(string matchId) =>
         FilmSource.ParseManifest(File.ReadAllText(Path.Combine(MatchDir(matchId), "manifest.json")));
 

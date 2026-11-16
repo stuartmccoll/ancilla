@@ -198,6 +198,28 @@ public class TimelineRunTests
     }
 
     [Fact]
+    public void The_timeline_model_has_the_feed_figures_and_head_to_head()
+    {
+        using var t = new TempCache();
+        var id = Guid.NewGuid().ToString();
+        WriteFilm(t.Cache, id, Roster, Events, Board(id));
+        var m = MatchTimeline.Build(t.Cache, id, Board(id));
+
+        Assert.Equal(["Test Alpha", "Test Bravo", "Test Charlie", "Test Delta"], m.Players.Select(p => p.Gamertag));
+        Assert.Equal([0, 1], m.Teams);
+        // Kills with their victims, the medal on the second kill, the suicide as a death with no killer.
+        Assert.Equal(
+            [(FeedKind.Kill, 0, (int?)2, 0), (FeedKind.Kill, 0, 3, 1), (FeedKind.Death, 1, null, 0), (FeedKind.Kill, 2, 0, 0)],
+            m.Feed.Select(f => (f.Kind, f.Player, f.Other, f.MedalNameIds.Count)));
+        var alpha = m.Summaries[0];
+        Assert.Equal((2, 1, 2, (uint?)50_000, (uint?)90_001, (int?)2), (alpha.Kills, alpha.Deaths, alpha.LongestStreak, alpha.FirstKillMs, alpha.FirstDeathMs, alpha.Nemesis));
+        Assert.Equal(1, m.Summaries[2].Revenge);                    // Charlie killed Alpha, who had killed him
+        Assert.Equal(1, m.HeadToHead[0, 2]);
+        Assert.Equal(new[] { 2, 1 }, m.TeamKillsPerMinute[0].Zip(m.TeamKillsPerMinute[1]).Select(x => x.First + x.Second));
+        Assert.False(m.HasPositions);                               // no replication chunks in this film
+    }
+
+    [Fact]
     public void Gamertags_appear_only_when_asked_for()
     {
         using var t = new TempCache();

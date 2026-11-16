@@ -44,10 +44,11 @@ so you usually can't check pages end to end yourself. Say so rather than claimin
   `src/Ancilla.Web/wwwroot`, and the navbar logo is inlined in `Components/Shared/Logo.razor`
   (charcoal parts use `currentColor` so it follows each theme).
 - `tests/Ancilla.Theater.Tests`: unit tests on synthetic films (see Commands).
-- `src/Ancilla.Theater`: decodes Theater films into match analysis (see its `README.md` and
-  `FORMAT.md`). For now it's a console app used to research the format. It references
-  `Ancilla.Core`, and the web app doesn't reference it yet; it will once Theater data feeds the
-  app's analysis. Films contain every player's gamertag and XUID: keep them in its cache outside
+- `src/Ancilla.Theater`: library that decodes Theater films into match analysis (see its `README.md`
+  and `FORMAT.md`). `MatchTimeline` is what the web app's match timeline page shows. It references
+  `Ancilla.Core`, and the web app references it.
+- `src/Ancilla.Theater.Cli`: the research console (`fetch`, `inspect`, `timeline`), run with
+  `dotnet run --project src/Ancilla.Theater.Cli -- <command>`. Films contain every player's gamertag and XUID: keep them in its cache outside
   the repo, and never commit film data or paste other players' gamertags into code, docs or
   commit messages.
 

@@ -1,4 +1,5 @@
 using Ancilla.Core;
+using Ancilla.Theater;
 using Ancilla.Web.Components;
 using Ancilla.Web.Services;
 
@@ -14,6 +15,9 @@ builder.Services.AddHttpClient();
 builder.Services.ConfigureHttpClientDefaults(http =>
     http.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
 builder.Services.AddSingleton(new SnapshotStore(builder.Configuration["Snapshots"] ?? SnapshotStore.DefaultPath));
+// Theater films (9–30 MB each, every player's gamertag and XUID) are cached on disk outside the
+// repo, in the same folder Ancilla.Theater.Cli uses, and downloaded only when a timeline is asked for.
+builder.Services.AddSingleton(new FilmCache(builder.Configuration["Films"] ?? FilmCache.DefaultRoot));
 builder.Services.AddSingleton<HaloCache>();
 builder.Services.AddSingleton<AssetCache>();
 builder.Services.AddScoped<HaloSession>();

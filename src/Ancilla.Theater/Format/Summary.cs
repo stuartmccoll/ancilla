@@ -1,13 +1,19 @@
 namespace Ancilla.Theater.Format;
 
-public enum SummaryEventKind { Other, PlayerKill, Death, Medal }
+/// <summary>
+/// What a summary record is. <see cref="Objective"/> is a mode-objective event: in CTF, one per flag
+/// steal, capture, capture assist, return and carrier kill, plus some pickups; in Firefight, a
+/// 5-second award for holding an objective.
+/// </summary>
+public enum SummaryEventKind { Other, PlayerKill, Death, Medal, Objective }
 
 /// <summary>
 /// One record from the summary (type-3) chunk: something that happened to <see cref="Player"/>
-/// (an index into the roster) at <see cref="TimeMs"/> into the match.
+/// (an index into the roster) at <see cref="TimeMs"/> into the match. <see cref="TypeByte"/> is the
+/// byte at +472: the medal code for medals, otherwise the record type.
 /// </summary>
 public sealed record SummaryEvent(
-    int Player, long NameBit, uint TimeMs, int Code, bool IsMedal, int MedalCode, SummaryEventKind Kind)
+    int Player, long NameBit, uint TimeMs, int Code, bool IsMedal, int MedalCode, SummaryEventKind Kind, int TypeByte = 0)
 {
     /// <summary>For a kill: the roster index of the player killed. Set by <see cref="Summary.PairKills"/>.</summary>
     public int? Victim { get; set; }
@@ -19,11 +25,12 @@ public sealed record SummaryEvent(
 /// layout). Each record holds the player's 16-character gamertag field, and the event fields sit
 /// at fixed offsets from it:
 /// <code>
-/// +376  7 bits   event code: 10 = death, 25 = killed a player (AI kills aren't recorded);
-///                for medals, 25/50/75 by medal difficulty (normal/heroic/legendary)
+/// +376  7 bits   event code: 10 = death, 25 = killed a player (AI kills aren't recorded),
+///                5 = objective; for medals, 25/50/75 by medal difficulty (normal/heroic/legendary)
 /// +384  32 bits  time into the match, milliseconds (big-endian, like every field here)
 /// +447  1 bit    medal flag
-/// +472  8 bits   medal code (the game's own numbering; see MedalCodes)
+/// +472  8 bits   medals: medal code (the game's own numbering; see MedalCodes);
+///                otherwise the record type: 0 = kill, 1 = death, 2 = objective
 /// </code>
 /// A kill is always followed by the victim's death record, 0–1 ms later.
 /// </summary>
@@ -45,6 +52,19 @@ public static class Summary
 
     public const int DeathCode = 10;
     public const int PlayerKillCode = 25;
+    public const int ObjectiveCode = 5;
+
+    /// <summary>
+    /// The +472 record type that goes with a non-medal event code (checked on eleven films: no other
+    /// pairing occurs), or null for a code not seen yet.
+    /// </summary>
+    public static int? RecordTypeOf(int code) => code switch
+    {
+        PlayerKillCode => 0,
+        DeathCode => 1,
+        ObjectiveCode => 2,
+        _ => null,
+    };
 
     /// <summary>
     /// Decodes events for the players in <paramref name="gamertags"/>, by walking the records
@@ -62,7 +82,7 @@ public static class Summary
             if (gamertags[p] is { } g) index[g] = p;
         return records
             .Where(r => index.ContainsKey(r.Gamertag))
-            .Select(r => new SummaryEvent(index[r.Gamertag], r.NameBit, r.TimeMs, r.Code, r.IsMedal, r.MedalCode, KindOf(r.IsMedal, r.Code)))
+            .Select(r => new SummaryEvent(index[r.Gamertag], r.NameBit, r.TimeMs, r.Code, r.IsMedal, r.MedalCode, KindOf(r.IsMedal, r.Code), r.TypeByte))
             .ToList();
     }
 
@@ -70,6 +90,7 @@ public static class Summary
         medal ? SummaryEventKind.Medal
         : code == DeathCode ? SummaryEventKind.Death
         : code == PlayerKillCode ? SummaryEventKind.PlayerKill
+        : code == ObjectiveCode ? SummaryEventKind.Objective
         : SummaryEventKind.Other;
 
     /// <summary>
@@ -91,8 +112,8 @@ public static class Summary
                 var code = (int)Read(CodeOffset, CodeBits);
                 var time = (uint)Read(TimeOffset, TimeBits);
                 var medal = Read(MedalFlagOffset, 1) == 1;
-                var medalCode = medal ? (int)Read(MedalCodeOffset, MedalCodeBits) : -1;
-                events.Add(new SummaryEvent(p, at, time, code, medal, medalCode, KindOf(medal, code)));
+                var typeByte = (int)Read(MedalCodeOffset, MedalCodeBits);
+                events.Add(new SummaryEvent(p, at, time, code, medal, medal ? typeByte : -1, KindOf(medal, code), typeByte));
             }
         }
         events.Sort((a, b) => a.NameBit.CompareTo(b.NameBit));

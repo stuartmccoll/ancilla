@@ -13,6 +13,9 @@ public static partial class Fmt
     public static string Pct(double v, int dp = 1) => v.ToString("F" + dp) + "%";
 
     /// <summary>For inline styles, which must use '.' regardless of the server's culture.</summary>
+    /// <summary>A time into a match, such as "4:07".</summary>
+    public static string Clock(long ms) => TimeSpan.FromMilliseconds(ms).ToString(ms >= 3_600_000 ? @"h\:mm\:ss" : @"m\:ss");
+
     public static string Css(double v) => v.ToString("F2", CultureInfo.InvariantCulture);
 
     public static string Duration(TimeSpan t) =>

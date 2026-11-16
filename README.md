@@ -7,7 +7,8 @@ history, trends, insights and the players you meet. It uses the services behind 
 ```
 src/Ancilla.Core     API client, models, calculations, caching, snapshot store (no NuGet deps)
 src/Ancilla.Web      Blazor Web App (interactive server rendering)
-src/Ancilla.Theater  Theater film decoding and match analysis (see src/Ancilla.Theater/README.md)
+src/Ancilla.Theater  Theater film decoding and match analysis, used by the web app (see src/Ancilla.Theater/README.md)
+src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline)
 tests/               unit tests for Ancilla.Theater, on synthetic films (dotnet test)
 ```
 
@@ -79,6 +80,10 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   collection strip by difficulty that filters the grid.
 - **History**: recent games (matchmaking, custom or all) with map, mode, score and your K/D/A.
   Select one for the full scoreboard, your medals, expected-vs-actual kills/deaths, MMR and CSR change.
+- **Match timeline** (from a match's page): read from the match's Theater film, which is downloaded
+  when you ask for it. Team kills by minute, where players died (PvP), a table per player (best
+  streak, traded and revenge kills, nemesis, objectives, kill distance) and the kill feed with each
+  kill's medals. Filter the map and the feed by player.
 - **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,
   kills above/below what the matchmaker expected, and CSR across ranked games.
 - **Insights**: over your last 50/100/200 PvP games:
@@ -117,6 +122,10 @@ To add a theme (e.g. Xbox 360):
   serves them from memory at `/assets/...`.
 - Finished matches, maps, modes and medal metadata never change, so they're cached in memory too
   (`HaloCache`).
+- Theater films (for match timelines, 9–30 MB each) are downloaded on request and cached in
+  `films` in the same `Ancilla` folder as snapshots, shared with `Ancilla.Theater.Cli`. Set the
+  `Films` setting to a folder to store them elsewhere. A film holds every player's gamertag and XUID,
+  so keep the folder out of anything you share.
 - Each time progress loads, a snapshot (matches played and total career XP) is saved to
   `snapshots.json` in an `Ancilla` folder under the local application data folder. On macOS
   that's `~/Library/Application Support/Ancilla`, and on Windows `%LOCALAPPDATA%\Ancilla`.

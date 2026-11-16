@@ -79,11 +79,24 @@ public class SummaryTests
     [InlineData(25, false, SummaryEventKind.PlayerKill)]
     [InlineData(25, true, SummaryEventKind.Medal)]    // a normal-tier medal shares code 25 with kills
     [InlineData(110, true, SummaryEventKind.Medal)]
-    [InlineData(5, false, SummaryEventKind.Other)]
+    [InlineData(5, false, SummaryEventKind.Objective)]
+    [InlineData(7, false, SummaryEventKind.Other)]
     public void Kind_comes_from_the_code_and_medal_flag(int code, bool medal, SummaryEventKind kind)
     {
         var e = new Event("Test Alpha", code, 1, Medal: medal);
         Assert.Equal(kind, Assert.Single(Summary.Decode(SummaryPayload([e]), Players)).Kind);
+    }
+
+    [Fact]
+    public void The_472_byte_is_the_record_type_for_events_and_the_medal_code_for_medals()
+    {
+        var events = Summary.Decode(SummaryPayload([
+            Kill("Test Alpha", 1), Death("Test Alpha", 2), new Event("Test Alpha", Summary.ObjectiveCode, 3),
+            Medal("Test Alpha", 4, medalCode: 152), new Event("Test Alpha", Summary.DeathCode, 5, Type: 7)]), Players);
+        Assert.Equal([0, 1, 2, 152, 7], events.Select(e => e.TypeByte));
+        Assert.Equal([-1, -1, -1, 152, -1], events.Select(e => e.MedalCode));
+        Assert.Equal(1, Summary.RecordTypeOf(Summary.DeathCode));
+        Assert.Null(Summary.RecordTypeOf(7));
     }
 
     [Fact]
