@@ -19,14 +19,16 @@ into the app's match analysis; the web app doesn't reference it yet.
 | Header: version, component registry, build identity | Decoded and checked |
 | Header: roster (XUIDs and gamertags, in scoreboard order) | Decoded and checked |
 | Summary: deaths, player kills with victims, medals, event times | Decoded and checked against the scoreboard |
-| Summary: medal code table | 43 codes confirmed (8-bit field); more come from more films |
+| Summary: medal code table | 47 codes confirmed (8-bit field); more come from more films |
 | Summary: bots and late joiners | Late joiners decoded and linked to the scoreboard; bot deaths aren't recorded, and the checks account for them |
 | Summary: full record layout (count, per-player body, name, event bits, 12000) | Decoded and checked; no positions or weapons in it |
-| Summary: event code 5 | Unknown |
-| Replication stream (type-0 packets: positions, aim, weapons) | Not started |
+| Summary: event code 5 | Objective events (CTF flag actions, Firefight objective awards); checked against CTF stats |
+| Replication chunk leading packets: type 1 entity slot table, types 6, 8, 12 | Type 1 decoded and checked; 8 and 12 partly |
+| Type 10 tick markers, and packet time = summary event time | Decoded and checked |
+| Replication stream: type 0 entity records and player positions | Record header and positions found (research-script checks, nine of ten PvP films); scale, aim and weapons not yet |
 
-**Verified on six version-41 films:** one Firefight (4 players) and five PvP Capture the Flag
-(8 players, mode category 9, with quitters, late joiners and bots). `inspect` passes every check on all six. Run
+**Verified on eleven version-41 films:** one Firefight (4 players) and ten PvP Capture the Flag
+(8 players, mode category 9, with quitters, late joiners and bots). `inspect` passes every check on all eleven. Run
 `list` to see what's cached.
 
 ## Running it
@@ -39,6 +41,7 @@ export HALO_SPARTAN_TOKEN='v4=...'      # raw or URL-encoded (v4%3D...) both wor
 dotnet run --project src/Ancilla.Theater -- fetch                 # your latest matchmade match
 dotnet run --project src/Ancilla.Theater -- fetch --pvp           # latest one that isn't Firefight
 dotnet run --project src/Ancilla.Theater -- fetch --pvp --count=5 # latest 5 of your last 25, one per mode first
+dotnet run --project src/Ancilla.Theater -- fetch --pvp --count=5 --start=25  # the same, from matches 26–50
 dotnet run --project src/Ancilla.Theater -- fetch <matchId>
 dotnet run --project src/Ancilla.Theater -- list
 dotnet run --project src/Ancilla.Theater -- inspect               # newest cached film
@@ -91,8 +94,10 @@ are `T{team} P{roster index}`; the index is scoreboard order among humans.
   films. Each film's own fit is 7.8–8.2 s, and `timeline` prints it.
 - **The event clock is match time.** The last event is 1.8–2.0 s before the scoreboard's match
   duration in every PvP film, and the winning team's Steaktacular medals sit on that last event.
-  Nobody has an event before 35 s, and the fit's 38 s is time before the first spawn, so first
-  spawn is about 35 s in. Each film is 11.6–11.8 s longer than its match.
+  Nobody has an event before 35 s, and the fit's 38 s is time before the first spawn. The
+  replication stream confirms both: event times equal packet time from the film's first packet
+  to within a few ms, and play starts 27–40 s in, after an intro in which bipeds already exist.
+  Each film is 11.6–11.8 s longer than its match.
 - **Firefight is different:** revives and lives make the fit meaningless there (14 s × deaths).
 
 **Speed:** `inspect` takes about 1 second for a 13-minute film. `fetch` downloads 9–30 MB, 6 chunks
@@ -126,6 +131,8 @@ at a time, and skips chunks already cached.
 | `Format/Summary.cs` | Turns walked records into events for a list of players, and pairs kills with victims. Keeps the old name-search decoder for `inspect`'s cross-check. |
 | `Format/FilmPlayers.cs` | Whose records are whose: roster players by XUID, then late joiners linked to the scoreboard by kills, deaths and medals. |
 | `Format/MedalCodes.cs` | Learned medal code → medal NameId table. |
+| `Format/SlotTable.cs` | The type-1 packet: the entity slot table (in use, generation, value per slot; pool cursors). |
+| `Format/TickMarker.cs` | The type-10 packet: one 6-bit value per present player slot. |
 | `Format/BitReader.cs` | MSB-first bit reader. |
 | `Format/ShiftedBits.cs` | The data shifted by 0–7 bits, so a byte pattern at any bit offset can be found with `IndexOf`. Much faster than reading bit by bit. |
 
@@ -186,20 +193,22 @@ In order of value:
 2. ~~Decode more of the kill record.~~ Done: apart from the four known fields, every bit in a
    summary record is constant for its player, so there are no positions, weapons or damage there.
    Those have to come from the replication stream (step 4).
-3. **Work out event code 5.** It's 1–8 per player in PvP and 9–65 in Firefight. Check its times
-   against kills and deaths (for example, whether it comes just before a death), and against mode
-   stats.
-4. **Replication stream (type-0 packets).** Start with controlled recordings: short custom games
-   where only one thing changes (stand still for 30 s, walk in a straight line, fire once, throw one
-   grenade), then diff the packets.
+3. ~~Work out event code 5.~~ Done: it's an objective event (FORMAT.md). Next: tell CTF flag
+   actions apart (steal, capture, return, carrier kill) for the kill feed, and check code 5 in
+   other modes.
+4. **Replication stream.** Type 1 (entity slots), type 10 and the match-time mapping are decoded,
+   and `inspect` checks them. Player positions are found: type 0 records are addressed by type 1
+   slot and carry a component list (see FORMAT.md). Next: port that parser and its checks into
+   `inspect`, chain lives into per-player tracks, and decode velocity and aim. A controlled
+   recording (short custom game, walk a straight line) would fix scale and axes.
 5. **Bring it into the web app.** Split the decoder and analysis into a library the web app
    references, and keep the research commands as a separate console entry point. A match timeline
    (kill feed and who killed whom) is the first app feature it enables; `Ancilla.Theater timeline`
    prototypes it.
 
-**Open questions from FORMAT.md:** the extra XUID-range values in each header stream; what
-the 123-value table after the registry means; and the meaning of packet types 1, 2, 6, 8 and 12 and
-of packet header field 2.
+**Open questions from FORMAT.md:** the extra XUID-range values in each header stream; whether the
+123-value table after the registry describes type 1's 123 static slots; the layouts of packet types
+2, 8 and 12; the event clock's offset from film time; and packet header field 2.
 
 ## Privacy
 - **Where films live:** cached in `~/Library/Application Support/Ancilla/films` on macOS (the local

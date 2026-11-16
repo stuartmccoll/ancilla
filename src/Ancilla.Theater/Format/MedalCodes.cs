@@ -48,11 +48,15 @@ public static class MedalCodes
         [109] = 1512363953L, // Perfect (count matched two medals; difficulty code chose this one)
         [110] = 2414983178L, // Bank Shot
         [111] = 988255960L,  // Fire & Forget
+        [112] = 4215552487L, // Ballista
         [114] = 2602963073L, // No Scope
         [116] = 1646928910L, // Grand Slam
         [117] = 3334154676L, // Guardian Angel
+        [118] = 651256911L,  // Interlinked (by elimination; the only fit whose difficulty matches event code 75)
+        [120] = 1969067783L, // Chain Reaction (by elimination, Bodyguard is 77 or 81)
         [121] = 1427176344L, // 360 (count matched 360 and Reversal; Reversal is 105, and difficulty agrees)
         [127] = 2625820422L, // From the Grave (as for code 109)
+        [131] = 3091261182L, // Last Shot (by elimination, Breacher is 165)
         [135] = 2861418269L, // Quick Draw (by elimination, Sharpshooter is 78)
         [152] = 580478179L,  // Hill Guardian (Firefight; was misread as 24 when the field was 7 bits)
         [165] = 2750622016L, // Breacher (Firefight and PvP; was misread as 37)

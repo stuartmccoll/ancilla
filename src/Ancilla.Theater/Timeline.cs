@@ -102,7 +102,8 @@ public static class Timeline
         o.WriteLine($"  not decodable: {outsiders.Count(x => !x.IsHuman)} bot(s), {outsiders.Count(x => x.IsHuman)} other player(s) with no records, " +
                     $"{unlinked.Count} unlinked gamertag(s). Their kills and deaths show only as unmatched events.");
         o.WriteLine($"  events: {events.Count(e => e.Kind == SummaryEventKind.PlayerKill)} kills, {events.Count(e => e.Kind == SummaryEventKind.Death)} deaths, " +
-                    $"{events.Count(e => e.Kind == SummaryEventKind.Medal)} medals; {events.Count(e => e.Kind == SummaryEventKind.Other)} with unknown codes (not shown)");
+                    $"{events.Count(e => e.Kind == SummaryEventKind.Medal)} medals, {events.Count(e => e.Kind == SummaryEventKind.Objective)} objective events (not shown); " +
+                    $"{events.Count(e => e.Kind == SummaryEventKind.Other)} with unknown codes");
 
         // ---- Kill feed ----
         if (feed)

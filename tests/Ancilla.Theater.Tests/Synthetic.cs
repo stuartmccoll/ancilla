@@ -62,9 +62,12 @@ public static class Synthetic
         return bytes.ToArray();
     }
 
-    /// <summary>One summary record's contents. Code 10 = death, 25 = player kill.</summary>
+    /// <summary>
+    /// One summary record's contents. Code 10 = death, 25 = player kill, 5 = objective. The +472 byte
+    /// is the medal code for medals, else <paramref name="Type"/>, defaulting to the code's record type.
+    /// </summary>
     public sealed record Event(string Name, int Code, uint TimeMs, bool Medal = false, int MedalCode = 0,
-        int BodyOffset = LongRecordOffset, uint Separator = SummaryRecords.Separator);
+        int BodyOffset = LongRecordOffset, uint Separator = SummaryRecords.Separator, int? Type = null);
 
     public static Event Kill(string name, uint t) => new(name, Summary.PlayerKillCode, t);
     public static Event Death(string name, uint t) => new(name, Summary.DeathCode, t);
@@ -90,7 +93,7 @@ public static class Synthetic
             w.ZerosTo(name + Summary.MedalFlagOffset);
             w.Write(e.Medal ? 1UL : 0UL, 1);
             w.ZerosTo(name + Summary.MedalCodeOffset);
-            w.Write((ulong)e.MedalCode, Summary.MedalCodeBits);
+            w.Write((ulong)(e.Medal ? e.MedalCode : e.Type ?? Summary.RecordTypeOf(e.Code) ?? 0), Summary.MedalCodeBits);
             w.Write(e.Separator, SummaryRecords.SeparatorBits);
         }
         return w.ToArray();
