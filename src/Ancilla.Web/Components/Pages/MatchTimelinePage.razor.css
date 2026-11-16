@@ -1,0 +1,31 @@
+.intro p { margin: 0 0 .75rem; }
+.intro code { font-size: .85em; }
+progress { width: 100%; max-width: 24rem; }
+.note { color: var(--muted); font-size: .9rem; }
+
+/* Team colours: chart marks use --viz-1 and --viz-2 (3:1 contrast in every theme). */
+.team0 { fill: var(--viz-1); background: var(--viz-1); }
+.team1 { fill: var(--viz-2); background: var(--viz-2); }
+.key { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin-right: .35rem; vertical-align: -.05rem; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .6rem; font-size: .85rem; margin: .5rem 0 0; }
+
+.minutes { width: 100%; height: auto; max-height: 14rem; display: block; }
+.minutes text { font-size: 8px; fill: var(--muted); }
+
+.map { width: 100%; height: auto; max-height: 34rem; display: block; margin-top: .75rem; }
+.map .ground { fill: var(--track); }
+.map circle { stroke: var(--surface); stroke-width: .25; }
+
+.filter { display: inline-flex; gap: .5rem; align-items: center; font-size: .9rem; }
+
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: .9rem; }
+th, td { padding: .35rem .6rem; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+.l { text-align: left; }
+tr.me td { font-weight: 700; }
+.feed { margin-top: .75rem; }
+.feed td:nth-child(2) { white-space: normal; }
+
+.table-view { margin-top: .75rem; font-size: .85rem; }
+.table-view summary { cursor: pointer; color: var(--muted); }

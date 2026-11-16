@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ancilla.Core\Ancilla.Core.csproj" />
+    <ProjectReference Include="..\Ancilla.Theater\Ancilla.Theater.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

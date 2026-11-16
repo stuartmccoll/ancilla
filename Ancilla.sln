@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ancilla.Theater.Tests", "tests\Ancilla.Theater.Tests\Ancilla.Theater.Tests.csproj", "{B208A62F-2C11-4FC0-BA7E-295C41CCAF52}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ancilla.Theater.Cli", "src\Ancilla.Theater.Cli\Ancilla.Theater.Cli.csproj", "{056A909F-FDC4-4680-8435-118A4ED682E2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,6 +75,18 @@ Global
 		{B208A62F-2C11-4FC0-BA7E-295C41CCAF52}.Release|x64.Build.0 = Release|Any CPU
 		{B208A62F-2C11-4FC0-BA7E-295C41CCAF52}.Release|x86.ActiveCfg = Release|Any CPU
 		{B208A62F-2C11-4FC0-BA7E-295C41CCAF52}.Release|x86.Build.0 = Release|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Debug|x64.Build.0 = Debug|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Debug|x86.Build.0 = Debug|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Release|x64.ActiveCfg = Release|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Release|x64.Build.0 = Release|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Release|x86.ActiveCfg = Release|Any CPU
+		{056A909F-FDC4-4680-8435-118A4ED682E2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,5 +96,6 @@ Global
 		{6FE04C69-24D4-4253-B5AF-67EE6ED8820F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{70B53F0C-239C-4B7C-A1C0-90953A391CA0} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{B208A62F-2C11-4FC0-BA7E-295C41CCAF52} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{056A909F-FDC4-4680-8435-118A4ED682E2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

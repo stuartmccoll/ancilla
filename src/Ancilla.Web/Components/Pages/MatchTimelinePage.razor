@@ -1,0 +1,237 @@
+@page "/matches/{MatchId}/timeline"
+@using Ancilla.Theater
+@inject HaloSession Session
+
+<PageTitle>Timeline · @(_mode?.PublicName ?? "Match") · Ancilla</PageTitle>
+
+<p class="back"><a href="@($"matches/{MatchId}")">&larr; Match</a></p>
+
+<h1>Match timeline</h1>
+@if (_match is { } m)
+{
+    <p class="muted">@(_mode?.PublicName ?? "Match") · @(_map?.PublicName ?? "Unknown map") · @Fmt.When(m.MatchInfo.StartTime)</p>
+}
+
+@if (_error is not null)
+{
+    <p class="error" role="alert">@_error</p>
+    @if (_canRetry) { <button @onclick="LoadAsync">Try again</button> }
+}
+else if (_timeline is null)
+{
+    <section class="card intro">
+        <p>
+            The timeline comes from the match's Theater film: who killed whom and when, the medals each kill
+            earned, and where players died. The film is downloaded once (usually 9–30 MB) and kept in
+            <code>@Session.FilmFolder</code> on this computer.
+        </p>
+        @if (_loading)
+        {
+            <p role="status" aria-live="polite">@(_total == 0 ? "Getting the film…" : _done < _total ? $"Downloading the film: {_done} of {_total} parts…" : "Reading the film…")</p>
+            @if (_total > 0) { <progress max="@_total" value="@_done"></progress> }
+        }
+        else
+        {
+            <button @onclick="LoadAsync">Load the timeline</button>
+        }
+    </section>
+}
+else
+{
+    var t = _timeline;
+    <p class="note">
+        Times are into the match. @if (t.BotsAndUnlinked > 0) { <span>Bots and players who joined with no recorded events aren't in the film, so kills of them show as "a bot or another player". </span> }
+        <a href="about#timeline">How the timeline is worked out</a>.
+    </p>
+
+    <h2 class="section-title">Team kills by minute</h2>
+    <section class="card">
+        @{
+            var max = Math.Max(1, t.TeamKillsPerMinute.Max(m => m.DefaultIfEmpty().Max()));
+            var n = t.TeamKillsPerMinute.Count;
+            const int H = 140, GroupW = 24;
+        }
+        <svg class="minutes" viewBox="0 0 @(n * GroupW) @(H + 16)" role="img" aria-label="Kills per minute for each team. The table below has the same figures.">
+            @for (var i = 0; i < n; i++)
+            {
+                for (var k = 0; k < t.Teams.Count && k < 2; k++)
+                {
+                    var v = t.TeamKillsPerMinute[i][k];
+                    var h = v * (double)H / max;
+                    <rect class="@($"team{k}")" x="@Fmt.Css(i * GroupW + 3 + k * 9)" y="@Fmt.Css(H - h)" width="8" height="@Fmt.Css(h)" rx="2">
+                        <title>Minute @(i + 1): @Fmt.TeamName(t.Teams[k]) @v</title>
+                    </rect>
+                }
+                // Razor reserves <text>, so the SVG label is written as markup.
+                if (i % 2 == 0) { @((MarkupString)$"<text x=\"{Fmt.Css(i * GroupW + GroupW / 2.0)}\" y=\"{H + 13}\" text-anchor=\"middle\">{i + 1}</text>") }
+            }
+        </svg>
+        <p class="legend">
+            @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @Fmt.TeamName(t.Teams[k]) }
+            <span class="muted">· minute of the match</span>
+        </p>
+        <details class="table-view">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th class="l">Minute</th>@foreach (var team in t.Teams) { <th>@Fmt.TeamName(team)</th> }</tr></thead>
+                <tbody>
+                    @for (var i = 0; i < n; i++)
+                    {
+                        <tr><td class="l">@(i + 1)</td>@foreach (var v in t.TeamKillsPerMinute[i]) { <td>@v</td> }</tr>
+                    }
+                </tbody>
+            </table>
+        </details>
+    </section>
+
+    @if (t.HasPositions)
+    {
+        <h2 class="section-title">Where players died</h2>
+        <section class="card">
+            <label class="filter">Show deaths of
+                <select @bind="_mapPlayer">
+                    <option value="-1">everyone</option>
+                    @foreach (var p in t.Players) { <option value="@p.Index">@Name(p.Index)</option> }
+                </select>
+            </label>
+            @{ var shown = t.Deaths.Where(d => _mapPlayer < 0 || d.Player == _mapPlayer).ToList(); }
+            <svg class="map" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="img"
+                 aria-label="@($"Map of the arena with {shown.Count} deaths, coloured by the team of the player who died. The table below lists them.")">
+                @foreach (var (x, y) in t.Arena) { <rect class="ground" x="@x" y="@y" width="1" height="1" /> }
+                @foreach (var d in shown)
+                {
+                    <circle class="@($"team{Math.Max(0, t.Teams.ToList().IndexOf(d.Team))}")" cx="@Fmt.Css(d.X + .5)" cy="@Fmt.Css(d.Y + .5)" r="1.3">
+                        <title>@Fmt.Clock(d.TimeMs) @Name(d.Player)@(d.Killer is { } k ? $", killed by {Name(k)}" : "")</title>
+                    </circle>
+                }
+            </svg>
+            <p class="legend">
+                @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @($"{Fmt.TeamName(t.Teams[k])} player died") }
+                <span class="muted">· grey shows where players went. The game's map axes and scale aren't known yet, so the map may be mirrored or rotated.</span>
+            </p>
+            <details class="table-view">
+                <summary>Show as table</summary>
+                <table>
+                    <thead><tr><th class="l">Time</th><th class="l">Player</th><th class="l">Killed by</th><th>Across</th><th>Down</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in shown)
+                        {
+                            <tr><td class="l">@Fmt.Clock(d.TimeMs)</td><td class="l">@Name(d.Player)</td><td class="l">@(d.Killer is { } k ? Name(k) : "—")</td>
+                                <td>@Fmt.Pct(100.0 * d.X / MatchTimeline.MapWidth, 0)</td><td>@Fmt.Pct(100.0 * d.Y / MatchTimeline.MapHeight, 0)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        </section>
+    }
+
+    <h2 class="section-title">Players</h2>
+    <section class="card scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th class="l">Player</th><th>Kills</th><th>Deaths</th><th title="Most kills in one life">Best streak</th>
+                    <th title="Kills after which the player died within 3 seconds">Traded</th><th title="Kills of the player who last killed them">Revenge</th>
+                    <th class="l" title="The opponent who killed them most">Nemesis</th><th title="Flag actions in Capture the Flag; objective awards in Firefight">Objectives</th>
+                    @if (t.HasPositions) { <th title="Median distance from the player to the victim, in film units">Kill distance</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in t.Summaries.OrderBy(s => t.Players[s.Player].Team).ThenByDescending(s => s.Kills))
+                {
+                    <tr class="@(t.Players[s.Player].Xuid == Session.Xuid ? "me" : "")">
+                        <td class="l"><span class="key @TeamClass(s.Player)"></span>@Name(s.Player)@(t.Players[s.Player].LateJoiner ? " (joined late)" : "")</td>
+                        <td>@s.Kills</td><td>@s.Deaths</td><td>@s.LongestStreak</td><td>@s.Traded</td><td>@s.Revenge</td>
+                        <td class="l">@(s.Nemesis is { } ne ? Name(ne) : "—")</td><td>@s.Objectives</td>
+                        @if (t.HasPositions) { <td>@(s.KillDistance is { } kd ? kd.ToString("N0") : "—")</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <h2 class="section-title">Kill feed</h2>
+    <section class="card">
+        <label class="filter">Show
+            <select @bind="_feedPlayer">
+                <option value="-1">everyone</option>
+                @foreach (var p in t.Players) { <option value="@p.Index">@Name(p.Index)</option> }
+            </select>
+        </label>
+        <table class="feed">
+            <thead><tr><th class="l">Time</th><th class="l">What happened</th><th class="l">Medals</th></tr></thead>
+            <tbody>
+                @foreach (var f in t.Feed.Where(f => _feedPlayer < 0 || f.Player == _feedPlayer || f.Other == _feedPlayer))
+                {
+                    <tr>
+                        <td class="l">@Fmt.Clock(f.TimeMs)</td>
+                        <td class="l">
+                            <span class="key @TeamClass(f.Player)"></span>@Name(f.Player)
+                            @switch (f.Kind)
+                            {
+                                case FeedKind.Kill: <span> killed </span>@if (f.Other is { } v) { <span class="key @TeamClass(v)"></span>@Name(v) } else { <span>a bot or another player</span> } break;
+                                case FeedKind.Death: <span class="muted"> died (no killer recorded: a suicide, or killed by a bot)</span> break;
+                                case FeedKind.Medal: <span class="muted"> earned a medal</span> break;
+                                case FeedKind.Objective: <span class="muted"> completed an objective</span> break;
+                            }
+                        </td>
+                        <td class="l">@string.Join(", ", f.MedalNameIds.Select(MedalName))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    [Parameter] public string MatchId { get; set; } = "";
+
+    private MatchStats? _match;
+    private UgcAsset? _map, _mode;
+    private MatchTimeline? _timeline;
+    private MedalBook? _book;
+    private string? _error;
+    private bool _canRetry, _loading;
+    private int _done, _total, _mapPlayer = -1, _feedPlayer = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _match = null; _timeline = null; _error = null; _canRetry = false; _loading = false;
+        if (!HaloIds.IsGuid(MatchId)) { _error = "That isn't a valid match link."; return; }
+        try
+        {
+            _match = await Session.GetMatchAsync(MatchId);
+            (_map, _mode) = (await Session.GetMapAsync(_match.MatchInfo.MapVariant), await Session.GetModeAsync(_match.MatchInfo.UgcGameVariant));
+            try { _book = await Session.GetMedalBookAsync(); } catch (HttpRequestException) { }
+        }
+        catch (Exception ex) { _error = SignIn.Explain(ex); return; }
+        // A film already on disk needs no download, so show it straight away.
+        if (Session.IsFilmCached(MatchId)) await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null; _loading = true; _done = _total = 0;
+        try
+        {
+            _timeline = await Session.GetTimelineAsync(MatchId, (done, total) => InvokeAsync(() => { (_done, _total) = (done, total); StateHasChanged(); }));
+        }
+        catch (InvalidDataException)
+        {
+            _error = "This match's film couldn't be read. Films from older game versions, or matches with no film, aren't supported yet.";
+        }
+        catch (Exception ex)
+        {
+            _error = SignIn.Explain(ex);
+            _canRetry = true;
+        }
+        finally { _loading = false; }
+    }
+
+    private string Name(int player) => _timeline?.Players[player].Gamertag ?? "";
+
+    private string TeamClass(int player) =>
+        _timeline is { } t ? $"team{Math.Max(0, t.Teams.ToList().IndexOf(t.Players[player].Team))}" : "";
+
+    private string MedalName(long id) => _book?.ById.TryGetValue(id, out var d) == true && d.Name is { } n ? n : "a medal";
+}

@@ -113,6 +113,12 @@ else
         </section>
     }
 
+    <section class="card timeline-link">
+        <h2>Timeline</h2>
+        <p>Who killed whom and when, the medals each kill earned, team kills minute by minute and where players died, from the match's Theater film.</p>
+        <p><a href="@($"matches/{MatchId}/timeline")">Open the timeline &rarr;</a></p>
+    </section>
+
     <h2 class="section-title">Scoreboard</h2>
     @foreach (var group in Teams(m))
     {

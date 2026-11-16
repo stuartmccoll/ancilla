@@ -1,9 +1,8 @@
 # Ancilla.Theater
 
 Decodes Halo Infinite Theater films (the recordings behind Theater Mode) into match analysis: who
-killed whom and when, medals, lives and score flow. For now it's a console app used to research
-the format and prototype the analysis. It will become the part of Ancilla that turns Theater data
-into the app's match analysis; the web app doesn't reference it yet.
+killed whom and when, medals, lives and score flow. It's a library: the web app's match timeline
+page uses `MatchTimeline`, and the research console in `src/Ancilla.Theater.Cli` uses the rest.
 
 - **[FORMAT.md](FORMAT.md)** is the source of truth for what's been decoded, with the evidence and a
   confidence level for each finding. Read it first.
@@ -38,16 +37,16 @@ films from scratch (`Synthetic.cs`), so they need no token and no cached films.
 
 ```bash
 export HALO_SPARTAN_TOKEN='v4=...'      # raw or URL-encoded (v4%3D...) both work
-dotnet run --project src/Ancilla.Theater -- fetch                 # your latest matchmade match
-dotnet run --project src/Ancilla.Theater -- fetch --pvp           # latest one that isn't Firefight
-dotnet run --project src/Ancilla.Theater -- fetch --pvp --count=5 # latest 5 of your last 25, one per mode first
-dotnet run --project src/Ancilla.Theater -- fetch --pvp --count=5 --start=25  # the same, from matches 26–50
-dotnet run --project src/Ancilla.Theater -- fetch <matchId>
-dotnet run --project src/Ancilla.Theater -- list
-dotnet run --project src/Ancilla.Theater -- inspect               # newest cached film
-dotnet run --project src/Ancilla.Theater -- inspect <matchId> --learn --roster
-dotnet run --project src/Ancilla.Theater -- timeline <matchId>   # kill feed, score flow, head-to-head, lives
-dotnet run --project src/Ancilla.Theater -- dump <matchId> <chunkIndex>
+dotnet run --project src/Ancilla.Theater.Cli -- fetch                 # your latest matchmade match
+dotnet run --project src/Ancilla.Theater.Cli -- fetch --pvp           # latest one that isn't Firefight
+dotnet run --project src/Ancilla.Theater.Cli -- fetch --pvp --count=5 # latest 5 of your last 25, one per mode first
+dotnet run --project src/Ancilla.Theater.Cli -- fetch --pvp --count=5 --start=25  # the same, from matches 26–50
+dotnet run --project src/Ancilla.Theater.Cli -- fetch <matchId>
+dotnet run --project src/Ancilla.Theater.Cli -- list
+dotnet run --project src/Ancilla.Theater.Cli -- inspect               # newest cached film
+dotnet run --project src/Ancilla.Theater.Cli -- inspect <matchId> --learn --roster
+dotnet run --project src/Ancilla.Theater.Cli -- timeline <matchId>   # kill feed, score flow, head-to-head, lives
+dotnet run --project src/Ancilla.Theater.Cli -- dump <matchId> <chunkIndex>
 ```
 
 | Option | Effect |
@@ -61,8 +60,8 @@ dotnet run --project src/Ancilla.Theater -- dump <matchId> <chunkIndex>
 across all cached films to find where a finding stops holding:
 
 ```bash
-for m in $(dotnet run --project src/Ancilla.Theater --no-build -- list | cut -d' ' -f1); do
-  dotnet run --project src/Ancilla.Theater --no-build -- inspect "$m" | grep -E "FAIL|failed|passed"
+for m in $(dotnet run --project src/Ancilla.Theater.Cli --no-build -- list | cut -d' ' -f1); do
+  dotnet run --project src/Ancilla.Theater.Cli --no-build -- inspect "$m" | grep -E "FAIL|failed|passed"
 done
 ```
 
@@ -125,7 +124,8 @@ at a time, and skips chunks already cached.
 
 | File | Role |
 |---|---|
-| `Program.cs` | Commands. `Inspect` is a list of `Check(bool, description)` calls grouped by chunk type; add a check for every new finding. |
+| `../Ancilla.Theater.Cli/Program.cs` | Commands. `Inspect` is a list of `Check(bool, description)` calls grouped by chunk type; add a check for every new finding. |
+| `MatchTimeline.cs` | The web app's match timeline: kill feed, per-player figures, team kills per minute, head-to-head and death positions, as data. |
 | `Timeline.cs` | The `timeline` command: a prototype of the match-timeline feature, built on the decoded summary. `AssignMedals` links each medal to the same player's nearest kill. `WritePositions` adds distances and the death map. |
 | `FilmPositions.cs` | Loads a cached film's biped and dropped-object positions, with each tick's time on the event clock. |
 | `FilmSource.cs` | Manifest parsing and chunk download (public, so no token; host and path are validated). The manifest itself comes from `HaloWaypointClient.GetFilmManifestJsonAsync`. |
@@ -216,10 +216,12 @@ In order of value:
      position in the record, in component-list order. Velocity against the change in position may
      give the coordinate scale without a custom game.
    - [ ] A controlled recording (short custom game, walk a straight line) would fix scale and axes.
-5. **Bring it into the web app.** Split the decoder and analysis into a library the web app
-   references, and keep the research commands as a separate console entry point. A match timeline
-   (kill feed and who killed whom) is the first app feature it enables; `Ancilla.Theater timeline`
-   prototypes it.
+5. **The web app's match timeline.** Started: the decoder is a library, the console is
+   `Ancilla.Theater.Cli`, and `/matches/{id}/timeline` shows `MatchTimeline`. To do:
+   - [ ] Make the console's `timeline` command render `MatchTimeline` too, so the analysis lives
+     in one place (it still has its own copy of the streak, traded and revenge logic).
+   - [ ] Label CTF objective events (steal, capture, return, carrier kill) once a flag-state model
+     can tell them apart.
 
 **Open questions from FORMAT.md:** the extra XUID-range values in each header stream; whether the
 123-value table after the registry describes type 1's 123 static slots; the layouts of packet types
