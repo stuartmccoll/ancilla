@@ -1,4 +1,13 @@
+<p align="center">
+  <img src="branding/favicon-suite/ancilla-symbol-transparent.svg" alt="The Ancilla symbol" width="160">
+</p>
+
 # Ancilla
+
+> **ancilla** (plural *ancillas*): in the Halo universe, what the Forerunners called their artificial
+> intelligences. The term comes from Greg Bear's Forerunner Saga novels. Ancillas range from the
+> monitors that look after the Halo rings, such as 343 Guilty Spark, to vast minds like Mendicant
+> Bias. Humans would just say "AI".
 
 An unofficial Halo Infinite stats viewer, built with Blazor. It shows how many more matchmade games
 you need to finish your battle passes and reach Hero, plus your service record, medals, match
