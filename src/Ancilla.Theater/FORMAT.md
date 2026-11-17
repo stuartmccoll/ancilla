@@ -365,6 +365,19 @@ causes found so far:
   with far fewer round-count records than shots. Burst weapons (one record per burst?) and
   records with only an ammo component (no tick to check) are the next suspects.
 
+*Across every PvP film (research scripts, 11 films, 72 players whose lives all chain):*
+- A least-squares fit of shots fired on per-player record counts does best as about
+  1.1 × one-round drops + 176 × battery used (in whole batteries) + 0.4 × ammo-only count records.
+  The median error is 18%, and 25 of 72 players are within 10%. That's better than one-round drops
+  alone (median 0.45×), but not reliable: the weights don't match any single rule.
+- Players with almost no battery records still range from 0.21× to 0.88×. Drops of more than one
+  round are rare, so it isn't records missing within a magazine.
+- **The `[0] [count:8]` layout is probably right only for some weapons.** Counts after a rise
+  (which should be magazine sizes) are mostly 2, 14, 30, 4 and 5, and some slots start at 79. In
+  the controlled game the same layout gave exactly 36 and 12. So the ammo component's layout
+  likely depends on the weapon, and the next step is knowing which weapon a slot holds:
+  `weapon-state-type-info` (43–46), or a controlled game with one weapon at a time.
+
 **Scale is unknown; the axes are partly known.** F1 and F2 share one scale, and yaw is measured
 from +F1 (see aim, above). In the second custom game, on an 18/15/18 map, walking straight ran at
 about 372 units/s, a faster run (probably a sprint) at about 414, and crouch-walking at
