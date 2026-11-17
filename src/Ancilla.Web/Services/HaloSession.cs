@@ -433,8 +433,9 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
                 progress?.Invoke(Interlocked.Increment(ref done), chunks.Count);
             }));
         }
+        var navMesh = await GetNavMeshAsync(board.MatchInfo.MapVariant);
         // Decoding reads every chunk (a few seconds for a long match), so keep it off the circuit's thread.
-        return await Task.Run(() => MatchTimeline.Build(films, matchId, board));
+        return await Task.Run(() => MatchTimeline.Build(films, matchId, board, navMesh: navMesh));
     }
 
     // ---- Shared, immutable data (cached for everyone) ---------------------------------
@@ -455,6 +456,30 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     public Task<UgcAsset?> GetMapAsync(AssetRef? a) => GetUgcAsync("map", a, Client.GetMapAsync);
     public Task<UgcAsset?> GetModeAsync(AssetRef? a) => GetUgcAsync("mode", a, Client.GetGameVariantAsync);
+
+    /// <summary>
+    /// A Forge map's navmesh (its walkable floor), or null when the map has none (343-built maps) or
+    /// it can't be fetched or read. The blob host is public, so the request carries no token.
+    /// </summary>
+    public async Task<NavMesh?> GetNavMeshAsync(AssetRef? a)
+    {
+        if (await GetMapAsync(a) is not { } map || map.BlobFileUri(UgcAsset.NavMeshFile) is not { } uri) return null;
+        try
+        {
+            return await cache.GetOrAddAsync($"navmesh:{map.AssetId}:{map.VersionId}", async () =>
+            {
+                await _throttle.WaitAsync();
+                try
+                {
+                    using var http = httpFactory.CreateClient();
+                    http.MaxResponseContentBufferSize = 32 << 20;
+                    return NavMesh.Parse(await http.GetByteArrayAsync(uri));
+                }
+                finally { _throttle.Release(); }
+            });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or TaskCanceledException) { return null; }
+    }
 
     public async Task<UgcAsset?> GetPlaylistAsync(AssetRef? a)
     {

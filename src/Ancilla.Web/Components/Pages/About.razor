@@ -159,13 +159,50 @@
                 <dd>Kills of the player who last killed them.</dd>
                 <dt>Nemesis</dt>
                 <dd>The opponent who killed them most (the first one listed, on a tie).</dd>
-                <dt>Where players died</dt>
+                <dt>The map</dt>
                 <dd>
-                    The film records each player's position many times a second. A death is placed at the victim's last
-                    position, and the map's grey area is everywhere players went. The game's own scale and axes aren't
-                    known yet, so the map may be mirrored or rotated. Bot deaths and a few others can't be placed. Not
-                    shown for Firefight, where the AI's positions can't be told apart from players'.
+                    The film records each player's position and aim many times a second. The map's grey area is
+                    everywhere players went, seen from above (or the floor plan, below); which way is north isn't known. Not shown for Firefight,
+                    where the AI's positions can't be told apart from players'.
                 </dd>
+                <dt>The floor plan</dt>
+                <dd>
+                    Forge maps come with a navigation mesh: the walkable floor the game's AI uses. Ancilla downloads it
+                    and lines it up with the film by finding the placement that puts the most player positions on it
+                    (usually 94–99%). It's drawn darker where the floor is higher, and the heatmap is trimmed to it.
+                    If it doesn't line up well, or the map was built by 343 rather than in Forge, the map shows where
+                    players went instead.
+                </dd>
+                <dt>Where players died, and kills</dt>
+                <dd>
+                    A death is placed at the victim's last position, and a kill's line starts at the killer's position at
+                    that moment. Bot deaths, and kills by players whose life the film couldn't link to them, can't be
+                    placed. The short line on each dot is which way that player was aiming, in the second before.
+                </dd>
+                <dt>Facing away from killer</dt>
+                <dd>
+                    The angle between where the victim was aiming and the direction to their killer: 0° is looking straight
+                    at them, 180° is facing away. Hovering over a death or kill describes it in words: under 45° is facing
+                    the killer, over 135° is having their back to them, and anything between is side-on.
+                </dd>
+                <dt>Kill of that life</dt>
+                <dd>Counted from the killer's last death (or the start of the match), including this kill.</dd>
+                <dt>Where players spent time</dt>
+                <dd>
+                    Each position counts until the player's next one (at most a second, so gaps in the film don't pile up in
+                    one place). Time is spread a little to neighbouring squares, then squares are ranked: each of the six
+                    colours, from blue to red, covers the same number of squares. Time while dead, and lives the film couldn't
+                    link to a player, aren't counted. The table splits the map into thirds each way.
+                </dd>
+                <dt>Movement, animated</dt>
+                <dd>
+                    Each player's position and aim, sampled every quarter of a second and smoothed between samples, with
+                    the last 3 seconds of their path. A player disappears while dead and during lives the film couldn't
+                    link to them. Kills flash for a moment where the victim died. It never plays on its own, and with
+                    reduced motion turned on in your system settings it leaves out the trails and the fading.
+                </dd>
+                <dt>Objective events on the map</dt>
+                <dd>Where the player was at each objective event.</dd>
                 <dt>Kill distance</dt>
                 <dd>The median distance between a player and their victim at the moment of the kill, across the floor, in the film's own units. Compare it between players in a match, not with real-world distances.</dd>
             </dl>

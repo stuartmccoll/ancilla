@@ -186,13 +186,36 @@ bits 29–36  tick counter, u8, +1 per tick, wraps at 256
   rather than using timestamps.
 - A packet is a run of records, each starting with a 1 bit, ending with a 0 bit and zero padding.
   The 1-byte payload `0x80` is an idle tick. Record boundaries aren't decoded in general.
-- **Per-player list at the end of each packet:** `[1][index:8][21 bits]` per player, index
-  ascending, then `0`. The 21 bits take few distinct states, so they're status bits, not
-  positions. **A player's entry is missing exactly while they're dead** (research-script check,
-  nine of ten PvP films): the index equals the roster index (scoreboard order among humans) in
-  seven films; in one with a late joiner the indexes are shifted, in another a late joiner reuses a
-  quitter's index, and one film with a quitter, a late joiner and a bot is ambiguous for one
-  player. Type-10 slots don't follow anyone's deaths and remain unmapped.
+- **Per-player list at the end of each packet** (checked against deaths, research scripts; not
+  in the code yet): one entry per player who is alive, index ascending, then a `0` bit and fewer
+  than 8 zero bits of padding:
+
+  ```
+  [1] [index:8] [status:21]          status bits aren't decoded; they're nearly constant per player
+                [5 more bits]        when status bit 18 is 1
+                [16 more bits]       when status bit 19 is 1 (bit 20 is then part of that field)
+  ```
+
+  Parsing from the end (the earliest start that reads exactly to the padding) works for about 98%
+  of packets. Other variants exist (status bit 1 = 0 made one entry 3 bits shorter), so a few
+  packets fail; ignoring presence changes shorter than 60 ticks (1 s) absorbs them.
+  **A player's entry is missing exactly while they're dead:** of 1,161 deaths in nine PvP films
+  whose indexes follow the scoreboard, 1,152 end the player's presence within 0.5 s, and the
+  index is present 2 s after a death 4 times. An index appears 0–5 ticks (median per film) after
+  the life's first biped record (about 40 ticks before it in one film) and disappears 1 tick
+  after its last.
+- **Index to player:** learned from deaths (the index that's present just before and absent just
+  after most of a player's deaths). It's the scoreboard order among humans in eight of eleven
+  films. In one it's shifted by one (a late joiner), in one a late joiner takes over a quitter's
+  index, and a ninth human never appears: no list has more than 8 entries, so the list may hold
+  8 players at most (observed).
+- **What it adds to lives:** presence spans per player equal scoreboard spawns for about half the
+  players, but matching them to biped tracks (start within ±250 ticks, end −250 to +100) adds at
+  most one track per film to the death chaining (`Format/Lives.cs`). The chained tracks already
+  cover 91–99.6% of the time players were alive in nine of eleven films (77% and 65% in two). The
+  lives the chaining misses mostly have **no decoded biped track at all**, so the next gain is in
+  finding biped records (`EntityRecords`), not in linking them. Presence and chaining disagree on
+  about 5% of tracks; which is right isn't known.
 
 ### Entity records and player positions
 
@@ -219,14 +242,14 @@ data       per component, in list order. Component 0, position:
 - **Common biped component lists:** (0, 1, 19, 25), (0, 1, 25), (0, 1, 21, 25), (0, 1, 5, 21, 25),
   (0, 25). In block 35: 0 position, 1 velocity, 4/5 body/shield vitality, 19/20 AI actor control and
   state (Firefight only), 21 desired aiming vector, 25 command tick, 32/35 weapon state. All 41
-  indexes seen are block-35 slots. Only position has been decoded.
+  indexes seen are block-35 slots. Position, aim, command tick and ammo are decoded (below).
 - **The 2 bits before biped coordinates** are `00` in 18,447 of 18,463 records; perhaps a precision
   selector (guess, the other values are untested).
 - **Field widths:** F1 = 18 bits is certain (a 17-bit split makes F2 jump in 43–45% of steps); F2 =
   15 bits is the only split whose steps match F1's; F3's lowest bit is always 0. Each biped updates
   every few ticks (about 2.7 position records per tick in an 8-player film).
 
-**Biped component widths** (research scripts, 2026-11-16; not yet in `EntityRecords`). The command
+**Biped component widths** (`EntityRecords.FindBipedUpdates` reads them; `inspect` checks the tick, aim and ammo). The command
 tick works as a marker: its value is predictable, so finding it shows where the components before it
 end. Every common component list lands on these sums (one CTF film, 10 lists checked):
 
@@ -235,14 +258,36 @@ end. Every common component list lands on these sums (one CTF film, 10 lists che
 | 0 position | 54 | `[00]` + 51 coordinate bits + 1 bit, always 0 when nothing follows but the tick. The custom game's is 57 |
 | 1 velocity | 31 | not decoded |
 | 5 shield vitality | 29 | not decoded |
-| 21 aim | 25 | not decoded; a custom game looking up, down and in 90° turns would show the split |
-| 25 command tick | 9 | `[1] [tick:8]`, the game tick mod 256 |
+| 21 aim | 25 | `[1] [yaw:12] [pitch:12]`, 4,096 units to a full turn (controlled test below) |
+| 25 command tick | 9 | `[1] [tick:8]`, the game tick mod 256, then a `0` when more components follow |
+| 30/33/36/39 ammo | ? | `[0] [rounds:8]`, then bits that vary with the weapon's state; `[1]` there is another kind of value |
 
 - **Command tick (checked on all 12 matchmade films):** in every (0, 25) record the 8 bits equal
   the type-0 packet count plus a per-film offset. The offset steps up by 1–4 a few times in most
   films. Those are probably ticks missing from the film, so the command tick can repair its clock.
   With the widths above, the tick lands where expected in 99% of records carrying an ammo
   component (14 misses in 4,236 in one film).
+- **A `0` follows the command tick when another component comes after it** (checked): in
+  198,300 of 198,876 such records across the matchmade films. That's why an ammo count reads as
+  `[00] [count:8]` after the tick but `[0] [count:8]` in a record with the ammo component alone.
+- **`inspect` checks** (every film with a summary, 2026-11-17): the command tick is the packet
+  count plus one of the film's four most common offsets in 98.8–99.9% of records whose tick lands;
+  pitch is within 90° of level in 99.9%; yaw moves less than 22.5° between a slot's updates up to
+  3 ticks apart in 99.3–99.9%; 96–98% of drops in a slot's checked ammo counts are one round.
+- **Velocity isn't always 31 bits:** in a second custom game, all 10 records listing (1, 21, 25),
+  velocity without position, miss the command tick, while (0, 1, 21, 25) hits in 286 of 287.
+- **Aim (component 21, checked in a controlled custom game, 1,572 records):** `[1] [yaw:12]
+  [pitch:12]`. Four turns to the right show yaw falling by 1,071, 956, 1,065 and 1,082 (about
+  94°, 84°, 94° and 95° at 4,096 to a turn), ending about 7° from the start, which is how
+  accurately the player turned. Turning right lowers yaw: pitch stayed at exactly 2,032 in all
+  358 aim records during the turns (any vertical stick drift didn't register) and yaw only fell
+  (304 steps). Pitch is 2,048 at spawn and 2,032 after the player re-levelled by eye, so 2,048
+  is probably level (it's the midpoint). **Higher pitch is up** (the player looked up only):
+  looking up reached 3,020, 85° above 2,048; looking down at a ledge before stepping off it reached
+  1,172, 77° below. While walking straight, the direction of
+  movement in F1–F2 matches yaw, measured from +F1 towards +F2, within about 1° (60 samples,
+  3 walks; the player steered round obstacles between walks, where the two don't match, as
+  expected when strafing or turning). So yaw is an angle from the +F1 axis, and **F1 and F2 share one scale**.
 - **The custom game's position is 3 bits longer**: its command tick sits 3 bits later. The extra
   bits are 2 that vary and a 0, so its split is probably about 20/17/17, not 20/17/14.
 
@@ -265,7 +310,12 @@ films (9 maps, CTF and Firefight) all need F1 = 18 exactly, so the widths vary, 
 custom versus matchmade (the component is `object-position-dynamic-precision`). Bazaar is a small
 map, so "bigger map, more bits" doesn't fit; a matchmade film on Bazaar, or a custom game on a
 map already cached, would tell the two apart. Where they come from
-isn't known yet; the header is the place to look. Smoothness pins F1 (20, possibly 21) but not the
+isn't known yet; the header is the place to look.
+
+*Second custom game (a version of a map the cached films use, but a different map asset ID):* exactly **18/15/18**, with F3's
+lowest bit always 0, as in matchmade films; the command tick lands after a 54-bit position in
+2,659 of 2,713 records. So custom games don't use other widths as such: Bazaar, or that game's
+settings, does. Smoothness pins F1 (20, possibly 21) but not the
 F2/F3 boundary within a bit or two, because the spare high bits barely change over a short walk.
 Read as 20/17/14, the recording shows (`track` exports it):
 
@@ -291,7 +341,7 @@ moves in order, so the walking directions can't be checked against their account
 component 30, one per round. The 8 bits ending 4 bits before a constant 26-bit tail
 (`10000000011010111110111110`) count down by one per record, 35 to 12: a full 36-round magazine
 after its first shot. Components 21 (aim) and 25 (command tick) come before it in most of these
-records and vary in length (34–36 bits together), so neither is decoded yet.
+records (34 bits together: aim 25, command tick 9, see "Biped component widths").
 
 *In matchmade films (12 films, 72 players whose lives all chain):* skipping the components
 before it with the widths above, ammo data starting `00` holds `[00] [count:8]`. The count goes
@@ -305,7 +355,63 @@ inventory slots whose weapon can change, and it isn't known how the scoreboard c
 multi-pellet weapons. The value 36 (Assault Rifle and Battle Rifle magazine) never shows as a refill,
 so updates are sparse after reloads.
 
-**Scale and axes are unknown.** F3 is vertical (small range; objects settle at a floor value). If a
+*Controlled check (second custom game, checked against the scoreboard):* every round fired has
+its own record, and the drops add up to the scoreboard's shots fired exactly. The Assault Rifle
+(component 30) counts 35 down to 1, then one record starting `01` at empty, then 36 after the
+reload: 36 rounds. The Sidekick (component 33) counts 11 down to 7, then 12 after its reload:
+5 rounds. 36 + 5 = 41, the scoreboard's shots fired. The player fired 10 taps, then held the
+trigger, and the taps fired 15 rounds (four taps fired two, 83 ms apart, the Assault Rifle's
+time between rounds). So **shots fired counts rounds, not trigger pulls**. In records with only
+the ammo component the count comes after one 0 bit, not two (`[0] [count:8]`). Component 42
+appears at each weapon switch (not decoded).
+
+*Matchmade films, after decoding the tick (2026-11-17, research; `rounds` in the console):* the
+guess that unread records explained the shortfall was wrong. Reading stops before the ammo
+component in only about 170 of about 5,950 ammo records in two films. Counting checked one-round
+drops gives a median 0.45× the scoreboard's shots fired (7 complete players, one film). The
+causes found so far:
+
+- **Weapon slots** (header registry, block 35): each of four inventory slots has three
+  components: `weapon-state-ammo` (30, 33, 36, 39), `weapon-state-rounds-inventory` (31, 34,
+  37, 40; reserve rounds, probably) and `weapon-state-overheated` (32, 35, 38, 41). Then 42
+  `biped-desired-weapon-set` and 43–46 `weapon-state-type-info`, one per slot, which may say
+  which weapon is in it. `inspect --registry` lists every block's names.
+- **Ammo starting `1` is most ammo records** (1,868 of 2,831 checked in one film). Starting
+  `10`, the next 15 bits are a value from 0 to 32,767 that only goes up. It jumps by a fixed
+  step per shot, with no records between shots: steps of 913 (about 32,768 ÷ 36) and 3,280
+  (about 32,768 ÷ 10) seen, 20–38 ticks apart. So it's probably the share of a battery or
+  magazine used, for weapons that don't keep a round count (guess: energy weapons). Other runs
+  rise by 8 or 24 every tick for hundreds of ticks, perhaps continuous fire or a charge. Starting
+  `11` is rarer; the controlled game's "empty" record above is one, and its layout isn't known. The player with the most such records had 0.18× their shots counted, and the best,
+  with very few, 0.81×.
+- **It isn't the whole story:** two players with few such records still had only 0.23× and 0.34×,
+  with far fewer round-count records than shots. Burst weapons (one record per burst?) and
+  records with only an ammo component (no tick to check) are the next suspects.
+
+*Across every PvP film (research scripts, 11 films, 72 players whose lives all chain):*
+- A least-squares fit of shots fired on per-player record counts does best as about
+  1.1 × one-round drops + 176 × battery used (in whole batteries) + 0.4 × ammo-only count records.
+  The median error is 18%, and 25 of 72 players are within 10%. That's better than one-round drops
+  alone (median 0.45×), but not reliable: the weights don't match any single rule.
+- Players with almost no battery records still range from 0.21× to 0.88×. Drops of more than one
+  round are rare, so it isn't records missing within a magazine.
+- **The `[0] [count:8]` layout is probably right only for some weapons.** Counts after a rise
+  (which should be magazine sizes) are mostly 2, 14, 30, 4 and 5, and some slots start at 79. In
+  the controlled game the same layout gave exactly 36 and 12. So the ammo component's layout
+  likely depends on the weapon, and the next step is knowing which weapon a slot holds:
+  `weapon-state-type-info` (43–46), or a controlled game with one weapon at a time.
+
+**Killers aim at their victims (checked, 11 PvP films, 1,201 kills with a killer aim):** at each kill whose killer's
+life is linked (`MatchTimeline`), the killer's last checked aim in the second before points along
+the line from killer to victim with a median error of 2–6° per film, and 85–97% of kills are within
+20°. That checks aim in matchmade films (not only the custom game), the yaw convention, that the
+F1–F2 plane isn't mirrored (a mirror would put the median near the reflection, not 2°), and the
+killer placement. Victims were facing within 45° of their killer in 64–94% of kills per film.
+
+**Scale is unknown; the axes are partly known.** F1 and F2 share one scale, and yaw is measured
+from +F1 (see aim, above). In the second custom game, on an 18/15/18 map, walking straight ran at
+about 372 units/s, a faster run (probably a sprint) at about 414, and crouch-walking at
+about 194. F3 is vertical (small range; objects settle at a floor value). If a
 Spartan runs about 7 world units a second, 1 unit ≈ 0.05 world units (guess). A custom game walking
 a known line would settle it; so might decoding velocity (component 1) against the change in
 position.
@@ -355,6 +461,37 @@ type 0. Packet sizes show no respawn signal 4–12 s after deaths.
 Bipeds exist, and players are listed in type 0, from 9.6–30 s into the film, but packets stay
 small (about 2 KB/s): an intro. **Play starts 27–40 s in**, when the data rate jumps more than 4×.
 In the original six films that's 2–6 s before the first event.
+
+## Map geometry: the map asset's navmesh (observed)
+
+Films hold no geometry, but Forge maps carry it. The map asset
+(`GET discovery-infiniteugc.svc.halowaypoint.com/hi/maps/{asset}/versions/{version}`, token needed)
+lists its files under a `blobs-infiniteugc` prefix (token needed too). Forge maps (11 of the 12 maps
+in the cached PvP films) have `map.mvar` (0.3–1.6 MB, the Forge objects; `CustomData.NumOfObjectsOnMap`
+2,331–5,636), a small canvas `.mvar`, `navmesh.blob`, `lightprobes.blob` and `audioocclusion.blob`.
+Bazaar, a 343-built map (`IsBaked: true`, 0 objects), has only its `.mvar` and images.
+
+**`navmesh.blob`:** a 12-byte big-endian header (2, the length that follows, 0x001FFFFF), 12 more
+bytes, then raw deflate. Inside: big-endian u32s (2, 1 section, then sizes) and four Havok 2022.1
+tagfiles (`TAG0`, `SDKV 20220100`, `DATA`, `TYPE`, `INDX`/`ITEM`): `hkaiNavMesh`,
+`hkaiClusterGraph`, `hkaiTraversalAnnotationLibrary` (jumps and drops, probably) and
+`hkcdStaticAabbTree`, then about 190 KB not yet looked at. In the `hkaiNavMesh`, `ITEM` entries
+2–4 give the offsets in `DATA` and counts of faces (12 bytes: start edge i32, start user edge i32,
+edge count i16, user edge count i16), edges (20 bytes: vertex a i32, vertex b i32, opposite edge,
+opposite face, flags, padding, cost) and vertices (16-byte float4, little-endian). Each face's
+edges chain into a closed polygon (2,075 of 2,075 in one map). Z is up. Meshes have 66–7,761 faces.
+
+**Film coordinates against the navmesh (observed, 13 films on 10 maps):** with film X and Y mapped
+to world as (value − 16,384) ÷ k, the share of sampled biped positions over a navmesh face peaks at
+83–98% per film, at k = 68.5–81.5 (most 70–75). So X and Y share one scale, there's no axis swap
+or mirror, and one world unit is about 72 film units. Fitting k and both origins together
+(`FloorPlan.Fit`, checked on 11 PvP films) puts 94–99.8% of positions on the mesh at k = 70.8–73.0;
+the origins are near (16,360, 16,410) on maps near the world origin and move by up to about 100
+film units on maps far from it (centred 90–140 world units out), so the quantisation range
+probably depends on the map (guess), as Bazaar's different field widths also suggest. Z fits roughly
+200 × world Z + 210,000 on most maps (noisier: the biped position may not be the feet). A finer fit
+(k and offsets per axis at once) is still to do. At k = 72 the walking speeds above are about
+5.2 world units a second.
 
 ## Header (type-1 chunk)
 
@@ -566,9 +703,9 @@ guessed to be a timed map event such as a power weapon.
    flag-state model per team, checked against per-player steals, returns and captures; and see
    what code 5 means in other modes (Oddball, Strongholds).
 4. Replication stream: fill the remaining lives from the end-of-packet per-player list
-   (`timeline` already shows distances and a death map from the lives found); decode velocity (component 1), aiming (21) and command tick
-   (25). A controlled recording (walk a known line) would fix the coordinate scale and axes.
-   One exists (see "Field widths depend on the map"); next, find where the per-map widths come
+   (`timeline` already shows distances and a death map from the lives found); decode velocity
+   (component 1). Aim and the command tick are decoded. Two controlled recordings exist (see
+   "Field widths depend on the map"); next, find where the per-map widths come
    from, so `EntityRecords` stops assuming 18/15/18, and match the track to the player's account.
 
 ## Prior art

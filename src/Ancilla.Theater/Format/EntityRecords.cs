@@ -11,6 +11,30 @@ public readonly record struct FilmPosition(int X, int Y, int Z)
 public readonly record struct EntityPosition(int Slot, FilmPosition Position);
 
 /// <summary>
+/// Where a biped is aiming (component 21): 4,096 units to a full turn on both angles. Yaw is
+/// measured from +X towards +Y, so turning right lowers it. Pitch is 2,048 when level (probably;
+/// it's the midpoint and the value at spawn) and higher when looking up.
+/// </summary>
+public readonly record struct Aim(int Yaw, int Pitch)
+{
+    public const int UnitsPerTurn = 4096, Level = 2048;
+    public double YawDegrees => Yaw * 360.0 / UnitsPerTurn;
+    /// <summary>Degrees above level; negative is looking down.</summary>
+    public double PitchDegrees => (Pitch - Level) * 360.0 / UnitsPerTurn;
+}
+
+/// <summary>
+/// One biped record from a type-0 packet, read as far as its components are understood.
+/// <see cref="Checked"/> is true when the record's command tick landed where the widths before it
+/// say it should (a `1` bit, and a `0` bit after it when more components follow). Records whose
+/// components before the tick aren't understood, and records with only an ammo component, have
+/// no tick to check, so they're candidates only: they can be chance matches.
+/// </summary>
+public sealed record BipedUpdate(
+    int Slot, IReadOnlyList<int> Components, bool Checked,
+    FilmPosition? Position, Aim? Aim, int? CommandTick, int? AmmoComponent, int? Rounds);
+
+/// <summary>
 /// Entity records in type-0 (per-tick) packets. Each record updates one entity, addressed by its
 /// type-1 slot, and lists the components it carries by index in the header registry's block for
 /// that entity class (block 35 for bipeds). MSB-first:
@@ -30,6 +54,16 @@ public static class EntityRecords
 {
     public const int SlotBits = 13, CountBits = 5, ComponentBits = 6;
     public const int XBits = 18, YBits = 15, ZBits = 18, PositionBits = XBits + YBits + ZBits;
+
+    /// <summary>Biped component indexes (registry block 35) whose layout is known.</summary>
+    public const int PositionComponent = 0, VelocityComponent = 1, ShieldComponent = 5, AimComponent = 21, CommandTickComponent = 25;
+
+    /// <summary>Weapon-state-ammo components, one per inventory slot (probably).</summary>
+    public static readonly int[] AmmoComponents = [30, 33, 36, 39];
+
+    // Bits each component takes, as far as it's known (FORMAT.md, "Biped component widths").
+    // Position is [00] + 51 coordinate bits + 1 bit; velocity is 31 bits only after a position.
+    private const int PositionDataBits = 2 + PositionBits + 1, VelocityBits = 31, ShieldBits = 29, AimBits = 25, CommandTickBits = 9;
 
     // [0][1] [n = 4] components 0, 1, 2, 3: position, velocity, forward-and-up, angular velocity.
     private static readonly byte[] DroppedObjectHeader = Bits("01" + "00100" + "000000" + "000001" + "000010" + "000011");
@@ -58,6 +92,71 @@ public static class EntityRecords
                 objects.Add(new EntityPosition(Read(b, i, SlotBits), Position(b, at + DroppedObjectHeader.Length)));
         }
         return (bipeds, objects);
+    }
+
+    /// <summary>
+    /// Biped records in one type-0 payload, each read component by component as far as the layout
+    /// is known:
+    /// <code>
+    /// 0  position      [00] [X:18] [Y:15] [Z:18] [1 bit]
+    /// 1  velocity      31 bits, not decoded (only after a position: on its own its width differs)
+    /// 5  shield        29 bits, not decoded
+    /// 21 aim           [1] [yaw:12] [pitch:12]
+    /// 25 command tick  [1] [tick mod 256:8], then a [0] when more components follow
+    /// 30/33/36/39 ammo [0] [rounds:8] (a [1] there is another kind of value, not read)
+    /// </code>
+    /// Reading stops at the first component it can't read. Positions assume 18/15/18 bits, so a map
+    /// with other widths (Bazaar) won't check. Like <see cref="Find"/>, it matches headers at every
+    /// bit offset; use <see cref="BipedUpdate.Checked"/> updates where chance matches would matter.
+    /// </summary>
+    public static List<BipedUpdate> FindBipedUpdates(ReadOnlySpan<byte> payload)
+    {
+        var b = Expand(payload);
+        var updates = new List<BipedUpdate>();
+        var n = b.Length;
+        for (var i = 0; i + SlotBits + 2 + CountBits <= n; i++)
+        {
+            if (!(b[i] == 0 && b[i + 1] == 0 && b[i + 2] == 0 && b[i + 3] == 1 && b[i + 4] == 0 && b[i + 13] == 0 && b[i + 14] == 1)) continue;
+            var count = Read(b, i + 15, CountBits);
+            var q = i + 20 + ComponentBits * count;
+            if (count < 1 || q > n || !Ascending(b, i + 20, count)) continue;
+            var components = Enumerable.Range(0, count).Select(k => Read(b, i + 20 + ComponentBits * k, ComponentBits)).ToArray();
+            if (ReadBiped(b, q, components) is { } u) updates.Add(u with { Slot = Read(b, i, SlotBits) });
+        }
+        return updates;
+    }
+
+    // Reads one biped record's components from bit q; null when its command tick doesn't land.
+    private static BipedUpdate? ReadBiped(byte[] b, int q, int[] components)
+    {
+        FilmPosition? position = null; Aim? aim = null; int? tick = null, ammoComponent = null, rounds = null;
+        bool Has(int bits) => q + bits <= b.Length;
+        for (var k = 0; k < components.Length; k++)
+        {
+            var c = components[k];
+            if (c == PositionComponent && Has(PositionDataBits) && b[q] == 0 && b[q + 1] == 0)
+            { position = Position(b, q + 2); q += PositionDataBits; }
+            else if (c == VelocityComponent && position is not null && Has(VelocityBits)) q += VelocityBits;
+            else if (c == ShieldComponent && Has(ShieldBits)) q += ShieldBits;
+            else if (c == AimComponent && Has(AimBits) && b[q] == 1)
+            { aim = new Aim(Read(b, q + 1, 12), Read(b, q + 13, 12)); q += AimBits; }
+            else if (c == CommandTickComponent && Has(CommandTickBits + 1))
+            {
+                // A misplaced tick means a width before it is wrong or the header was a chance match.
+                var more = k + 1 < components.Length;
+                if (b[q] != 1 || (more && b[q + CommandTickBits] != 0)) return null;
+                tick = Read(b, q + 1, 8);
+                q += CommandTickBits + (more ? 1 : 0);
+            }
+            else if (AmmoComponents.Contains(c) && Has(9))
+            {
+                if (b[q] == 0) (ammoComponent, rounds) = (c, Read(b, q + 1, 8));
+                break;   // what follows the count isn't decoded
+            }
+            else break;
+        }
+        if (position is null && aim is null && tick is null && rounds is null) return null;
+        return new BipedUpdate(0, components, tick is not null, position, aim, tick, ammoComponent, rounds);
     }
 
     /// <summary>

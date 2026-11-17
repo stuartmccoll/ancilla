@@ -184,6 +184,18 @@ public sealed record UgcAsset(string AssetId, string VersionId, string? PublicNa
     public string? ThumbnailUrl => FileUrl("images/thumbnail.jpg");
     public string? HeroUrl => FileUrl("images/hero.jpg") ?? ThumbnailUrl;
 
+    /// <summary>The Forge navmesh, when the map has one (343-built maps don't).</summary>
+    public const string NavMeshFile = "navmesh.blob";
+
+    /// <summary>
+    /// A file the asset lists, as a URL on the public UGC blob host (which needs no token), or null
+    /// when it isn't listed or the prefix isn't that host.
+    /// </summary>
+    public Uri? BlobFileUri(string rel) =>
+        FileUrl(rel) is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+            && uri.Host == "blobs-infiniteugc.svc.halowaypoint.com" && string.IsNullOrEmpty(uri.Query)
+            ? uri : null;
+
     private string? FileUrl(string rel) =>
         Files is { } f && f.FileRelativePaths.Contains(rel) ? f.Prefix + rel : null;
 }

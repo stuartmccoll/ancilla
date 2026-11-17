@@ -124,6 +124,74 @@ public class EntityRecordsTests
         Assert.DoesNotContain(EntityRecords.Find(w.Write(0, 8).ToArray()).Bipeds, b => b.Slot == slot);
     }
 
+    // Component data in the layouts FindBipedUpdates reads (see EntityRecords).
+    private static BitWriter Position(BitWriter w, (int X, int Y, int Z) p) =>
+        w.Write(0, 2).Write((ulong)p.X, 18).Write((ulong)p.Y, 15).Write((ulong)p.Z, 18).Write(0, 1);
+    private static BitWriter Aim(BitWriter w, int yaw, int pitch) => w.Write(1, 1).Write((ulong)yaw, 12).Write((ulong)pitch, 12);
+    private static BitWriter Tick(BitWriter w, int tick, bool more) { w.Write(1, 1).Write((ulong)tick, 8); return more ? w.Write(0, 1) : w; }
+    private static BitWriter Ammo(BitWriter w, int rounds) => w.Write(0, 1).Write((ulong)rounds, 8).Write(0b1011, 4);
+
+    [Fact]
+    public void Reads_position_aim_command_tick_and_ammo_from_one_biped_record()
+    {
+        var w = new BitWriter().Write(0b11, 2);
+        Header(w, 600, [0, 1, 5, 21, 25, 30]);
+        Position(w, (16_000, 18_000, 231_038)).Write(0x5555_5555, 31).Write(0x0AAA_AAAA, 29);
+        Tick(Aim(w, 3288, 3020), 200, more: true);
+        Ammo(w, 27).Write(0, 8);
+
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 600);
+        Assert.True(u.Checked);
+        Assert.Equal([0, 1, 5, 21, 25, 30], u.Components);
+        Assert.Equal(new FilmPosition(16_000, 18_000, 231_038), u.Position);
+        Assert.Equal(new Aim(3288, 3020), u.Aim);
+        Assert.Equal(200, u.CommandTick);
+        Assert.Equal((30, 27), (u.AmmoComponent!.Value, u.Rounds!.Value));
+    }
+
+    [Fact]
+    public void Reads_aim_and_command_tick_without_a_position()
+    {
+        var w = new BitWriter().Write(0b1, 1);
+        Tick(Aim(Header(w, 512, [21, 25]), 1024, 2048), 7, more: false).Write(0, 8);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 512);
+        Assert.True(u.Checked);
+        Assert.Null(u.Position);
+        Assert.Equal(90.0, u.Aim!.Value.YawDegrees);
+        Assert.Equal(0.0, u.Aim!.Value.PitchDegrees);
+    }
+
+    [Fact]
+    public void Drops_a_record_whose_command_tick_does_not_land()
+    {
+        // The tick's leading bit is 0: a width before it is wrong, so nothing in the record is trusted.
+        var w = new BitWriter();
+        Aim(Header(w, 600, [21, 25]), 100, 2048).Write(0, 1).Write(7, 8).Write(0, 8);
+        Assert.DoesNotContain(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 600);
+
+        // A component follows the tick but the bit after the tick is 1.
+        w = new BitWriter();
+        Aim(Header(w, 600, [21, 25, 30]), 100, 2048).Write(1, 1).Write(7, 8).Write(1, 1);
+        Ammo(w, 12).Write(0, 8);
+        Assert.DoesNotContain(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 600);
+    }
+
+    [Fact]
+    public void Leaves_records_it_cannot_check_unchecked()
+    {
+        // Velocity without a position has another width, so reading stops before the tick.
+        var w = new BitWriter();
+        Tick(Aim(Header(w, 600, [1, 21, 25]).Write(0x5555_5555, 31), 100, 2048), 7, more: false);
+        Assert.DoesNotContain(EntityRecords.FindBipedUpdates(w.Write(0, 8).ToArray()), x => x.Slot == 600);
+
+        // An ammo component on its own has no tick: a candidate, not checked.
+        w = new BitWriter();
+        Ammo(Header(w, 601, [33]), 11).Write(0, 8);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 601);
+        Assert.False(u.Checked);
+        Assert.Equal((33, 11), (u.AmmoComponent!.Value, u.Rounds!.Value));
+    }
+
     [Fact]
     public void Filtering_keeps_slots_with_enough_records_inside_the_dropped_objects_range()
     {

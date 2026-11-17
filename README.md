@@ -81,9 +81,13 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
 - **History**: recent games (matchmaking, custom or all) with map, mode, score and your K/D/A.
   Select one for the full scoreboard, your medals, expected-vs-actual kills/deaths, MMR and CSR change.
 - **Match timeline** (from a match's page): read from the match's Theater film, which is downloaded
-  when you ask for it. Team kills by minute, where players died (PvP), a table per player (best
-  streak, traded and revenge kills, nemesis, objectives, kill distance) and the kill feed with each
-  kill's medals. Filter the map and the feed by player.
+  when you ask for it. Team kills by minute; a map (PvP) of where players died and which way they
+  faced, kills drawn from killer to victim, a heatmap of where players spent time, objective
+  events, and an animation of everyone's movement (play, scrub, speed, kill flashes), drawn on the
+  map's own floor plan for Forge maps (from the map's navmesh). Hover over a death or kill for its
+  details. The map starts on you; a table per player (best streak, traded and revenge kills, nemesis, objectives, kill
+  distance) and the kill feed with each kill's medals. Filter the map by player or team, and the
+  feed by player.
 - **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,
   kills above/below what the matchmaker expected, and CSR across ranked games.
 - **Insights**: over your last 50/100/200 PvP games:
@@ -172,6 +176,7 @@ response header.
 | Gamertags and gamerpics (batch) | `GET https://profile.svc.halowaypoint.com/users?xuids={xuid},{xuid},...` |
 | Service tag* | `GET https://economy.svc.halowaypoint.com/hi/players/xuid({xuid})/customization/appearance` |
 | Theater film manifest (chunk list, blob prefix; used by Ancilla.Theater) | `GET https://discovery-infiniteugc.svc.halowaypoint.com/hi/films/matches/{matchId}/spectate` |
+| Map navmesh, for the timeline's floor plan (Forge maps only; deflate + Havok tagfile; public, sent without the token) | `GET https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/map/{assetId}/{versionId}/navmesh.blob` (listed in the map's `Files`) |
 | Theater film chunks (zlib; public on `blobs-infiniteugc.svc.halowaypoint.com`, sent without the token) | `GET {BlobStoragePathPrefix}filmChunk{n}` (the prefix is a full URL from the manifest) |
 
 \* needs `343-clearance`.
