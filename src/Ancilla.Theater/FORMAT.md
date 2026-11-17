@@ -219,7 +219,7 @@ data       per component, in list order. Component 0, position:
 - **Common biped component lists:** (0, 1, 19, 25), (0, 1, 25), (0, 1, 21, 25), (0, 1, 5, 21, 25),
   (0, 25). In block 35: 0 position, 1 velocity, 4/5 body/shield vitality, 19/20 AI actor control and
   state (Firefight only), 21 desired aiming vector, 25 command tick, 32/35 weapon state. All 41
-  indexes seen are block-35 slots. Only position has been decoded.
+  indexes seen are block-35 slots. Position, aim, command tick and ammo are decoded (below).
 - **The 2 bits before biped coordinates** are `00` in 18,447 of 18,463 records; perhaps a precision
   selector (guess, the other values are untested).
 - **Field widths:** F1 = 18 bits is certain (a 17-bit split makes F2 jump in 43–45% of steps); F2 =
@@ -235,7 +235,7 @@ end. Every common component list lands on these sums (one CTF film, 10 lists che
 | 0 position | 54 | `[00]` + 51 coordinate bits + 1 bit, always 0 when nothing follows but the tick. The custom game's is 57 |
 | 1 velocity | 31 | not decoded |
 | 5 shield vitality | 29 | not decoded |
-| 21 aim | 25 | not decoded; a custom game looking up, down and in 90° turns would show the split |
+| 21 aim | 25 | `[1] [yaw:12] [pitch:12]`, 4,096 units to a full turn (controlled test below) |
 | 25 command tick | 9 | `[1] [tick:8]`, the game tick mod 256 |
 
 - **Command tick (checked on all 12 matchmade films):** in every (0, 25) record the 8 bits equal
@@ -243,6 +243,20 @@ end. Every common component list lands on these sums (one CTF film, 10 lists che
   films. Those are probably ticks missing from the film, so the command tick can repair its clock.
   With the widths above, the tick lands where expected in 99% of records carrying an ammo
   component (14 misses in 4,236 in one film).
+- **Velocity isn't always 31 bits:** in a second custom game, all 10 records listing (1, 21, 25),
+  velocity without position, miss the command tick, while (0, 1, 21, 25) hits in 286 of 287.
+- **Aim (component 21, checked in a controlled custom game, 1,572 records):** `[1] [yaw:12]
+  [pitch:12]`. Four turns to the right show yaw falling by 1,071, 956, 1,065 and 1,082 (about
+  94°, 84°, 94° and 95° at 4,096 to a turn), ending about 7° from the start, which is how
+  accurately the player turned. Turning right lowers yaw: pitch stayed at exactly 2,032 in all
+  358 aim records during the turns (any vertical stick drift didn't register) and yaw only fell
+  (304 steps). Pitch is 2,048 at spawn and 2,032 after the player re-levelled by eye, so 2,048
+  is probably level (it's the midpoint). **Higher pitch is up** (the player looked up only):
+  looking up reached 3,020, 85° above 2,048; looking down at a ledge before stepping off it reached
+  1,172, 77° below. While walking straight, the direction of
+  movement in F1–F2 matches yaw, measured from +F1 towards +F2, within about 1° (60 samples,
+  3 walks; the player steered round obstacles between walks, where the two don't match, as
+  expected when strafing or turning). So yaw is an angle from the +F1 axis, and **F1 and F2 share one scale**.
 - **The custom game's position is 3 bits longer**: its command tick sits 3 bits later. The extra
   bits are 2 that vary and a 0, so its split is probably about 20/17/17, not 20/17/14.
 
@@ -265,7 +279,12 @@ films (9 maps, CTF and Firefight) all need F1 = 18 exactly, so the widths vary, 
 custom versus matchmade (the component is `object-position-dynamic-precision`). Bazaar is a small
 map, so "bigger map, more bits" doesn't fit; a matchmade film on Bazaar, or a custom game on a
 map already cached, would tell the two apart. Where they come from
-isn't known yet; the header is the place to look. Smoothness pins F1 (20, possibly 21) but not the
+isn't known yet; the header is the place to look.
+
+*Second custom game (a version of a map the cached films use, but a different map asset ID):* exactly **18/15/18**, with F3's
+lowest bit always 0, as in matchmade films; the command tick lands after a 54-bit position in
+2,659 of 2,713 records. So custom games don't use other widths as such: Bazaar, or that game's
+settings, does. Smoothness pins F1 (20, possibly 21) but not the
 F2/F3 boundary within a bit or two, because the spare high bits barely change over a short walk.
 Read as 20/17/14, the recording shows (`track` exports it):
 
@@ -291,7 +310,7 @@ moves in order, so the walking directions can't be checked against their account
 component 30, one per round. The 8 bits ending 4 bits before a constant 26-bit tail
 (`10000000011010111110111110`) count down by one per record, 35 to 12: a full 36-round magazine
 after its first shot. Components 21 (aim) and 25 (command tick) come before it in most of these
-records and vary in length (34–36 bits together), so neither is decoded yet.
+records (34 bits together: aim 25, command tick 9, see "Biped component widths").
 
 *In matchmade films (12 films, 72 players whose lives all chain):* skipping the components
 before it with the widths above, ammo data starting `00` holds `[00] [count:8]`. The count goes
@@ -305,7 +324,22 @@ inventory slots whose weapon can change, and it isn't known how the scoreboard c
 multi-pellet weapons. The value 36 (Assault Rifle and Battle Rifle magazine) never shows as a refill,
 so updates are sparse after reloads.
 
-**Scale and axes are unknown.** F3 is vertical (small range; objects settle at a floor value). If a
+*Controlled check (second custom game, checked against the scoreboard):* every round fired has
+its own record, and the drops add up to the scoreboard's shots fired exactly. The Assault Rifle
+(component 30) counts 35 down to 1, then one record starting `01` at empty, then 36 after the
+reload: 36 rounds. The Sidekick (component 33) counts 11 down to 7, then 12 after its reload:
+5 rounds. 36 + 5 = 41, the scoreboard's shots fired. The player fired 10 taps, then held the
+trigger, and the taps fired 15 rounds (four taps fired two, 83 ms apart, the Assault Rifle's
+time between rounds). So **shots fired counts rounds, not trigger pulls**. In records with only
+the ammo component the count comes after one 0 bit, not two (`[0] [count:8]`). Component 42
+appears at each weapon switch (not decoded). With every round recorded, the 0.74× shortfall in
+matchmade films is probably records the decoder can't read yet (unknown widths before the ammo
+component), not rounds missing from the film.
+
+**Scale is unknown; the axes are partly known.** F1 and F2 share one scale, and yaw is measured
+from +F1 (see aim, above). In the second custom game, on an 18/15/18 map, walking straight ran at
+about 372 units/s, a faster run (probably a sprint) at about 414, and crouch-walking at
+about 194. F3 is vertical (small range; objects settle at a floor value). If a
 Spartan runs about 7 world units a second, 1 unit ≈ 0.05 world units (guess). A custom game walking
 a known line would settle it; so might decoding velocity (component 1) against the change in
 position.
