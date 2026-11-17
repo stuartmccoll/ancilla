@@ -25,14 +25,39 @@ public sealed record FeedEntry(uint TimeMs, FeedKind Kind, int Player, int? Othe
 public sealed record PlayerSummary(int Player, int Kills, int Deaths, int LongestStreak, uint? FirstKillMs, uint? FirstDeathMs,
     int Traded, int Revenge, int Objectives, int? Nemesis, int LivesPlaced, double DistanceMoved, double? KillDistance);
 
-/// <summary>Where a player died, in map cells (0 ≤ X &lt; MapWidth, 0 ≤ Y &lt; MapHeight, Y down).</summary>
-public sealed record DeathPoint(uint TimeMs, int Player, int Team, int? Killer, int X, int Y);
+/// <summary>
+/// A point on the map grid: 0 ≤ X &lt; <see cref="MatchTimeline.MapWidth"/>, 0 ≤ Y &lt;
+/// <see cref="MatchTimeline.MapHeight"/>, Y down. The film's +Y is drawn up, so the map is a true
+/// top-down view (not mirrored); which way is north isn't known.
+/// </summary>
+public readonly record struct MapPoint(double X, double Y);
+
+/// <summary>
+/// Where a player died and, when the killer's life is known, where the killer was. Facings are the
+/// aim's yaw in degrees, anticlockwise from the map's +X (across), or null when no aim was recorded
+/// in the second before.
+/// </summary>
+public sealed record DeathPoint(uint TimeMs, int Player, int Team, int? Killer, MapPoint At, double? Facing,
+    MapPoint? KillerAt, double? KillerFacing)
+{
+    /// <summary>
+    /// Degrees between where the victim was facing and the direction to the killer: 0 is looking
+    /// straight at them, 180 is facing away. Null when either is unknown.
+    /// </summary>
+    public double? AngleOff => Facing is { } f && KillerAt is { } k && (k.X != At.X || k.Y != At.Y)
+        ? MatchTimeline.AngleBetween(f, Math.Atan2(At.Y - k.Y, k.X - At.X) * 180 / Math.PI) : null;
+}
+
+/// <summary>Where a player was at an objective event (in CTF, a flag action).</summary>
+public sealed record ObjectivePoint(uint TimeMs, int Player, int Team, MapPoint At);
 
 /// <summary>
 /// A match's timeline from its Theater film: the kill feed, per-player figures, team kills over
-/// time, head-to-head kills and, for PvP, where players died. Built from a cached film (see
-/// <see cref="FilmCache"/>) and the match's scoreboard. Positions are in film units (scale and axes
-/// unknown), so the map is drawn on a grid scaled to the area players covered.
+/// time, head-to-head kills and, for PvP, a map: where players died and killed from, where objective
+/// events happened, and how long each player spent in each cell (<see cref="TimeByCell"/>, ms,
+/// indexed <c>y * MapWidth + x</c>, for the lives linked to them). Built from a cached film (see
+/// <see cref="FilmCache"/>) and the match's scoreboard. The film's scale is unknown, so the map is
+/// drawn on a grid scaled to the area players covered.
 /// </summary>
 public sealed record MatchTimeline(
     IReadOnlyList<TimelinePlayer> Players,
@@ -43,10 +68,16 @@ public sealed record MatchTimeline(
     IReadOnlyList<int[]> TeamKillsPerMinute,
     int[,] HeadToHead,
     IReadOnlyList<DeathPoint> Deaths,
+    IReadOnlyList<ObjectivePoint> Objectives,
+    IReadOnlyDictionary<int, float[]> TimeByCell,
     IReadOnlySet<(int X, int Y)> Arena,
     int BotsAndUnlinked)
 {
     public const int TradeWindowMs = 3_000;
+    /// <summary>Longest gap between two records of a life that counts as time in one cell.</summary>
+    public const double MaxStepMs = 1_000;
+    /// <summary>How old an aim record can be and still count as the facing at a moment.</summary>
+    public const double AimMaxAgeMs = 1_000;
     public const int MapWidth = 120, MapHeight = 80;
     private const int FirefightCategory = 42;
 
@@ -111,6 +142,8 @@ public sealed record MatchTimeline(
         var deathIdx = events.Select((e, i) => (e, i)).Where(x => x.e.Kind == SummaryEventKind.Death).Select(x => x.i).ToList();
         var lives = new Dictionary<int, List<int>>();
         var deathPoints = new List<DeathPoint>();
+        var objectivePoints = new List<ObjectivePoint>();
+        var timeByCell = new Dictionary<int, float[]>();
         var arena = new HashSet<(int, int)>();
         Dictionary<int, BipedTrack> tracks = [];
         var killDistances = new Dictionary<int, List<double>>();
@@ -125,36 +158,53 @@ public sealed record MatchTimeline(
                 var matched = Lives.MatchDeaths(deathTicks, tracks);
                 var respawns = Lives.Respawns(deaths.Select(x => (double)x.TimeMs).ToList(), matched.Keys, tracks, pos.TickMs);
                 lives = Lives.Chain(deaths.Select(x => x.Player).ToList(), matched, respawns, tracks);
+                var aims = pos.Aims.GroupBy(a => a.Slot).ToDictionary(g => g.Key, g => g.Select(a => (a.Tick, a.Aim)).ToList());
 
                 var all = pos.Bipeds.Select(b => b.Record.Position).ToList();
                 int minX = all.Min(p => p.X), maxX = all.Max(p => p.X), minY = all.Min(p => p.Y), maxY = all.Max(p => p.Y);
-                // One scale for both axes, so the map keeps its shape; centred in the grid.
+                // One scale for both axes, so the map keeps its shape; centred in the grid. +Y is up.
                 var scale = Math.Min((MapWidth - 1.0) / Math.Max(1, maxX - minX), (MapHeight - 1.0) / Math.Max(1, maxY - minY));
                 var (padX, padY) = ((MapWidth - 1 - (maxX - minX) * scale) / 2, (MapHeight - 1 - (maxY - minY) * scale) / 2);
-                (int, int) Cell(FilmPosition p) => ((int)(padX + (p.X - minX) * scale), (int)(padY + (maxY - p.Y) * scale));
-                foreach (var p in all) arena.Add(Cell(p));
+                MapPoint Cell(FilmPosition p) => new(padX + (p.X - minX) * scale + .5, padY + (maxY - p.Y) * scale + .5);
+                foreach (var p in all) { var c = Cell(p); arena.Add(((int)c.X, (int)c.Y)); }
 
-                FilmPosition? At(int player, int tick)
+                (int Slot, FilmPosition Position)? At(int player, int tick)
                 {
                     foreach (var slot in lives.GetValueOrDefault(player) ?? [])
                     {
                         var t = tracks[slot];
                         if (tick < t.FirstTick || tick > t.LastTick + 3) continue;
                         var i = t.Points.FindLastIndex(x => x.Tick <= tick);
-                        return i >= 0 ? t.Points[i].Position : null;
+                        return i >= 0 ? (slot, t.Points[i].Position) : null;
                     }
                     return null;
                 }
+                double? Facing(int slot, int tick) =>
+                    aims.TryGetValue(slot, out var list) && AimAt(list, tick) is { } a && pos.TickMs[tick] - pos.TickMs[a.Tick] <= AimMaxAgeMs
+                        ? a.Aim.YawDegrees : null;
+
                 foreach (var (n, slot) in matched)
                 {
                     var at = tracks[slot].Points[^1].Position;
                     var killer = killerOf.TryGetValue(deathIdx[n], out var k) ? k : (int?)null;
-                    var (x, y) = Cell(at);
-                    deathPoints.Add(new DeathPoint(deaths[n].TimeMs, deaths[n].Player, players[deaths[n].Player].Team, killer, x, y));
-                    if (killer is { } kp && At(kp, deathTicks[n]) is { } killerAt)
-                        (killDistances.TryGetValue(kp, out var l) ? l : killDistances[kp] = []).Add(at.HorizontalDistance(killerAt));
+                    var tick = deathTicks[n];
+                    MapPoint? killerCell = null; double? killerFacing = null;
+                    if (killer is { } kp && At(kp, tick) is { } ka)
+                    {
+                        (killDistances.TryGetValue(kp, out var l) ? l : killDistances[kp] = []).Add(at.HorizontalDistance(ka.Position));
+                        (killerCell, killerFacing) = (Cell(ka.Position), Facing(ka.Slot, tick));
+                    }
+                    deathPoints.Add(new DeathPoint(deaths[n].TimeMs, deaths[n].Player, players[deaths[n].Player].Team, killer,
+                        Cell(at), Facing(slot, Math.Min(tick, tracks[slot].LastTick)), killerCell, killerFacing));
                 }
                 deathPoints.Sort((a, b) => a.TimeMs.CompareTo(b.TimeMs));
+
+                foreach (var e in events.Where(e => e.Kind == SummaryEventKind.Objective))
+                    if (At(e.Player, pos.TickAt(e.TimeMs)) is { } oa)
+                        objectivePoints.Add(new ObjectivePoint(e.TimeMs, e.Player, players[e.Player].Team, Cell(oa.Position)));
+
+                foreach (var (player, slots) in lives)
+                    timeByCell[player] = TimeSpent(slots.Select(s => tracks[s]), pos.TickMs, Cell);
             }
         }
 
@@ -186,6 +236,68 @@ public sealed record MatchTimeline(
                 nemesis, myLives.Count, moved, kd is { Count: > 0 } ? kd[kd.Count / 2] : null));
         }
 
-        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, arena, outsiders);
+        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, outsiders);
+    }
+
+    /// <summary>
+    /// Milliseconds spent in each map cell (index <c>y * MapWidth + x</c>) over the given lives. Each
+    /// record's position holds until the life's next record; gaps over <see cref="MaxStepMs"/> count
+    /// only that long, so a missing stretch of records doesn't pile time on one cell.
+    /// </summary>
+    public static float[] TimeSpent(IEnumerable<BipedTrack> lives, IReadOnlyList<double> tickMs, Func<FilmPosition, MapPoint> cell)
+    {
+        var grid = new float[MapWidth * MapHeight];
+        foreach (var life in lives)
+            for (var i = 0; i + 1 < life.Points.Count; i++)
+            {
+                var ms = Math.Min(MaxStepMs, tickMs[life.Points[i + 1].Tick] - tickMs[life.Points[i].Tick]);
+                var c = cell(life.Points[i].Position);
+                int x = Math.Clamp((int)c.X, 0, MapWidth - 1), y = Math.Clamp((int)c.Y, 0, MapHeight - 1);
+                grid[y * MapWidth + x] += (float)ms;
+            }
+        return grid;
+    }
+
+    /// <summary>
+    /// Heatmap levels for a <see cref="TimeSpent"/> grid: each cell's time is averaged with its
+    /// neighbours within <paramref name="radius"/> cells (a box blur, so paths read as areas), then the
+    /// cells with any time are split into <paramref name="levels"/> equal-sized groups by that time,
+    /// 1 (least) to <paramref name="levels"/> (most). Cells with no time are 0.
+    /// </summary>
+    public static byte[] HeatLevels(float[] grid, int levels = 6, int radius = 1)
+    {
+        var blurred = new float[grid.Length];
+        for (var y = 0; y < MapHeight; y++)
+            for (var x = 0; x < MapWidth; x++)
+            {
+                float sum = 0;
+                for (var dy = -radius; dy <= radius; dy++)
+                    for (var dx = -radius; dx <= radius; dx++)
+                        if (x + dx is >= 0 and < MapWidth && y + dy is >= 0 and < MapHeight) sum += grid[(y + dy) * MapWidth + x + dx];
+                blurred[y * MapWidth + x] = sum;
+            }
+        var order = Enumerable.Range(0, blurred.Length).Where(i => blurred[i] > 0).OrderBy(i => blurred[i]).ToList();
+        var result = new byte[grid.Length];
+        for (var r = 0; r < order.Count; r++) result[order[r]] = (byte)(1 + r * levels / order.Count);
+        return result;
+    }
+
+    /// <summary>The last aim at or before a tick, from one slot's aims in tick order.</summary>
+    public static (int Tick, Aim Aim)? AimAt(IReadOnlyList<(int Tick, Aim Aim)> aims, int tick)
+    {
+        int lo = 0, hi = aims.Count - 1, found = -1;
+        while (lo <= hi)
+        {
+            var mid = (lo + hi) / 2;
+            if (aims[mid].Tick <= tick) { found = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        return found >= 0 ? aims[found] : null;
+    }
+
+    /// <summary>The angle between two directions in degrees, 0–180.</summary>
+    public static double AngleBetween(double a, double b)
+    {
+        var d = Math.Abs((a - b) % 360);
+        return d > 180 ? 360 - d : d;
     }
 }

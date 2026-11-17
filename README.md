@@ -81,9 +81,11 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
 - **History**: recent games (matchmaking, custom or all) with map, mode, score and your K/D/A.
   Select one for the full scoreboard, your medals, expected-vs-actual kills/deaths, MMR and CSR change.
 - **Match timeline** (from a match's page): read from the match's Theater film, which is downloaded
-  when you ask for it. Team kills by minute, where players died (PvP), a table per player (best
-  streak, traded and revenge kills, nemesis, objectives, kill distance) and the kill feed with each
-  kill's medals. Filter the map and the feed by player.
+  when you ask for it. Team kills by minute; a map (PvP) of where players died and which way they
+  faced, kills drawn from killer to victim, a heatmap of where players spent time, and objective
+  events; a table per player (best streak, traded and revenge kills, nemesis, objectives, kill
+  distance) and the kill feed with each kill's medals. Filter the map by player or team, and the
+  feed by player.
 - **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,
   kills above/below what the matchmaker expected, and CSR across ranked games.
 - **Insights**: over your last 50/100/200 PvP games:

@@ -378,6 +378,13 @@ causes found so far:
   likely depends on the weapon, and the next step is knowing which weapon a slot holds:
   `weapon-state-type-info` (43–46), or a controlled game with one weapon at a time.
 
+**Killers aim at their victims (checked, 11 PvP films, 1,201 kills with a killer aim):** at each kill whose killer's
+life is linked (`MatchTimeline`), the killer's last checked aim in the second before points along
+the line from killer to victim with a median error of 2–6° per film, and 85–97% of kills are within
+20°. That checks aim in matchmade films (not only the custom game), the yaw convention, that the
+F1–F2 plane isn't mirrored (a mirror would put the median near the reflection, not 2°), and the
+killer placement. Victims were facing within 45° of their killer in 64–94% of kills per film.
+
 **Scale is unknown; the axes are partly known.** F1 and F2 share one scale, and yaw is measured
 from +F1 (see aim, above). In the second custom game, on an 18/15/18 map, walking straight ran at
 about 372 units/s, a faster run (probably a sprint) at about 414, and crouch-walking at
@@ -431,6 +438,33 @@ type 0. Packet sizes show no respawn signal 4–12 s after deaths.
 Bipeds exist, and players are listed in type 0, from 9.6–30 s into the film, but packets stay
 small (about 2 KB/s): an intro. **Play starts 27–40 s in**, when the data rate jumps more than 4×.
 In the original six films that's 2–6 s before the first event.
+
+## Map geometry: the map asset's navmesh (observed)
+
+Films hold no geometry, but Forge maps carry it. The map asset
+(`GET discovery-infiniteugc.svc.halowaypoint.com/hi/maps/{asset}/versions/{version}`, token needed)
+lists its files under a `blobs-infiniteugc` prefix (token needed too). Forge maps (11 of the 12 maps
+in the cached PvP films) have `map.mvar` (0.3–1.6 MB, the Forge objects; `CustomData.NumOfObjectsOnMap`
+2,331–5,636), a small canvas `.mvar`, `navmesh.blob`, `lightprobes.blob` and `audioocclusion.blob`.
+Bazaar, a 343-built map (`IsBaked: true`, 0 objects), has only its `.mvar` and images.
+
+**`navmesh.blob`:** a 12-byte big-endian header (2, the length that follows, 0x001FFFFF), 12 more
+bytes, then raw deflate. Inside: big-endian u32s (2, 1 section, then sizes) and four Havok 2022.1
+tagfiles (`TAG0`, `SDKV 20220100`, `DATA`, `TYPE`, `INDX`/`ITEM`): `hkaiNavMesh`,
+`hkaiClusterGraph`, `hkaiTraversalAnnotationLibrary` (jumps and drops, probably) and
+`hkcdStaticAabbTree`, then about 190 KB not yet looked at. In the `hkaiNavMesh`, `ITEM` entries
+2–4 give the offsets in `DATA` and counts of faces (12 bytes: start edge i32, start user edge i32,
+edge count i16, user edge count i16), edges (20 bytes: vertex a i32, vertex b i32, opposite edge,
+opposite face, flags, padding, cost) and vertices (16-byte float4, little-endian). Each face's
+edges chain into a closed polygon (2,075 of 2,075 in one map). Z is up. Meshes have 66–7,761 faces.
+
+**Film coordinates against the navmesh (observed, 13 films on 10 maps):** with film X and Y mapped
+to world as (value − 16,384) ÷ k, the share of sampled biped positions over a navmesh face peaks at
+83–98% per film, at k = 68.5–81.5 (most 70–75). So X and Y share one scale, 16,384 (2^14) is world
+0, there's no axis swap or mirror, and one world unit is about 72 film units. Z fits roughly
+200 × world Z + 210,000 on most maps (noisier: the biped position may not be the feet). A finer fit
+(k and offsets per axis at once) is still to do. At k = 72 the walking speeds above are about
+5.2 world units a second.
 
 ## Header (type-1 chunk)
 

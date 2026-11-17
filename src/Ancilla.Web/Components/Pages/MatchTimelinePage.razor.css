@@ -15,6 +15,24 @@ progress { width: 100%; max-width: 24rem; }
 .map { width: 100%; height: auto; max-height: 34rem; display: block; margin-top: .75rem; }
 .map .ground { fill: var(--track); }
 .map circle { stroke: var(--surface); stroke-width: .25; }
+.stroke0 { stroke: var(--viz-1); }
+.stroke1 { stroke: var(--viz-2); }
+.map .facing { stroke-width: .45; stroke-linecap: round; }
+.map .shot { stroke-width: .3; opacity: .7; }
+.map circle.victim { fill: var(--surface); stroke-width: .35; }
+.map .objective { stroke: var(--surface); stroke-width: .25; }
+.controls { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.key.ring { background: transparent; border: 2px solid var(--muted); box-sizing: border-box; }
+.key.diamond { border-radius: 1px; transform: rotate(45deg) scale(.85); }
+
+/* Heatmap: blue (--viz-1) for the least time to red (--viz-neg) for the most, mixed so every theme follows. */
+.heat1 { fill: var(--viz-1); background: var(--viz-1); }
+.heat2 { fill: color-mix(in oklab, var(--viz-neg) 20%, var(--viz-1)); background: color-mix(in oklab, var(--viz-neg) 20%, var(--viz-1)); }
+.heat3 { fill: color-mix(in oklab, var(--viz-neg) 40%, var(--viz-1)); background: color-mix(in oklab, var(--viz-neg) 40%, var(--viz-1)); }
+.heat4 { fill: color-mix(in oklab, var(--viz-neg) 60%, var(--viz-1)); background: color-mix(in oklab, var(--viz-neg) 60%, var(--viz-1)); }
+.heat5 { fill: color-mix(in oklab, var(--viz-neg) 80%, var(--viz-1)); background: color-mix(in oklab, var(--viz-neg) 80%, var(--viz-1)); }
+.heat6 { fill: var(--viz-neg); background: var(--viz-neg); }
+.swatch { display: inline-block; width: 1rem; height: .7rem; }
 
 .filter { display: inline-flex; gap: .5rem; align-items: center; font-size: .9rem; }
 

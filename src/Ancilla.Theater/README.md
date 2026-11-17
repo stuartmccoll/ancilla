@@ -230,6 +230,11 @@ In order of value:
      in one place (it still has its own copy of the streak, traded and revenge logic).
    - [ ] Label CTF objective events (steal, capture, return, carrier kill) once a flag-state model
      can tell them apart.
+   - [x] Map layers: deaths with facing, kills from killer to victim, time-spent heatmap, objective
+     events.
+   - [ ] Animated movement on the map; it needs the lives chaining misses filled first.
+   - [ ] Weapon pickups: dropped objects that vanish next to a biped (untested), then which weapon
+     (`weapon-state-type-info`, 43–46).
 
 **Open questions from FORMAT.md:** the extra XUID-range values in each header stream; whether the
 123-value table after the registry describes type 1's 123 static slots; the layouts of packet types
