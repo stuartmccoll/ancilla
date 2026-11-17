@@ -226,7 +226,7 @@ data       per component, in list order. Component 0, position:
   15 bits is the only split whose steps match F1's; F3's lowest bit is always 0. Each biped updates
   every few ticks (about 2.7 position records per tick in an 8-player film).
 
-**Biped component widths** (research scripts, 2026-11-16; not yet in `EntityRecords`). The command
+**Biped component widths** (`EntityRecords.FindBipedUpdates` reads them; `inspect` checks the tick, aim and ammo). The command
 tick works as a marker: its value is predictable, so finding it shows where the components before it
 end. Every common component list lands on these sums (one CTF film, 10 lists checked):
 
@@ -236,13 +236,21 @@ end. Every common component list lands on these sums (one CTF film, 10 lists che
 | 1 velocity | 31 | not decoded |
 | 5 shield vitality | 29 | not decoded |
 | 21 aim | 25 | `[1] [yaw:12] [pitch:12]`, 4,096 units to a full turn (controlled test below) |
-| 25 command tick | 9 | `[1] [tick:8]`, the game tick mod 256 |
+| 25 command tick | 9 | `[1] [tick:8]`, the game tick mod 256, then a `0` when more components follow |
+| 30/33/36/39 ammo | ? | `[0] [rounds:8]`, then bits that vary with the weapon's state; `[1]` there is another kind of value |
 
 - **Command tick (checked on all 12 matchmade films):** in every (0, 25) record the 8 bits equal
   the type-0 packet count plus a per-film offset. The offset steps up by 1–4 a few times in most
   films. Those are probably ticks missing from the film, so the command tick can repair its clock.
   With the widths above, the tick lands where expected in 99% of records carrying an ammo
   component (14 misses in 4,236 in one film).
+- **A `0` follows the command tick when another component comes after it** (checked): in
+  198,300 of 198,876 such records across the matchmade films. That's why an ammo count reads as
+  `[00] [count:8]` after the tick but `[0] [count:8]` in a record with the ammo component alone.
+- **`inspect` checks** (every film with a summary, 2026-11-17): the command tick is the packet
+  count plus one of the film's four most common offsets in 98.8–99.9% of records whose tick lands;
+  pitch is within 90° of level in 99.9%; yaw moves less than 22.5° between a slot's updates up to
+  3 ticks apart in 99.3–99.9%; 96–98% of drops in a slot's checked ammo counts are one round.
 - **Velocity isn't always 31 bits:** in a second custom game, all 10 records listing (1, 21, 25),
   velocity without position, miss the command tick, while (0, 1, 21, 25) hits in 286 of 287.
 - **Aim (component 21, checked in a controlled custom game, 1,572 records):** `[1] [yaw:12]
@@ -600,9 +608,9 @@ guessed to be a timed map event such as a power weapon.
    flag-state model per team, checked against per-player steals, returns and captures; and see
    what code 5 means in other modes (Oddball, Strongholds).
 4. Replication stream: fill the remaining lives from the end-of-packet per-player list
-   (`timeline` already shows distances and a death map from the lives found); decode velocity (component 1), aiming (21) and command tick
-   (25). A controlled recording (walk a known line) would fix the coordinate scale and axes.
-   One exists (see "Field widths depend on the map"); next, find where the per-map widths come
+   (`timeline` already shows distances and a death map from the lives found); decode velocity
+   (component 1). Aim and the command tick are decoded. Two controlled recordings exist (see
+   "Field widths depend on the map"); next, find where the per-map widths come
    from, so `EntityRecords` stops assuming 18/15/18, and match the track to the player's account.
 
 ## Prior art

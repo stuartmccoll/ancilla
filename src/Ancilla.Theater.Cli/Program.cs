@@ -235,6 +235,57 @@ void InspectReplication(Action<bool, string> check, List<SlotTable> tables, List
     }
 }
 
+// Checks on biped records read past their position (EntityRecords.FindBipedUpdates): the command
+// tick, aim and ammo. Only records whose command tick landed are used.
+void InspectBipedUpdates(Action<bool, string> check, List<(int Tick, BipedUpdate Update)> updates)
+{
+    Console.WriteLine("\nBiped components (type-0 records past the position)");
+    var withTick = updates.Where(u => u.Update.CommandTick is not null).ToList();
+    Console.WriteLine($"  {updates.Count:N0} records whose command tick landed, in {updates.Select(u => u.Update.Slot).Distinct().Count()} slots");
+    if (withTick.Count < 100) { Console.WriteLine("  too few to check"); return; }
+
+    // (a) The command tick is the packet count plus a per-film offset, which steps up a few times
+    // (probably ticks missing from the film).
+    var offsets = withTick.CountBy(u => (u.Update.CommandTick!.Value - u.Tick) & 0xFF).OrderByDescending(x => x.Value).ToList();
+    var top = offsets.Take(4).Sum(x => x.Value);
+    // 98.8–99.9% per film; the rest are chance matches of a biped header.
+    check(top * 50 >= withTick.Count * 49,
+        $"command ticks are the packet count plus the film's offset (its four most common, {string.Join(", ", offsets.Take(4).Select(x => x.Key))}): {top:N0} of {withTick.Count:N0}");
+
+    // (b) Pitch stays within 90° of level.
+    var aims = updates.Where(u => u.Update.Aim is not null).ToList();
+    var level = aims.Count(u => Math.Abs(u.Update.Aim!.Value.PitchDegrees) <= 90);
+    check(level * 200 >= aims.Count * 199, $"aim pitch is within 90° of level: {level:N0} of {aims.Count:N0}");
+
+    // (c) Aim turns smoothly: consecutive updates of one slot up to 3 ticks apart differ by less than 22.5° in yaw.
+    int smooth = 0, pairs = 0;
+    foreach (var g in aims.GroupBy(u => u.Update.Slot))
+        foreach (var (a, b) in g.Zip(g.Skip(1)))
+        {
+            if (b.Tick - a.Tick is < 1 or > 3) continue;
+            pairs++;
+            var d = Math.Abs(a.Update.Aim!.Value.Yaw - b.Update.Aim!.Value.Yaw);
+            if (Math.Min(d, Aim.UnitsPerTurn - d) < 256) smooth++;
+        }
+    // 99.3–99.9% per film.
+    check(pairs > 0 && smooth * 100 >= pairs * 99, $"aim turns smoothly: yaw moves less than 22.5° between updates up to 3 ticks apart in {smooth:N0} of {pairs:N0}");
+
+    // (d) Ammo counts go down one round at a time between reloads. Bigger drops are records with
+    // no command tick to check (an ammo component on its own), which aren't used here.
+    int down = 0, oneRound = 0, up = 0;
+    foreach (var g in updates.Where(u => u.Update.Rounds is not null).GroupBy(u => (u.Update.Slot, u.Update.AmmoComponent)))
+        foreach (var (a, b) in g.Zip(g.Skip(1)))
+        {
+            var d = b.Update.Rounds!.Value - a.Update.Rounds!.Value;
+            if (d < 0) down++;
+            if (d == -1) oneRound++;
+            if (d > 0) up++;
+        }
+    // 96–98% in matchmade films; 86% in a short custom game where many records had the ammo component alone.
+    check(down > 0 && oneRound * 5 >= down * 4,
+        $"ammo counts drop one round at a time: {oneRound:N0} of {down:N0} drops ({up:N0} rises: reloads and pickups)");
+}
+
 // Checks that type-0 biped records carry player positions, against the summary's deaths. PvP only:
 // in Firefight the AI share the biped slots and AI deaths aren't in the summary.
 void InspectPositions(Action<bool, string> check, List<SummaryEvent> events, IReadOnlyList<int> teamOf, IReadOnlyList<int> spawnsOf, List<(double Ms, int Bytes)> tickData,
@@ -382,6 +433,7 @@ int Inspect(string matchId)
     var tickData = new List<(double Ms, int Bytes)>();   // type-0 packets: film time and size
     var bipedCandidates = new List<(int Tick, EntityPosition Record)>();
     var objectCandidates = new List<(int Tick, EntityPosition Record)>();
+    var checkedUpdates = new List<(int Tick, BipedUpdate Update)>();   // biped records whose command tick landed
     foreach (var c in chunks.Where(c => c.ChunkType != 1).OrderBy(c => c.Index))
     {
         var data = cache.LoadChunk(matchId, c);
@@ -411,6 +463,7 @@ int Inspect(string matchId)
                         var (found, objects) = EntityRecords.Find(span1);
                         bipedCandidates.AddRange(found.Select(r => (tickData.Count, r)));
                         objectCandidates.AddRange(objects.Select(r => (tickData.Count, r)));
+                        checkedUpdates.AddRange(EntityRecords.FindBipedUpdates(span1).Where(u => u.Checked).Select(u => (tickData.Count, u)));
                         tickData.Add(((p.TimestampUs - firstStart.Value.Us) / 1000.0, p.Payload.Length));
                         break;
                     case 1:
@@ -638,6 +691,7 @@ int Inspect(string matchId)
 
     InspectReplication(Check, slotTables, events, board, humans.Count,
         (type6Ok, type12Ok, type8MaxCount), (tickMarkers, tickLayoutMisses, tickFollowedByType0, maxPresentSlots), tickData);
+    InspectBipedUpdates(Check, checkedUpdates);
     if (board is not null && board.MatchInfo.GameVariantCategory != GameVariantFirefight)
         InspectPositions(Check, events, filmPlayers.Select(x => x.Row.LastTeamId).ToList(),
             filmPlayers.Select(x => x.Row.Stats?.CoreStats.Spawns ?? 0).ToList(), tickData,

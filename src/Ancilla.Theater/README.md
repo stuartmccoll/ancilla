@@ -214,10 +214,16 @@ In order of value:
      84 PvP players are complete) from the end-of-packet per-player list: a player's entry is
      missing exactly while they're dead, and its index is the roster index in most films (see
      FORMAT.md, "Per-player list"). Its parser isn't in the repo yet.
-   - [ ] **Decode velocity (component 1) and aim (component 21)** in biped records. They follow
-     position in the record, in component-list order. Velocity against the change in position may
-     give the coordinate scale without a custom game.
-   - [ ] A controlled recording (short custom game, walk a straight line) would fix scale and axes.
+   - [x] **Aim (component 21), the command tick (25) and ammo counts (30/33/36/39)** are read by
+     `EntityRecords.FindBipedUpdates`, and `inspect` checks them (FORMAT.md, "Biped component
+     widths").
+   - [ ] **Decode velocity (component 1).** It's 31 bits after a position and another width
+     without one. Velocity against the change in position may give the coordinate scale.
+   - [ ] **Count rounds fired** from the ammo counts and compare them with the scoreboard's shots
+     fired. It matched exactly in a controlled custom game; matchmade films need the ammo
+     component on its own (no command tick to check it) and the `[1]` kind handled.
+   - [x] Controlled recordings fixed the axes: Z is vertical, X and Y share one scale, and yaw is
+     measured from +X. The scale is still unknown.
 5. **The web app's match timeline.** Started: the decoder is a library, the console is
    `Ancilla.Theater.Cli`, and `/matches/{id}/timeline` shows `MatchTimeline`. To do:
    - [ ] Make the console's `timeline` command render `MatchTimeline` too, so the analysis lives
