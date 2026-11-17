@@ -232,6 +232,8 @@ In order of value:
      can tell them apart.
    - [x] Map layers: deaths with facing, kills from killer to victim, time-spent heatmap, objective
      events.
+   - [x] Floor plan from the Forge map's navmesh (`NavMesh` in Core, `FloorPlan` here), fitted per
+     film; 343-built maps (Bazaar) have none.
    - [ ] Animated movement on the map; it needs the lives chaining misses filled first.
    - [ ] Weapon pickups: dropped objects that vanish next to a biped (untested), then which weapon
      (`weapon-state-type-info`, 43–46).

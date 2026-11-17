@@ -460,8 +460,12 @@ edges chain into a closed polygon (2,075 of 2,075 in one map). Z is up. Meshes h
 
 **Film coordinates against the navmesh (observed, 13 films on 10 maps):** with film X and Y mapped
 to world as (value − 16,384) ÷ k, the share of sampled biped positions over a navmesh face peaks at
-83–98% per film, at k = 68.5–81.5 (most 70–75). So X and Y share one scale, 16,384 (2^14) is world
-0, there's no axis swap or mirror, and one world unit is about 72 film units. Z fits roughly
+83–98% per film, at k = 68.5–81.5 (most 70–75). So X and Y share one scale, there's no axis swap
+or mirror, and one world unit is about 72 film units. Fitting k and both origins together
+(`FloorPlan.Fit`, checked on 11 PvP films) puts 94–99.8% of positions on the mesh at k = 70.8–73.0;
+the origins are near (16,360, 16,410) on maps near the world origin and move by up to about 100
+film units on maps far from it (centred 90–140 world units out), so the quantisation range
+probably depends on the map (guess), as Bazaar's different field widths also suggest. Z fits roughly
 200 × world Z + 210,000 on most maps (noisier: the biped position may not be the feet). A finer fit
 (k and offsets per axis at once) is still to do. At k = 72 the walking speeds above are about
 5.2 world units a second.

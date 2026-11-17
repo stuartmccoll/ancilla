@@ -32,7 +32,7 @@ so you usually can't check pages end to end yourself. Say so rather than claimin
 
 - `src/Ancilla.Core`: no NuGet dependencies, no ASP.NET. Holds the API client
   (`HaloWaypointClient`), JSON models (`Models.cs`, `StatsModels.cs`), progress maths
-  (`ProgressService`), `HaloCache` and `SnapshotStore`.
+  (`ProgressService`), `HaloCache`, `SnapshotStore` and the Forge map navmesh reader (`NavMesh`).
 - `src/Ancilla.Web`: the Blazor app.
   - `Services/HaloSession.cs`: per-circuit (scoped) state. It holds the signed-in client and the
     player's data, and is the only thing pages should call for Halo data.

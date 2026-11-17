@@ -162,8 +162,16 @@
                 <dt>The map</dt>
                 <dd>
                     The film records each player's position and aim many times a second. The map's grey area is
-                    everywhere players went, seen from above; which way is north isn't known. Not shown for Firefight,
+                    everywhere players went, seen from above (or the floor plan, below); which way is north isn't known. Not shown for Firefight,
                     where the AI's positions can't be told apart from players'.
+                </dd>
+                <dt>The floor plan</dt>
+                <dd>
+                    Forge maps come with a navigation mesh: the walkable floor the game's AI uses. Ancilla downloads it
+                    and lines it up with the film by finding the placement that puts the most player positions on it
+                    (usually 94–99%). It's drawn darker where the floor is higher, and the heatmap is trimmed to it.
+                    If it doesn't line up well, or the map was built by 343 rather than in Forge, the map shows where
+                    players went instead.
                 </dd>
                 <dt>Where players died, and kills</dt>
                 <dd>

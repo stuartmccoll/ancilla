@@ -123,7 +123,7 @@ else
                     </svg>
                     <p class="legend">
                         @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @($"{Fmt.TeamName(t.Teams[k])} player died") }
-                        <span class="muted">· the line shows which way they were facing. @MapNote</span>
+                        <span class="muted">· the line shows which way they were facing. @MapNote @FloorNote(t)</span>
                     </p>
                     <details class="table-view">
                         <summary>Show as table</summary>
@@ -161,7 +161,7 @@ else
                     <p class="legend">
                         @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @($"{Fmt.TeamName(t.Teams[k])} killer") }
                         <span class="key ring"></span> victim
-                        <span class="muted">· the short line shows which way the killer was facing. Kills where the killer's position isn't known are left out. @MapNote</span>
+                        <span class="muted">· the short line shows which way the killer was facing. Kills where the killer's position isn't known are left out. @MapNote @FloorNote(t)</span>
                     </p>
                     <details class="table-view">
                         <summary>Show as table</summary>
@@ -186,15 +186,18 @@ else
                     <svg class="map" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="img"
                          aria-label="Heatmap of the arena: blue where little time was spent, red where the most was. The table below gives the time in each part of the map.">
                         @Ground(t)
-                        @foreach (var (x, y) in t.Arena)
-                        {
-                            var level = heat[y * MatchTimeline.MapWidth + x];
-                            if (level > 0) { <rect class="@($"heat{level}")" x="@x" y="@y" width="1" height="1" /> }
-                        }
+                        @if (t.Floor.Count > 0) { @FloorClip(t) }
+                        <g class="heat" clip-path="@(t.Floor.Count > 0 ? "url(#timeline-floor)" : null)">
+                            @foreach (var (x, y) in t.Arena)
+                            {
+                                var level = heat[y * MatchTimeline.MapWidth + x];
+                                if (level > 0) { <rect class="@($"heat{level}")" x="@x" y="@y" width="1" height="1" /> }
+                            }
+                        </g>
                     </svg>
                     <p class="legend">
                         less time @for (var l = 1; l <= HeatSteps; l++) { <span class="swatch @($"heat{l}")"></span> } more time
-                        <span class="muted">· each colour covers the same number of squares. Counts @linked of about @spawns lives: lives the film couldn't link to a player are left out. @MapNote</span>
+                        <span class="muted">· each colour covers the same number of squares. Counts @linked of about @spawns lives: lives the film couldn't link to a player are left out. @MapNote @FloorNote(t)</span>
                     </p>
                     <details class="table-view">
                         <summary>Show as table</summary>
@@ -228,7 +231,7 @@ else
                     </svg>
                     <p class="legend">
                         @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key diamond @($"team{k}")"></span> @Fmt.TeamName(t.Teams[k]) }
-                        <span class="muted">· where the player was at each objective event (in Capture the Flag, a flag action; the film doesn't say which). @MapNote</span>
+                        <span class="muted">· where the player was at each objective event (in Capture the Flag, a flag action; the film doesn't say which). @MapNote @FloorNote(t)</span>
                     </p>
                     <details class="table-view">
                         <summary>Show as table</summary>
@@ -319,7 +322,12 @@ else
 
     private enum Layer { Deaths, Kills, Time, Objectives }
     private const int TeamFocus = 1000, HeatSteps = 6;
-    private const string MapNote = "North may not be up, and the film's scale isn't known.";
+    private const string MapNote = "North may not be up.";
+
+    // Under each map's legend: what the background is.
+    private static string FloorNote(MatchTimeline t) => t.Floor.Count > 0
+        ? "The floor is the map's own walkable area (from its Forge navmesh), darker where it's higher."
+        : "Grey shows where players went.";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -392,10 +400,31 @@ else
     private static string Down(MapPoint p) => Fmt.Pct(100.0 * p.Y / MatchTimeline.MapHeight, 0);
     private static string Degrees(double? d) => d is { } v ? $"{v:F0}°" : "—";
 
+    // The floor: the map's navmesh, shaded by height, when it lined up with the film; otherwise the
+    // squares players went through.
     private static RenderFragment Ground(MatchTimeline t) => __builder =>
     {
-        foreach (var (x, y) in t.Arena) { <rect class="ground" x="@x" y="@y" width="1" height="1" /> }
+        if (t.Floor.Count > 0)
+        {
+            foreach (var f in t.Floor) { <polygon class="@($"floor floor{f.Level}")" points="@Points(f.Points)" /> }
+        }
+        else
+        {
+            foreach (var (x, y) in t.Arena) { <rect class="ground" x="@x" y="@y" width="1" height="1" /> }
+        }
     };
+
+    // Clips the heatmap to the floor, so its smoothing doesn't spill past walls.
+    private static RenderFragment FloorClip(MatchTimeline t) => __builder =>
+    {
+        <defs>
+            <clipPath id="timeline-floor">
+                @foreach (var f in t.Floor) { <polygon points="@Points(f.Points)" /> }
+            </clipPath>
+        </defs>
+    };
+
+    private static string Points(IReadOnlyList<MapPoint> points) => string.Join(' ', points.Select(p => $"{Fmt.Css(p.X)},{Fmt.Css(p.Y)}"));
 
     // A short line from a point in the direction faced (yaw anticlockwise from +X; the map's Y runs down).
     private static RenderFragment Facing(MapPoint at, double? yaw, int team) => __builder =>

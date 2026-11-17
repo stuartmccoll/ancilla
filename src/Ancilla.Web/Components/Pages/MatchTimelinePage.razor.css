@@ -14,6 +14,12 @@ progress { width: 100%; max-width: 24rem; }
 
 .map { width: 100%; height: auto; max-height: 34rem; display: block; margin-top: .75rem; }
 .map .ground { fill: var(--track); }
+/* The navmesh floor: four heights, lowest lightest. The stroke matches the fill to hide seams between polygons. */
+.map .floor { stroke-width: .12; stroke-linejoin: round; }
+.map .floor1 { fill: var(--track); stroke: var(--track); }
+.map .floor2 { fill: color-mix(in oklab, var(--text) 8%, var(--track)); stroke: color-mix(in oklab, var(--text) 8%, var(--track)); }
+.map .floor3 { fill: color-mix(in oklab, var(--text) 16%, var(--track)); stroke: color-mix(in oklab, var(--text) 16%, var(--track)); }
+.map .floor4 { fill: color-mix(in oklab, var(--text) 24%, var(--track)); stroke: color-mix(in oklab, var(--text) 24%, var(--track)); }
 .map circle { stroke: var(--surface); stroke-width: .25; }
 .stroke0 { stroke: var(--viz-1); }
 .stroke1 { stroke: var(--viz-2); }

@@ -48,6 +48,12 @@ public sealed record DeathPoint(uint TimeMs, int Player, int Team, int? Killer, 
         ? MatchTimeline.AngleBetween(f, Math.Atan2(At.Y - k.Y, k.X - At.X) * 180 / Math.PI) : null;
 }
 
+/// <summary>
+/// One navmesh polygon on the map grid. <see cref="Level"/> is its height in the area shown, 1 (lowest)
+/// to <see cref="MatchTimeline.FloorLevels"/>; all 1 when the floor is flat.
+/// </summary>
+public sealed record FloorFace(IReadOnlyList<MapPoint> Points, int Level);
+
 /// <summary>Where a player was at an objective event (in CTF, a flag action).</summary>
 public sealed record ObjectivePoint(uint TimeMs, int Player, int Team, MapPoint At);
 
@@ -55,7 +61,9 @@ public sealed record ObjectivePoint(uint TimeMs, int Player, int Team, MapPoint 
 /// A match's timeline from its Theater film: the kill feed, per-player figures, team kills over
 /// time, head-to-head kills and, for PvP, a map: where players died and killed from, where objective
 /// events happened, and how long each player spent in each cell (<see cref="TimeByCell"/>, ms,
-/// indexed <c>y * MapWidth + x</c>, for the lives linked to them). Built from a cached film (see
+/// indexed <c>y * MapWidth + x</c>, for the lives linked to them). With a Forge map's navmesh, the map
+/// also has a <see cref="Floor"/>, lowest faces first, when the fit is good enough
+/// (<see cref="FloorPlan.MinOnMesh"/>; <see cref="FloorFit"/> is kept either way). Built from a cached film (see
 /// <see cref="FilmCache"/>) and the match's scoreboard. The film's scale is unknown, so the map is
 /// drawn on a grid scaled to the area players covered.
 /// </summary>
@@ -71,6 +79,8 @@ public sealed record MatchTimeline(
     IReadOnlyList<ObjectivePoint> Objectives,
     IReadOnlyDictionary<int, float[]> TimeByCell,
     IReadOnlySet<(int X, int Y)> Arena,
+    IReadOnlyList<FloorFace> Floor,
+    FloorFit? FloorFit,
     int BotsAndUnlinked)
 {
     public const int TradeWindowMs = 3_000;
@@ -78,12 +88,17 @@ public sealed record MatchTimeline(
     public const double MaxStepMs = 1_000;
     /// <summary>How old an aim record can be and still count as the facing at a moment.</summary>
     public const double AimMaxAgeMs = 1_000;
+    public const int FloorLevels = 4;
+    /// <summary>Floors less than this many world units apart in height count as flat.</summary>
+    private const double FlatFloor = 1.0;
+    /// <summary>How many grid squares from where players went a floor face can be and still be drawn.</summary>
+    private const int FloorReach = 2;
     public const int MapWidth = 120, MapHeight = 80;
     private const int FirefightCategory = 42;
 
     public bool HasPositions => Arena.Count > 0;
 
-    public static MatchTimeline Build(FilmCache cache, string matchId, MatchStats board, bool positions = true)
+    public static MatchTimeline Build(FilmCache cache, string matchId, MatchStats board, bool positions = true, NavMesh? navMesh = null)
     {
         var header = cache.LoadChunk(matchId, FilmCache.ChunkOfType(cache.LoadManifest(matchId), 1));
         var named = Roster.Find(header, FilmHeader.Parse(header).StreamOffset).Where(r => r.Gamertag is not null).ToList();
@@ -145,6 +160,8 @@ public sealed record MatchTimeline(
         var objectivePoints = new List<ObjectivePoint>();
         var timeByCell = new Dictionary<int, float[]>();
         var arena = new HashSet<(int, int)>();
+        var floor = new List<FloorFace>();
+        FloorFit? fit = null;
         Dictionary<int, BipedTrack> tracks = [];
         var killDistances = new Dictionary<int, List<double>>();
         if (positions && board.MatchInfo.GameVariantCategory != FirefightCategory && deathIdx.Count > 0)
@@ -165,8 +182,16 @@ public sealed record MatchTimeline(
                 // One scale for both axes, so the map keeps its shape; centred in the grid. +Y is up.
                 var scale = Math.Min((MapWidth - 1.0) / Math.Max(1, maxX - minX), (MapHeight - 1.0) / Math.Max(1, maxY - minY));
                 var (padX, padY) = ((MapWidth - 1 - (maxX - minX) * scale) / 2, (MapHeight - 1 - (maxY - minY) * scale) / 2);
-                MapPoint Cell(FilmPosition p) => new(padX + (p.X - minX) * scale + .5, padY + (maxY - p.Y) * scale + .5);
+                MapPoint At2(double x, double y) => new(padX + (x - minX) * scale + .5, padY + (maxY - y) * scale + .5);
+                MapPoint Cell(FilmPosition p) => At2(p.X, p.Y);
                 foreach (var p in all) { var c = Cell(p); arena.Add(((int)c.X, (int)c.Y)); }
+                if (navMesh is not null && (fit = FloorPlan.Fit(navMesh, all)) is { OnMesh: >= FloorPlan.MinOnMesh } good)
+                {
+                    // Faces players came near: the mesh can reach well beyond the playable space.
+                    var near = arena.SelectMany(c => Enumerable.Range(-FloorReach, 2 * FloorReach + 1)
+                        .SelectMany(dx => Enumerable.Range(-FloorReach, 2 * FloorReach + 1).Select(dy => (c.Item1 + dx, c.Item2 + dy)))).ToHashSet();
+                    floor = PlaceFloor(navMesh, good, At2, near);
+                }
 
                 (int Slot, FilmPosition Position)? At(int player, int tick)
                 {
@@ -236,7 +261,47 @@ public sealed record MatchTimeline(
                 nemesis, myLives.Count, moved, kd is { Count: > 0 } ? kd[kd.Count / 2] : null));
         }
 
-        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, outsiders);
+        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, floor, fit, outsiders);
+    }
+
+    /// <summary>
+    /// The navmesh faces placed on the map grid by <paramref name="fit"/> and <paramref name="toMap"/>
+    /// (film X, Y to the grid) that cover or touch a square in <paramref name="near"/>, with height
+    /// levels over the faces kept, lowest first so upper floors are drawn over lower ones.
+    /// </summary>
+    public static List<FloorFace> PlaceFloor(NavMesh mesh, FloorFit fit, Func<double, double, MapPoint> toMap, IReadOnlySet<(int X, int Y)> near)
+    {
+        var shown = new List<(MapPoint[] Points, float Height)>();
+        foreach (var face in mesh.Faces)
+        {
+            var points = face.Points.Select(p => fit.ToFilm(p.X, p.Y)).Select(f => toMap(f.X, f.Y)).ToArray();
+            if (Touches(points, near)) shown.Add((points, face.Height));
+        }
+        if (shown.Count == 0) return [];
+        float low = shown.Min(f => f.Height), high = shown.Max(f => f.Height);
+        int Level(float h) => high - low < FlatFloor ? 1 : 1 + Math.Min(FloorLevels - 1, (int)(FloorLevels * (h - low) / (high - low)));
+        return shown.OrderBy(f => f.Height).Select(f => new FloorFace(f.Points, Level(f.Height))).ToList();
+    }
+
+    // Whether a polygon has a corner in one of the squares, or covers one's centre.
+    private static bool Touches(MapPoint[] pts, IReadOnlySet<(int X, int Y)> squares)
+    {
+        if (pts.Any(p => squares.Contains(((int)Math.Floor(p.X), (int)Math.Floor(p.Y))))) return true;
+        int x0 = Math.Max(0, (int)pts.Min(p => p.X)), x1 = Math.Min(MapWidth - 1, (int)pts.Max(p => p.X));
+        int y0 = Math.Max(0, (int)pts.Min(p => p.Y)), y1 = Math.Min(MapHeight - 1, (int)pts.Max(p => p.Y));
+        for (var y = y0; y <= y1; y++)
+            for (var x = x0; x <= x1; x++)
+                if (squares.Contains((x, y)) && Inside(pts, x + .5, y + .5)) return true;
+        return false;
+    }
+
+    private static bool Inside(MapPoint[] pts, double x, double y)
+    {
+        var inside = false;
+        for (int i = 0, j = pts.Length - 1; i < pts.Length; j = i++)
+            if ((pts[i].Y > y) != (pts[j].Y > y) && x < (pts[j].X - pts[i].X) * (y - pts[i].Y) / (pts[j].Y - pts[i].Y) + pts[i].X)
+                inside = !inside;
+        return inside;
     }
 
     /// <summary>
