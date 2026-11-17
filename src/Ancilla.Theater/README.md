@@ -236,7 +236,8 @@ In order of value:
      events.
    - [x] Floor plan from the Forge map's navmesh (`NavMesh` in Core, `FloorPlan` here), fitted per
      film; 343-built maps (Bazaar) have none.
-   - [ ] Animated movement on the map; it needs the lives chaining misses filled first.
+   - [x] Animated movement on the map (`MatchTimeline.Playback`, drawn in the browser by
+     `MatchTimelinePage.razor.js`).
    - [ ] Weapon pickups: dropped objects that vanish next to a biped (untested), then which weapon
      (`weapon-state-type-info`, 43–46).
 

@@ -81,3 +81,27 @@ public class MapTests
         Assert.Null(Death(0, 10, 10).AngleOff);                    // same spot: no direction
     }
 }
+
+public class PlaybackTests
+{
+    [Fact]
+    public void Lives_are_sampled_every_step_with_facing_and_gaps_where_the_player_isnt_placed()
+    {
+        // Ticks every 100 ms; one life from 200 ms to 900 ms, moving one unit per tick along X.
+        var tickMs = Enumerable.Range(0, 20).Select(i => i * 100.0).ToList();
+        var life = new BipedTrack(600, Enumerable.Range(2, 8).Select(t => (t, new FilmPosition(t, 0, 0))).ToList());
+        var aims = new Dictionary<int, List<(int Tick, Aim Aim)>> { [600] = [(2, new Aim(1024, 2048))] };   // 90°
+        var pos = new FilmPositions(tickMs, [], [], []);
+
+        var pb = MatchTimeline.BuildPlayback(new() { [3] = [600] }, new() { [600] = life }, aims, pos, 1_900, p => new MapPoint(p.X, 5));
+
+        var track = Assert.Single(pb.Tracks);
+        Assert.Equal(3, track.Player);
+        Assert.Equal(1_900 / MatchTimeline.PlaybackStepMs + 1, pb.Frames);
+        // Frames at 0, 250, 500, 750, 1000 ms: before the life, then ticks 2, 5, 7, then after it.
+        Assert.Equal([-1, 20, 50, 70, -1], track.X10[..5]);
+        Assert.Equal([-1, 50, 50, 50, -1], track.Y10[..5]);
+        Assert.Equal([-1, 90, 90, 90, -1], track.Yaw[..5]);
+        Assert.Equal(-1, track.X10[^1]);
+    }
+}

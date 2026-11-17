@@ -58,6 +58,17 @@ public sealed record FloorFace(IReadOnlyList<MapPoint> Points, int Level);
 public sealed record ObjectivePoint(uint TimeMs, int Player, int Team, MapPoint At);
 
 /// <summary>
+/// One player's movement for the animated map, sampled every <see cref="Playback.StepMs"/>: positions
+/// in tenths of a map square (X10, Y10; -1 where the player isn't placed: dead, not yet spawned, or a
+/// life the film couldn't link to them) and facing in whole degrees, anticlockwise from +X (-1 when
+/// unknown).
+/// </summary>
+public sealed record PlaybackTrack(int Player, int[] X10, int[] Y10, int[] Yaw);
+
+/// <summary>Every linked player's movement through the match, for the animated map.</summary>
+public sealed record Playback(int StepMs, int Frames, IReadOnlyList<PlaybackTrack> Tracks);
+
+/// <summary>
 /// A match's timeline from its Theater film: the kill feed, per-player figures, team kills over
 /// time, head-to-head kills and, for PvP, a map: where players died and killed from, where objective
 /// events happened, and how long each player spent in each cell (<see cref="TimeByCell"/>, ms,
@@ -81,6 +92,7 @@ public sealed record MatchTimeline(
     IReadOnlySet<(int X, int Y)> Arena,
     IReadOnlyList<FloorFace> Floor,
     FloorFit? FloorFit,
+    Playback? Playback,
     int BotsAndUnlinked)
 {
     public const int TradeWindowMs = 3_000;
@@ -161,6 +173,7 @@ public sealed record MatchTimeline(
         var timeByCell = new Dictionary<int, float[]>();
         var arena = new HashSet<(int, int)>();
         var floor = new List<FloorFace>();
+        Playback? playback = null;
         FloorFit? fit = null;
         Dictionary<int, BipedTrack> tracks = [];
         var killDistances = new Dictionary<int, List<double>>();
@@ -230,6 +243,7 @@ public sealed record MatchTimeline(
 
                 foreach (var (player, slots) in lives)
                     timeByCell[player] = TimeSpent(slots.Select(s => tracks[s]), pos.TickMs, Cell);
+                playback = BuildPlayback(lives, tracks, aims, pos, duration, Cell);
             }
         }
 
@@ -261,7 +275,7 @@ public sealed record MatchTimeline(
                 nemesis, myLives.Count, moved, kd is { Count: > 0 } ? kd[kd.Count / 2] : null));
         }
 
-        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, floor, fit, outsiders);
+        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, floor, fit, playback, outsiders);
     }
 
     /// <summary>
@@ -281,6 +295,44 @@ public sealed record MatchTimeline(
         float low = shown.Min(f => f.Height), high = shown.Max(f => f.Height);
         int Level(float h) => high - low < FlatFloor ? 1 : 1 + Math.Min(FloorLevels - 1, (int)(FloorLevels * (h - low) / (high - low)));
         return shown.OrderBy(f => f.Height).Select(f => new FloorFace(f.Points, Level(f.Height))).ToList();
+    }
+
+    /// <summary>The step between animation samples.</summary>
+    public const int PlaybackStepMs = 250;
+
+    /// <summary>
+    /// Samples each player's linked lives every <see cref="PlaybackStepMs"/>: the life's last position at or before
+    /// the moment (none once its track has ended), and the aim from the second before.
+    /// </summary>
+    public static Playback BuildPlayback(Dictionary<int, List<int>> lives, Dictionary<int, BipedTrack> tracks,
+        Dictionary<int, List<(int Tick, Aim Aim)>> aims, FilmPositions pos, uint durationMs, Func<FilmPosition, MapPoint> cell)
+    {
+        var frames = (int)(durationMs / PlaybackStepMs) + 1;
+        var result = new List<PlaybackTrack>();
+        foreach (var (player, slots) in lives.OrderBy(x => x.Key))
+        {
+            int[] x10 = new int[frames], y10 = new int[frames], yaw = new int[frames];
+            Array.Fill(x10, -1); Array.Fill(y10, -1); Array.Fill(yaw, -1);
+            foreach (var slot in slots)
+            {
+                var t = tracks[slot];
+                var ticks = t.Points.Select(p => p.Tick).ToList();
+                var slotAims = aims.GetValueOrDefault(slot);
+                int first = (int)Math.Ceiling(pos.TickMs[t.FirstTick] / PlaybackStepMs), last = (int)(pos.TickMs[t.LastTick] / PlaybackStepMs);
+                for (var f = Math.Max(0, first); f <= Math.Min(frames - 1, last); f++)
+                {
+                    var tick = pos.TickAt(f * (double)PlaybackStepMs);
+                    var i = ticks.BinarySearch(tick); if (i < 0) i = ~i - 1;
+                    if (i < 0) continue;
+                    var c = cell(t.Points[i].Position);
+                    (x10[f], y10[f]) = ((int)Math.Round(c.X * 10), (int)Math.Round(c.Y * 10));
+                    if (slotAims is not null && AimAt(slotAims, tick) is { } a && pos.TickMs[tick] - pos.TickMs[a.Tick] <= AimMaxAgeMs)
+                        yaw[f] = (int)Math.Round(a.Aim.YawDegrees) % 360;
+                }
+            }
+            result.Add(new PlaybackTrack(player, x10, y10, yaw));
+        }
+        return new Playback(PlaybackStepMs, frames, result);
     }
 
     // Whether a polygon has a corner in one of the squares, or covers one's centre.

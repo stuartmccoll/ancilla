@@ -82,8 +82,10 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   Select one for the full scoreboard, your medals, expected-vs-actual kills/deaths, MMR and CSR change.
 - **Match timeline** (from a match's page): read from the match's Theater film, which is downloaded
   when you ask for it. Team kills by minute; a map (PvP) of where players died and which way they
-  faced, kills drawn from killer to victim, a heatmap of where players spent time, and objective
-  events, drawn on the map's own floor plan for Forge maps (from the map's navmesh); a table per player (best streak, traded and revenge kills, nemesis, objectives, kill
+  faced, kills drawn from killer to victim, a heatmap of where players spent time, objective
+  events, and an animation of everyone's movement (play, scrub, speed, kill flashes), drawn on the
+  map's own floor plan for Forge maps (from the map's navmesh). Hover over a death or kill for its
+  details. The map starts on you; a table per player (best streak, traded and revenge kills, nemesis, objectives, kill
   distance) and the kill feed with each kill's medals. Filter the map by player or team, and the
   feed by player.
 - **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,

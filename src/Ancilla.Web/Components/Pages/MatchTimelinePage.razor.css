@@ -12,7 +12,10 @@ progress { width: 100%; max-width: 24rem; }
 .minutes { width: 100%; height: auto; max-height: 14rem; display: block; }
 .minutes text { font-size: 8px; fill: var(--muted); }
 
-.map { width: 100%; height: auto; max-height: 34rem; display: block; margin-top: .75rem; }
+/* The map keeps the grid's 3:2 shape, so its box is exactly the drawing and hover cards and the
+   animation overlay can be placed by percentage. */
+.map { width: 100%; aspect-ratio: 3 / 2; height: auto; display: block; }
+.map-stack { position: relative; max-width: 51rem; margin: .75rem auto 0; }
 .map .ground { fill: var(--track); }
 /* The navmesh floor: four heights, lowest lightest. The stroke matches the fill to hide seams between polygons. */
 .map .floor { stroke-width: .12; stroke-linejoin: round; }
@@ -27,7 +30,15 @@ progress { width: 100%; max-width: 24rem; }
 .map .shot { stroke-width: .3; opacity: .7; }
 .map circle.victim { fill: var(--surface); stroke-width: .35; }
 .map .objective { stroke: var(--surface); stroke-width: .25; }
-.controls { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.controls { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: center; }
+.controls .filter, .player-controls .filter { color: var(--muted); }
+
+/* Animated movement: the browser draws into the overlay, which sits exactly over the map. */
+.map-stack .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.player-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .75rem; }
+.player-controls .play { min-width: 5.5rem; }
+.player-controls .scrub { flex: 1 1 12rem; min-width: 8rem; accent-color: var(--accent); }
+.player-controls .clock { font-variant-numeric: tabular-nums; font-size: .9rem; color: var(--muted); min-width: 6.5rem; }
 .key.ring { background: transparent; border: 2px solid var(--muted); box-sizing: border-box; }
 .key.diamond { border-radius: 1px; transform: rotate(45deg) scale(.85); }
 
@@ -53,3 +64,24 @@ tr.me td { font-weight: 700; }
 
 .table-view { margin-top: .75rem; font-size: .85rem; }
 .table-view summary { cursor: pointer; color: var(--muted); }
+
+/* Hover cards on deaths and kills. */
+.map .mark { cursor: pointer; outline: none; }
+.map .mark .hit { stroke: transparent; stroke-width: 2.2; pointer-events: stroke; }
+.map.has-hot .mark:not(.hot) { opacity: .3; }
+.map .mark.hot circle, .map .mark:focus-visible circle { stroke: var(--text); stroke-width: .45; }
+.map .mark.hot .shot { stroke-width: .6; opacity: 1; }
+.tip {
+    position: absolute; z-index: 2; pointer-events: none; transform: translate(-50%, calc(-100% - .7rem));
+    width: max-content; max-width: min(19rem, 80vw); padding: .55rem .7rem; border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18); font-size: .85rem; line-height: 1.4;
+}
+.tip.below { transform: translate(-50%, .7rem); }
+.tip.left { transform: translate(-.5rem, calc(-100% - .7rem)); }
+.tip.right { transform: translate(calc(-100% + .5rem), calc(-100% - .7rem)); }
+.tip.left.below { transform: translate(-.5rem, .7rem); }
+.tip.right.below { transform: translate(calc(-100% + .5rem), .7rem); }
+.tip-time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .8rem; }
+.tip-title { font-weight: 600; margin-bottom: .15rem; }
+.tip .muted { font-weight: 400; color: var(--muted); }

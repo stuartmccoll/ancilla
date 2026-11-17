@@ -1,6 +1,8 @@
 @page "/matches/{MatchId}/timeline"
 @using Ancilla.Theater
 @inject HaloSession Session
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Timeline · @(_mode?.PublicName ?? "Match") · Ancilla</PageTitle>
 
@@ -90,15 +92,16 @@ else
         <section class="card">
             <div class="controls">
                 <label class="filter">Show
-                    <select @bind="_layer">
+                    <select @bind="_layer" @bind:after="Unpin">
                         <option value="@Layer.Deaths">where players died</option>
                         <option value="@Layer.Kills">kills, from killer to victim</option>
                         <option value="@Layer.Time">where players spent time</option>
                         @if (t.Objectives.Count > 0) { <option value="@Layer.Objectives">objective events</option> }
+                        @if (t.Playback is not null) { <option value="@Layer.Movement">movement, animated</option> }
                     </select>
                 </label>
-                <label class="filter">@(_layer switch { Layer.Deaths => "of", Layer.Time => "for", _ => "by" })
-                    <select @bind="_mapFocus">
+                <label class="filter">@(_layer switch { Layer.Deaths => "of", Layer.Time or Layer.Movement => "for", _ => "by" })
+                    <select @bind="_mapFocus" @bind:after="Unpin">
                         <option value="-1">everyone</option>
                         @for (var k = 0; k < t.Teams.Count; k++) { <option value="@(TeamFocus + k)">@Fmt.TeamName(t.Teams[k]) team</option> }
                         @foreach (var p in t.Players) { <option value="@p.Index">@Name(p.Index)</option> }
@@ -108,19 +111,23 @@ else
             @switch (_layer)
             {
                 case Layer.Deaths:
-                    var died = t.Deaths.Where(d => InFocus(d.Player)).ToList();
-                    <svg class="map" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="img"
-                         aria-label="@($"Map of the arena with {died.Count} deaths, coloured by the team of the player who died, each with a line showing which way they faced. The table below lists them.")">
-                        @Ground(t)
-                        @foreach (var d in died)
-                        {
-                            var team = TeamIndex(d.Team);
-                            @Facing(d.At, d.Facing, team)
-                            <circle class="@($"team{team}")" cx="@Fmt.Css(d.At.X)" cy="@Fmt.Css(d.At.Y)" r="1.3">
-                                <title>@Fmt.Clock(d.TimeMs) @Name(d.Player)@(d.Killer is { } k ? $", killed by {Name(k)}" : "")</title>
-                            </circle>
-                        }
-                    </svg>
+                    var died = t.Deaths.Select((d, i) => (d, i)).Where(x => InFocus(x.d.Player)).ToList();
+                    <div class="map-stack">
+                        <svg class="@($"map{(_hot is { } dh && dh.Layer == Layer.Deaths ? " has-hot" : "")}")" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="group" @onclick="Unpin"
+                             aria-label="@($"Map of the arena with {died.Count} deaths, coloured by the team of the player who died, each with a line showing which way they faced. Hover over or select a death for details; the table below lists them.")">
+                            @Ground(t)
+                            @foreach (var (d, i) in died)
+                            {
+                                var team = TeamIndex(d.Team);
+                                <g class="@Mark(Layer.Deaths, i)" tabindex="0" role="button" aria-label="@DeathSummary(t, d)"
+                                   @onmouseenter="() => Hot(Layer.Deaths, i)" @onmouseleave="Cold" @onfocus="() => Hot(Layer.Deaths, i)" @onblur="Cold" @onclick="() => Toggle(Layer.Deaths, i)" @onclick:stopPropagation="true">
+                                    @Facing(d.At, d.Facing, team)
+                                    <circle class="@($"team{team}")" cx="@Fmt.Css(d.At.X)" cy="@Fmt.Css(d.At.Y)" r="1.3" />
+                                </g>
+                            }
+                        </svg>
+                        @if (_hot is { Layer: Layer.Deaths } hd) { @TipCard(t, t.Deaths[hd.Index], asKill: false) }
+                    </div>
                     <p class="legend">
                         @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @($"{Fmt.TeamName(t.Teams[k])} player died") }
                         <span class="muted">· the line shows which way they were facing. @MapNote @FloorNote(t)</span>
@@ -130,7 +137,7 @@ else
                         <table>
                             <thead><tr><th class="l">Time</th><th class="l">Player</th><th class="l">Killed by</th><th>Across</th><th>Down</th><th title="0° is looking straight at the killer, 180° is facing away">Facing away from killer</th></tr></thead>
                             <tbody>
-                                @foreach (var d in died)
+                                @foreach (var (d, _) in died)
                                 {
                                     <tr><td class="l">@Fmt.Clock(d.TimeMs)</td><td class="l">@Name(d.Player)</td><td class="l">@(d.Killer is { } k ? Name(k) : "—")</td>
                                         <td>@Across(d.At)</td><td>@Down(d.At)</td><td>@Degrees(d.AngleOff)</td></tr>
@@ -141,23 +148,27 @@ else
                     break;
 
                 case Layer.Kills:
-                    var kills = t.Deaths.Where(d => d.Killer is { } k && d.KillerAt is not null && InFocus(k)).ToList();
-                    <svg class="map" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="img"
-                         aria-label="@($"Map of the arena with {kills.Count} kills, each a line from the killer to the victim, coloured by the killer's team. The table below lists them.")">
-                        @Ground(t)
-                        @foreach (var d in kills)
-                        {
-                            var team = TeamIndex(t.Players[d.Killer!.Value].Team);
-                            var from = d.KillerAt!.Value;
-                            <g>
-                                <title>@Fmt.Clock(d.TimeMs) @Name(d.Killer.Value) killed @Name(d.Player)</title>
-                                <line class="@($"shot stroke{team}")" x1="@Fmt.Css(from.X)" y1="@Fmt.Css(from.Y)" x2="@Fmt.Css(d.At.X)" y2="@Fmt.Css(d.At.Y)" />
-                                @Facing(from, d.KillerFacing, team)
-                                <circle class="@($"team{team}")" cx="@Fmt.Css(from.X)" cy="@Fmt.Css(from.Y)" r="1.1" />
-                                <circle class="@($"victim stroke{team}")" cx="@Fmt.Css(d.At.X)" cy="@Fmt.Css(d.At.Y)" r=".9" />
-                            </g>
-                        }
-                    </svg>
+                    var kills = t.Deaths.Select((d, i) => (d, i)).Where(x => x.d.Killer is { } k && x.d.KillerAt is not null && InFocus(k)).ToList();
+                    <div class="map-stack">
+                        <svg class="@($"map{(_hot is { } kh && kh.Layer == Layer.Kills ? " has-hot" : "")}")" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="group" @onclick="Unpin"
+                             aria-label="@($"Map of the arena with {kills.Count} kills, each a line from the killer to the victim, coloured by the killer's team. Hover over or select a kill for details; the table below lists them.")">
+                            @Ground(t)
+                            @foreach (var (d, i) in kills)
+                            {
+                                var team = TeamIndex(t.Players[d.Killer!.Value].Team);
+                                var from = d.KillerAt!.Value;
+                                <g class="@Mark(Layer.Kills, i)" tabindex="0" role="button" aria-label="@DeathSummary(t, d)"
+                                   @onmouseenter="() => Hot(Layer.Kills, i)" @onmouseleave="Cold" @onfocus="() => Hot(Layer.Kills, i)" @onblur="Cold" @onclick="() => Toggle(Layer.Kills, i)" @onclick:stopPropagation="true">
+                                    <line class="hit" x1="@Fmt.Css(from.X)" y1="@Fmt.Css(from.Y)" x2="@Fmt.Css(d.At.X)" y2="@Fmt.Css(d.At.Y)" />
+                                    <line class="@($"shot stroke{team}")" x1="@Fmt.Css(from.X)" y1="@Fmt.Css(from.Y)" x2="@Fmt.Css(d.At.X)" y2="@Fmt.Css(d.At.Y)" />
+                                    @Facing(from, d.KillerFacing, team)
+                                    <circle class="@($"team{team}")" cx="@Fmt.Css(from.X)" cy="@Fmt.Css(from.Y)" r="1.1" />
+                                    <circle class="@($"victim stroke{team}")" cx="@Fmt.Css(d.At.X)" cy="@Fmt.Css(d.At.Y)" r=".9" />
+                                </g>
+                            }
+                        </svg>
+                        @if (_hot is { Layer: Layer.Kills } hk) { @TipCard(t, t.Deaths[hk.Index], asKill: true) }
+                    </div>
                     <p class="legend">
                         @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @($"{Fmt.TeamName(t.Teams[k])} killer") }
                         <span class="key ring"></span> victim
@@ -168,7 +179,7 @@ else
                         <table>
                             <thead><tr><th class="l">Time</th><th class="l">Killer</th><th class="l">Victim</th><th>Killer across</th><th>Killer down</th><th>Victim across</th><th>Victim down</th><th title="0° is looking straight at the killer, 180° is facing away">Victim facing away</th></tr></thead>
                             <tbody>
-                                @foreach (var d in kills)
+                                @foreach (var (d, _) in kills)
                                 {
                                     <tr><td class="l">@Fmt.Clock(d.TimeMs)</td><td class="l">@Name(d.Killer!.Value)</td><td class="l">@Name(d.Player)</td>
                                         <td>@Across(d.KillerAt!.Value)</td><td>@Down(d.KillerAt.Value)</td><td>@Across(d.At)</td><td>@Down(d.At)</td><td>@Degrees(d.AngleOff)</td></tr>
@@ -213,6 +224,51 @@ else
                                 }
                             </tbody>
                         </table>
+                    </details>
+                    break;
+
+                case Layer.Movement when t.Playback is { } pb:
+                    <div class="playback" @ref="_playbackRoot">
+                        <div class="map-stack">
+                            <svg class="map" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" role="img"
+                                 aria-label="Animated map of where each player moved, coloured by team. Use the controls below to play it; the table below gives positions every 30 seconds.">
+                                @Ground(t)
+                            </svg>
+                            <svg class="overlay" viewBox="0 0 @MatchTimeline.MapWidth @MatchTimeline.MapHeight" aria-hidden="true"></svg>
+                        </div>
+                        <div class="player-controls">
+                            <button type="button" class="play" aria-pressed="false">Play</button>
+                            <input type="range" class="scrub" min="0" max="@t.DurationMs" step="@MatchTimeline.PlaybackStepMs" value="0" aria-label="Time in the match" />
+                            <span class="clock"></span>
+                            <label class="filter">Speed
+                                <select class="speed">
+                                    <option value="1">1×</option><option value="2">2×</option><option value="4" selected>4×</option><option value="8">8×</option><option value="16">16×</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                    <p class="legend">
+                        @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @Fmt.TeamName(t.Teams[k]) }
+                        <span class="muted">· each dot is a player, with the way they're facing and a trail of the last 3 seconds. Kills flash as a cross where the victim died. Players disappear while dead, and during lives the film couldn't link to them. @MapNote @FloorNote(t)</span>
+                    </p>
+                    <details class="table-view">
+                        <summary>Show as table</summary>
+                        <div class="scroll">
+                            <table>
+                                <thead><tr><th class="l">Time</th>@foreach (var tr in pb.Tracks.Where(x => InFocus(x.Player))) { <th class="l">@Name(tr.Player)</th> }</tr></thead>
+                                <tbody>
+                                    @for (var f = 0; f < pb.Frames; f += 30_000 / pb.StepMs)
+                                    {
+                                        <tr><td class="l">@Fmt.Clock((uint)(f * pb.StepMs))</td>
+                                            @foreach (var tr in pb.Tracks.Where(x => InFocus(x.Player)))
+                                            {
+                                                <td class="l">@(tr.X10[f] < 0 ? "—" : $"{Fmt.Pct(tr.X10[f] / 10.0 * 100 / MatchTimeline.MapWidth, 0)} across, {Fmt.Pct(tr.Y10[f] / 10.0 * 100 / MatchTimeline.MapHeight, 0)} down")</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     </details>
                     break;
 
@@ -320,7 +376,126 @@ else
     private int _done, _total, _mapFocus = -1, _feedPlayer = -1;
     private Layer _layer = Layer.Deaths;
 
-    private enum Layer { Deaths, Kills, Time, Objectives }
+    private enum Layer { Deaths, Kills, Time, Objectives, Movement }
+
+    // ---- Hover cards on the deaths and kills maps (Index is the death's position in Deaths) ----
+    private (Layer Layer, int Index)? _hot;
+    private bool _pinned;
+    private void Hot(Layer layer, int index) { if (!_pinned) _hot = (layer, index); }
+    private void Cold() { if (!_pinned) _hot = null; }
+    private void Unpin() => (_hot, _pinned) = (null, false);
+    // A tap or click keeps the card open (touch screens have no hover); another closes it.
+    private void Toggle(Layer layer, int index)
+    {
+        if (_pinned && _hot == (layer, index)) (_hot, _pinned) = (null, false);
+        else (_hot, _pinned) = ((layer, index), true);
+    }
+    private string Mark(Layer layer, int index) => _hot == (layer, index) ? "mark hot" : "mark";
+
+    private string DeathSummary(MatchTimeline t, DeathPoint d) =>
+        $"{Fmt.Clock(d.TimeMs)}: " + (d.Killer is { } k ? $"{Name(k)} killed {Name(d.Player)}" : $"{Name(d.Player)} died");
+
+    // The kill-feed line for a death: the killer's kill 0–5 ms before it, with its medals.
+    private static FeedEntry? KillOf(MatchTimeline t, DeathPoint d) =>
+        d.Killer is { } k ? t.Feed.FirstOrDefault(f => f.Kind == FeedKind.Kill && f.Player == k && f.Other == d.Player && f.TimeMs <= d.TimeMs && d.TimeMs - f.TimeMs <= 5) : null;
+
+    // Kills by the killer in their life so far, counting this one.
+    private static int StreakAt(MatchTimeline t, FeedEntry kill)
+    {
+        var n = 0;
+        foreach (var f in t.Feed)
+        {
+            if (f.TimeMs > kill.TimeMs) break;
+            if (f.Kind == FeedKind.Kill && f.Player == kill.Player) n++;
+            else if ((f.Kind == FeedKind.Kill && f.Other == kill.Player) || (f.Kind == FeedKind.Death && f.Player == kill.Player)) n = 0;
+        }
+        return n;
+    }
+
+    private static string Ordinal(int n) => n + (n % 100 is 11 or 12 or 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
+
+    private RenderFragment TipCard(MatchTimeline t, DeathPoint d, bool asKill) => __builder =>
+    {
+        var at = asKill && d.KillerAt is { } ka ? new MapPoint((ka.X + d.At.X) / 2, (ka.Y + d.At.Y) / 2) : d.At;
+        double x = 100 * at.X / MatchTimeline.MapWidth, y = 100 * at.Y / MatchTimeline.MapHeight;
+        var side = (x < 18 ? " left" : x > 82 ? " right" : "") + (y < 30 ? " below" : "");
+        var kill = KillOf(t, d);
+        <div class="@($"tip{side}")" style="@($"left: {Fmt.Css(x)}%; top: {Fmt.Css(y)}%")" role="status">
+            <div class="tip-time">@Fmt.Clock(d.TimeMs)</div>
+            <div class="tip-title">
+                @if (d.Killer is { } k)
+                {
+                    <span class="key @TeamClass(k)"></span>@Name(k) <span class="muted">killed</span> <span class="key @TeamClass(d.Player)"></span>@Name(d.Player)
+                }
+                else
+                {
+                    <span class="key @TeamClass(d.Player)"></span>@Name(d.Player) <span class="muted">died: no killer recorded (a suicide, or killed by a bot)</span>
+                }
+            </div>
+            @if (kill is not null)
+            {
+                <div>@($"{Name(kill.Player)}'s {Ordinal(StreakAt(t, kill))} kill of that life")</div>
+                @if (kill.MedalNameIds.Count > 0) { <div>Medals: @string.Join(", ", kill.MedalNameIds.Select(MedalName))</div> }
+            }
+            @if (d.AngleOff is { } a)
+            {
+                <div>@Name(d.Player) @(a < 45 ? "was facing the killer" : a > 135 ? "had their back to the killer" : "was side-on to the killer") (@Degrees(a) off)</div>
+            }
+        </div>
+    };
+
+    // The animation runs in the browser (MatchTimelinePage.razor.js); the page starts it when the
+    // movement layer appears and tells it when the player filter changes.
+    private ElementReference _playbackRoot;
+    private IJSObjectReference? _module;
+    private bool _playbackStarted;
+    private int? _focusSent;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var showing = _layer == Layer.Movement && _timeline?.Playback is not null;
+        if (!showing) { _playbackStarted = false; _focusSent = null; return; }
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./" + Assets["Components/Pages/MatchTimelinePage.razor.js"]);
+            if (!_playbackStarted)
+            {
+                await _module.InvokeVoidAsync("start", _playbackRoot, PlaybackData(_timeline!));
+                _playbackStarted = true;
+            }
+            if (_focusSent != _mapFocus)
+            {
+                await _module.InvokeVoidAsync("setFocus", _playbackRoot, _mapFocus < 0 ? null : _timeline!.Players.Where(p => InFocus(p.Index)).Select(p => p.Index).ToArray());
+                _focusSent = _mapFocus;
+            }
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    private object PlaybackData(MatchTimeline t)
+    {
+        var pb = t.Playback!;
+        int Team(int player) => TeamIndex(t.Players[player].Team);
+        int Tenth(double v) => (int)Math.Round(v * 10);
+        return new
+        {
+            stepMs = pb.StepMs,
+            durationMs = t.DurationMs,
+            players = pb.Tracks.Select(x => new { player = x.Player, team = Team(x.Player), name = Name(x.Player), x = x.X10, y = x.Y10, yaw = x.Yaw }),
+            kills = t.Deaths.Where(d => d.Killer is not null).Select(d => new
+            {
+                t = d.TimeMs, player = d.Killer!.Value, other = d.Player, team = Team(d.Killer.Value),
+                kx = d.KillerAt is { } k ? Tenth(k.X) : -1, ky = d.KillerAt is { } k2 ? Tenth(k2.Y) : -1, vx = Tenth(d.At.X), vy = Tenth(d.At.Y),
+            }),
+            objectives = t.Objectives.Select(o => new { t = o.TimeMs, player = o.Player, other = -1, team = Team(o.Player), x = Tenth(o.At.X), y = Tenth(o.At.Y) }),
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
     private const int TeamFocus = 1000, HeatSteps = 6;
     private const string MapNote = "North may not be up.";
 
@@ -350,6 +525,8 @@ else
         try
         {
             _timeline = await Session.GetTimelineAsync(MatchId, (done, total) => InvokeAsync(() => { (_done, _total) = (done, total); StateHasChanged(); }));
+            // The map starts on the signed-in player when they're in the match.
+            _mapFocus = _timeline.Players.FirstOrDefault(p => p.Xuid is not null && p.Xuid == Session.Xuid)?.Index ?? -1;
         }
         catch (InvalidDataException)
         {
