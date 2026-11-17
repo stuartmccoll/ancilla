@@ -340,9 +340,30 @@ reload: 36 rounds. The Sidekick (component 33) counts 11 down to 7, then 12 afte
 trigger, and the taps fired 15 rounds (four taps fired two, 83 ms apart, the Assault Rifle's
 time between rounds). So **shots fired counts rounds, not trigger pulls**. In records with only
 the ammo component the count comes after one 0 bit, not two (`[0] [count:8]`). Component 42
-appears at each weapon switch (not decoded). With every round recorded, the 0.74× shortfall in
-matchmade films is probably records the decoder can't read yet (unknown widths before the ammo
-component), not rounds missing from the film.
+appears at each weapon switch (not decoded).
+
+*Matchmade films, after decoding the tick (2026-11-17, research; `rounds` in the console):* the
+guess that unread records explained the shortfall was wrong. Reading stops before the ammo
+component in only about 170 of about 5,950 ammo records in two films. Counting checked one-round
+drops gives a median 0.45× the scoreboard's shots fired (7 complete players, one film). The
+causes found so far:
+
+- **Weapon slots** (header registry, block 35): each of four inventory slots has three
+  components: `weapon-state-ammo` (30, 33, 36, 39), `weapon-state-rounds-inventory` (31, 34,
+  37, 40; reserve rounds, probably) and `weapon-state-overheated` (32, 35, 38, 41). Then 42
+  `biped-desired-weapon-set` and 43–46 `weapon-state-type-info`, one per slot, which may say
+  which weapon is in it. `inspect --registry` lists every block's names.
+- **Ammo starting `1` is most ammo records** (1,868 of 2,831 checked in one film). Starting
+  `10`, the next 15 bits are a value from 0 to 32,767 that only goes up. It jumps by a fixed
+  step per shot, with no records between shots: steps of 913 (about 32,768 ÷ 36) and 3,280
+  (about 32,768 ÷ 10) seen, 20–38 ticks apart. So it's probably the share of a battery or
+  magazine used, for weapons that don't keep a round count (guess: energy weapons). Other runs
+  rise by 8 or 24 every tick for hundreds of ticks, perhaps continuous fire or a charge. Starting
+  `11` is rarer; the controlled game's "empty" record above is one, and its layout isn't known. The player with the most such records had 0.18× their shots counted, and the best,
+  with very few, 0.81×.
+- **It isn't the whole story:** two players with few such records still had only 0.23× and 0.34×,
+  with far fewer round-count records than shots. Burst weapons (one record per burst?) and
+  records with only an ammo component (no tick to check) are the next suspects.
 
 **Scale is unknown; the axes are partly known.** F1 and F2 share one scale, and yaw is measured
 from +F1 (see aim, above). In the second custom game, on an 18/15/18 map, walking straight ran at

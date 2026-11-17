@@ -22,6 +22,7 @@ try
         "inspect" => Inspect(ResolveMatch(rest.FirstOrDefault())),
         "timeline" => Timeline.Run(cache, ResolveMatch(rest.FirstOrDefault()), showNames, !args.Contains("--no-feed"), Console.Out),
         "track" => Track(ResolveMatch(rest.FirstOrDefault())),
+        "rounds" => RoundsFired(ResolveMatch(rest.FirstOrDefault())),
         "dump" => Dump(ResolveMatch(rest.FirstOrDefault()), rest.Length > 1 ? ParseNumber(rest[1], "chunk index") : 0),
         _ => Help(),
     };
@@ -397,6 +398,83 @@ int Track(string matchId)
     return 0;
 }
 
+// Research: rounds fired per player, counted from biped ammo records, against the scoreboard's
+// shots fired. Only players whose lives all chain are compared. Players are labelled T{team} P{index}.
+int RoundsFired(string matchId)
+{
+    var board = cache.LoadScoreboard(matchId) ?? throw new InvalidDataException("No scoreboard cached for this match.");
+    var m = cache.LoadManifest(matchId);
+    var header = cache.LoadChunk(matchId, FilmCache.ChunkOfType(m, 1));
+    var named = Roster.Find(header, FilmHeader.Parse(header).StreamOffset).Where(r => r.Gamertag is not null).ToList();
+    var walked = SummaryRecords.Walk(Summary.Payload(PacketReader.Read(cache.LoadChunk(matchId, FilmCache.ChunkOfType(m, 3)), out _))).Records;
+    var (players, _) = FilmPlayers.Resolve(named, walked, board);
+    var events = Summary.FromRecords(walked, players.Select(x => (string?)x.Gamertag).ToList());
+    var deaths = events.Where(e => e.Kind == SummaryEventKind.Death).ToList();
+
+    var pos = FilmPositions.Load(cache, matchId);
+    var tracks = Lives.Tracks(pos.Bipeds);
+    var matched = Lives.MatchDeaths(deaths.Select(d => pos.TickAt(d.TimeMs)).ToList(), tracks);
+    var respawns = Lives.Respawns(deaths.Select(d => (double)d.TimeMs).ToList(), matched.Keys, tracks, pos.TickMs);
+    var lives = Lives.Chain(deaths.Select(d => d.Player).ToList(), matched, respawns, tracks);
+
+    // Every ammo count, per (slot, component), in tick order.
+    var counts = new Dictionary<(int Slot, int Component), List<(int Tick, int Rounds, bool Checked)>>();
+    var tick = 0;
+    foreach (var c in m.CustomData.Chunks.Where(c => c.ChunkType == 2).OrderBy(c => c.Index))
+        foreach (var p in PacketReader.Read(cache.LoadChunk(matchId, c), out _))
+        {
+            if (p.Type != 0) continue;
+            foreach (var u in EntityRecords.FindBipedUpdates(p.Payload.Span))
+                if (u.Rounds is { } r && (u.Checked || u.Components[0] == u.AmmoComponent))
+                    (counts.TryGetValue((u.Slot, u.AmmoComponent!.Value), out var l) ? l : counts[(u.Slot, u.AmmoComponent!.Value)] = []).Add((tick, r, u.Checked));
+            tick++;
+        }
+    var fullOf = counts.GroupBy(x => x.Key.Component).ToDictionary(g => g.Key, g => g.SelectMany(x => x.Value).Where(v => v.Checked).Select(v => v.Rounds).DefaultIfEmpty(0).Max());
+    Console.WriteLine($"Largest checked count per component: {string.Join(", ", fullOf.OrderBy(x => x.Key).Select(x => $"{x.Key}: {x.Value}"))}");
+
+    // A: checked drops only. B: plus unchecked counts that continue a run one round down.
+    // C: B, plus the rounds before the first count after a rise or a life's start, up to 3, against the component's largest count.
+    (int A, int B, int C) Count(List<(int Tick, int Rounds, bool Checked)> series, int full)
+    {
+        int a = 0, b = 0, cc = 0; int? lastChecked = null, last = null;
+        foreach (var (_, r, chk) in series)
+        {
+            if (chk) { if (lastChecked is { } lc && r < lc) a += lc - r; lastChecked = r; }
+            if (!chk && !(last is { } l0 && r == l0 - 1)) continue;
+            if (last is { } l)
+            {
+                if (r < l) { b += l - r; cc += l - r; }
+                else if (r > l && full - r is > 0 and <= 3) cc += full - r;
+            }
+            else if (full - r is > 0 and <= 3) cc += full - r;
+            last = r;
+        }
+        return (a, b, cc);
+    }
+
+    Console.WriteLine("player   lives/spawns  shots fired   A checked   B +unchecked   C +refills");
+    var ratios = new List<(double A, double B, double C)>();
+    for (var i = 0; i < players.Count; i++)
+    {
+        var row = players[i].Row; var core = row.Stats?.CoreStats;
+        var mine = lives.GetValueOrDefault(i) ?? [];
+        if (core is null) continue;
+        int sa = 0, sb = 0, sc = 0;
+        foreach (var slot in mine)
+            foreach (var (key, series) in counts.Where(x => x.Key.Slot == slot))
+            { var (a, b, c) = Count(series, fullOf[key.Component]); sa += a; sb += b; sc += c; }
+        var complete = mine.Count == core.Spawns;
+        var shots = core.ShotsFired;
+        if (complete && shots > 0) ratios.Add((sa / (double)shots, sb / (double)shots, sc / (double)shots));
+        Console.WriteLine($"T{row.LastTeamId} P{i,-3}  {mine.Count,3}/{core.Spawns,-3}{(complete ? " " : "*")}    {shots,7}   {sa,9}   {sb,12}   {sc,10}");
+        if (args.Contains("--slots")) Console.WriteLine($"         slots {string.Join(" ", mine)}");
+    }
+    double Med(IEnumerable<double> v) { var o = v.Order().ToList(); return o.Count == 0 ? double.NaN : o[o.Count / 2]; }
+    Console.WriteLine($"Complete players: {ratios.Count}; median ratio to shots fired A {Med(ratios.Select(r => r.A)):F3}, B {Med(ratios.Select(r => r.B)):F3}, C {Med(ratios.Select(r => r.C)):F3}");
+    Console.WriteLine($"  within 5%: A {ratios.Count(r => Math.Abs(r.A - 1) <= 0.05)}, B {ratios.Count(r => Math.Abs(r.B - 1) <= 0.05)}, C {ratios.Count(r => Math.Abs(r.C - 1) <= 0.05)}");
+    return 0;
+}
+
 int Dump(string matchId, int index)
 {
     var m = cache.LoadManifest(matchId);
@@ -508,6 +586,10 @@ int Inspect(string matchId)
     Console.WriteLine($"  component registry: {h.Blocks.Count} blocks, {h.Blocks.Sum(b => b.Slots.Count)} slots, " +
                       $"{h.Blocks.SelectMany(b => b.Slots).Select(s => s.Name).Distinct().Count()} distinct names");
     Console.WriteLine($"  table after registry: {h.Table.Count} values");
+    if (args.Contains("--registry"))
+        foreach (var block in h.Blocks)
+            for (var si = 0; si < block.Slots.Count; si++)
+                Console.WriteLine($"    block {block.Index} slot {si}: {block.Slots[si].Name} ({block.Slots[si].Value})");
     Console.WriteLine($"  build: {h.Build.Version} / {h.Build.Branch} / {h.Build.Flavour} ({h.Build.Value1}, {h.Build.Value2})");
 
     var roster = Roster.Find(header, h.StreamOffset);
