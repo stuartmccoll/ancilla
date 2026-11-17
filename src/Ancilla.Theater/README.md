@@ -210,10 +210,12 @@ In order of value:
    and `inspect` checks them. Player positions are found: type 0 records are addressed by type 1
    slot and carry a component list (see FORMAT.md), and `inspect` checks them; `Lives` chains them
    into each player's lives, and `timeline` shows distances and a death map. **To do:**
-   - [ ] **Fill the lives chaining misses** (players who never died, a quitter's last life; 64 of
-     84 PvP players are complete) from the end-of-packet per-player list: a player's entry is
-     missing exactly while they're dead, and its index is the roster index in most films (see
-     FORMAT.md, "Per-player list"). Its parser isn't in the repo yet.
+   - [x] **Per-player list decoded** (FORMAT.md, "Per-player list"): who is alive at every tick.
+     It showed the lives chaining isn't the gap: chained tracks already cover 91–99.6% of alive
+     time in most films. Not in the code yet; the animation can use it for alive and dead states.
+   - [ ] **Find the missing biped tracks.** Lives the chaining misses mostly have no decoded biped
+     records (two films cover only 65% and 77% of alive time). Look at what `EntityRecords.Find`
+     skips during those lives.
    - [x] **Aim (component 21), the command tick (25) and ammo counts (30/33/36/39)** are read by
      `EntityRecords.FindBipedUpdates`, and `inspect` checks them (FORMAT.md, "Biped component
      widths").

@@ -186,13 +186,36 @@ bits 29–36  tick counter, u8, +1 per tick, wraps at 256
   rather than using timestamps.
 - A packet is a run of records, each starting with a 1 bit, ending with a 0 bit and zero padding.
   The 1-byte payload `0x80` is an idle tick. Record boundaries aren't decoded in general.
-- **Per-player list at the end of each packet:** `[1][index:8][21 bits]` per player, index
-  ascending, then `0`. The 21 bits take few distinct states, so they're status bits, not
-  positions. **A player's entry is missing exactly while they're dead** (research-script check,
-  nine of ten PvP films): the index equals the roster index (scoreboard order among humans) in
-  seven films; in one with a late joiner the indexes are shifted, in another a late joiner reuses a
-  quitter's index, and one film with a quitter, a late joiner and a bot is ambiguous for one
-  player. Type-10 slots don't follow anyone's deaths and remain unmapped.
+- **Per-player list at the end of each packet** (checked against deaths, research scripts; not
+  in the code yet): one entry per player who is alive, index ascending, then a `0` bit and fewer
+  than 8 zero bits of padding:
+
+  ```
+  [1] [index:8] [status:21]          status bits aren't decoded; they're nearly constant per player
+                [5 more bits]        when status bit 18 is 1
+                [16 more bits]       when status bit 19 is 1 (bit 20 is then part of that field)
+  ```
+
+  Parsing from the end (the earliest start that reads exactly to the padding) works for about 98%
+  of packets. Other variants exist (status bit 1 = 0 made one entry 3 bits shorter), so a few
+  packets fail; ignoring presence changes shorter than 60 ticks (1 s) absorbs them.
+  **A player's entry is missing exactly while they're dead:** of 1,161 deaths in nine PvP films
+  whose indexes follow the scoreboard, 1,152 end the player's presence within 0.5 s, and the
+  index is present 2 s after a death 4 times. An index appears 0–5 ticks (median per film) after
+  the life's first biped record (about 40 ticks before it in one film) and disappears 1 tick
+  after its last.
+- **Index to player:** learned from deaths (the index that's present just before and absent just
+  after most of a player's deaths). It's the scoreboard order among humans in eight of eleven
+  films. In one it's shifted by one (a late joiner), in one a late joiner takes over a quitter's
+  index, and a ninth human never appears: no list has more than 8 entries, so the list may hold
+  8 players at most (observed).
+- **What it adds to lives:** presence spans per player equal scoreboard spawns for about half the
+  players, but matching them to biped tracks (start within ±250 ticks, end −250 to +100) adds at
+  most one track per film to the death chaining (`Format/Lives.cs`). The chained tracks already
+  cover 91–99.6% of the time players were alive in nine of eleven films (77% and 65% in two). The
+  lives the chaining misses mostly have **no decoded biped track at all**, so the next gain is in
+  finding biped records (`EntityRecords`), not in linking them. Presence and chaining disagree on
+  about 5% of tracks; which is right isn't known.
 
 ### Entity records and player positions
 
