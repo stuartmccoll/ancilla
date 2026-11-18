@@ -32,7 +32,7 @@
     var forecast = !c.IsHero && _snapshots is not null ? ProgressMath.ForecastHero(_snapshots, c.XpTotal, from) : null;
     <section class="tiles">
         <div class="tile xp-tile">
-            <span class="label">XP per match</span>
+            <span class="label">Career XP per match</span>
             <span class="value">@Fmt.N(r.Estimate.XpPerMatch)</span>
             <label class="based-on">
                 <span>Based on</span>
@@ -151,6 +151,18 @@
             </div>
         </div>
         <p class="hint above">XP only goes to your active pass, so you finish passes one after another and the total is their sum.</p>
+        @if (r.PassEstimate is { } pe)
+        {
+            <p class="hint above">Pass XP per match: <strong>@Fmt.N(pe.XpPerMatch)</strong>. @pe.Source.</p>
+        }
+        else if (unfinished > 0)
+        {
+            <p class="hint above">
+                Matches for passes aren't known yet. Battle pass XP comes in more slowly than career XP, so it's
+                measured on its own: each time this page loads it saves your active pass's XP. After 5 matches with the
+                same pass active, the Matches column fills in.
+            </p>
+        }
         @if (unfinished == 0)
         {
             <p class="big">All done.</p>
@@ -193,7 +205,7 @@
                                     <span class="pct">@Fmt.Pct(pp)</span>
                                 </td>
                                 <td class="hide-sm">@Fmt.N(p.XpRemaining)</td>
-                                <td>@(p.IsComplete ? "Done" : $"~{Fmt.N(r.GamesFor(p.XpRemaining))}")</td>
+                                <td>@(p.IsComplete ? "Done" : PassGames(r, p.XpRemaining))</td>
                             </tr>
                         }
                     </tbody>
@@ -206,7 +218,7 @@
                                 <td class="hide-sm"></td>
                                 <td></td>
                                 <td class="hide-sm">@Fmt.N(passXp)</td>
-                                <td>~@Fmt.N(r.GamesFor(passXp))</td>
+                                <td>@PassGames(r, passXp)</td>
                             </tr>
                         </tfoot>
                     }
@@ -257,6 +269,8 @@ else if (_loading)
     private string AriaSort(string key) => _sortKey != key ? "none" : _sortDesc ? "descending" : "ascending";
     private string Arrow(string key) => _sortKey != key ? "↕" : _sortDesc ? "▼" : "▲";
 
+    private static string PassGames(ProgressReport r, long xp) => r.PassGamesFor(xp) is { } n ? $"~{Fmt.N(n)}" : "—";
+
     private static double Percent(TrackStatus p) => p.XpTotal == 0 ? 0 : 100.0 * p.XpEarned / p.XpTotal;
 
     // Active, then in progress (premium before free track), then not started, then completed.
@@ -273,7 +287,7 @@ else if (_loading)
             "ranks" => p.RanksCompleted,
             "progress" => Percent(p),
             "xp" => p.XpRemaining,
-            _ => r.GamesFor(p.XpRemaining),
+            _ => r.PassGamesFor(p.XpRemaining) ?? int.MaxValue,
         };
         var cmp = _sortKey == "name" ? (IComparer<IComparable>)Comparer<IComparable>.Create((a, b) =>
             StringComparer.CurrentCultureIgnoreCase.Compare((string)a, (string)b)) : Comparer<IComparable>.Default;

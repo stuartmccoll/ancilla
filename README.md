@@ -77,7 +77,8 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
 - **Home** (where you land): profile header plus an overview card per section: career and
   active-pass progress, headline stats and top medals, your last 10 results with a K/D sparkline
   and latest games, and the players you've seen most recently.
-- **Progress**: battle passes and career rank (with rank icon), and games to go for each, plus a
+- **Progress**: battle passes and career rank (with rank icon), and games to go for each (career
+  XP and pass XP per match are measured separately; pass XP comes in much more slowly), plus a
   **Road to Hero** forecast: XP pace over the chosen window, from the saved snapshots, projected to a Hero date.
   The forecast needs snapshots at least a day apart.
 - **Service record**: lifetime stats, ranked CSR, top medals, combat stats with per-match figures,
@@ -139,7 +140,8 @@ To add a theme (e.g. Xbox 360):
   `films` in the same `Ancilla` folder as snapshots, shared with `Ancilla.Theater.Cli`. Set the
   `Films` setting to a folder to store them elsewhere. A film holds every player's gamertag and XUID,
   so keep the folder out of anything you share.
-- Each time progress loads, a snapshot (matches played and total career XP) is saved to
+- Each time progress loads, a snapshot (matches played, total career XP, and the active pass with
+  its XP) is saved to
   `snapshots.json` in an `Ancilla` folder under the local application data folder. On macOS
   that's `~/Library/Application Support/Ancilla`, and on Windows `%LOCALAPPDATA%\Ancilla`.
   To store it elsewhere, set the `Snapshots` setting to a file path:

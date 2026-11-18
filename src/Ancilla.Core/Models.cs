@@ -91,7 +91,8 @@ public sealed record ProgressReport(
     CareerStatus Career,
     IReadOnlyList<TrackStatus> Passes,
     XpPerMatchEstimate Estimate,
-    IReadOnlyList<ProgressSnapshot> History)
+    IReadOnlyList<ProgressSnapshot> History,
+    XpPerMatchEstimate? PassEstimate = null)
 {
     /// <summary>When the data was fetched. Kept by <c>with</c> copies.</summary>
     public DateTimeOffset LoadedAt { get; init; } = DateTimeOffset.UtcNow;
@@ -104,9 +105,23 @@ public sealed record ProgressReport(
         Passes.Where(p => (includeCompleted || !p.IsComplete) && (includeUnowned || p.IsOwned))
             .OrderBy(p => p.IsComplete);
 
+    /// <summary>Matches to earn this much career XP.</summary>
     public int GamesFor(long xp) =>
         xp <= 0 ? 0 : (int)Math.Ceiling(xp / Math.Max(1, Estimate.XpPerMatch));
+
+    /// <summary>Matches to earn this much battle pass XP; null until pass XP per match has been measured.</summary>
+    public int? PassGamesFor(long xp) =>
+        xp <= 0 ? 0 : PassEstimate is { XpPerMatch: > 0 } e ? (int)Math.Ceiling(xp / e.XpPerMatch) : null;
+
+    /// <summary>The active pass, if there is one.</summary>
+    public TrackStatus? ActivePass => Passes.FirstOrDefault(p => p.IsActive);
 }
 
-/// <summary>A point-in-time reading, used to measure real XP gained per match.</summary>
-public sealed record ProgressSnapshot(DateTimeOffset TakenAt, int MatchesCompleted, long CareerXpEarned);
+/// <summary>
+/// A point-in-time reading, used to measure real XP gained per match. <see cref="ActivePass"/> and
+/// <see cref="ActivePassXpEarned"/> (the active pass's path and the XP earned on it) are missing from
+/// snapshots saved before they were recorded. Pass XP is measured separately from career XP because
+/// the two don't grow at the same rate.
+/// </summary>
+public sealed record ProgressSnapshot(DateTimeOffset TakenAt, int MatchesCompleted, long CareerXpEarned,
+    string? ActivePass = null, long? ActivePassXpEarned = null);

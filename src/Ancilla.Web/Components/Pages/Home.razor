@@ -52,11 +52,11 @@
                 <div class="meter">
                     <div class="meter-label"><span>Active pass · @pass.Name</span><span>@pass.RanksCompleted / @pass.TotalRanks</span></div>
                     <div class="bar small" role="progressbar" aria-label="Active pass progress" aria-valuenow="@pp.ToString("F0")" aria-valuemin="0" aria-valuemax="100"><div class="fill" style="width:@Fmt.Css(pp)%"></div></div>
-                    <div class="meter-note">~@Fmt.N(rep.GamesFor(pass.XpRemaining)) games to finish</div>
+                    <div class="meter-note">@(rep.PassGamesFor(pass.XpRemaining) is { } n ? $"~{Fmt.N(n)} games to finish" : "Games to finish: still measuring pass XP per game")</div>
                 </div>
             }
             var left = rep.RemainingPasses(false).Count();
-            <p class="hint">@(left == 0 ? "Every pass you own is finished." : $"{left} unfinished {(left == 1 ? "pass" : "passes")} you own · ~{Fmt.N(rep.Estimate.XpPerMatch)} XP per game")</p>
+            <p class="hint">@(left == 0 ? "Every pass you own is finished." : $"{left} unfinished {(left == 1 ? "pass" : "passes")} you own" + (rep.PassEstimate is { } pe ? $" · ~{Fmt.N(pe.XpPerMatch)} pass XP per game" : ""))</p>
         }
         else if (_progressError is not null) { <p class="error">@_progressError</p> }
         else { <Skeleton Lines="3" /> }

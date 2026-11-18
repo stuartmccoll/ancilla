@@ -72,8 +72,8 @@
                     Tokens expire after a few hours anyway.
                 </li>
                 <li>
-                    <strong>Career snapshots</strong> (your career XP and matches played, with a timestamp) are saved each
-                    time your progress loads, to power the XP-per-match rate and the Hero forecast. They're stored on this
+                    <strong>Progress snapshots</strong> (your career XP, matches played and your active pass's XP, with a
+                    timestamp) are saved each time your progress loads, to power the XP-per-match rates and the Hero forecast. They're stored on this
                     machine at <code class="path">@Snapshots.DisplayPath</code>.
                 </li>
                 <li>
@@ -111,7 +111,7 @@
                     service record minus your Firefight record. Counts subtract exactly. Accuracy and average KDA are
                     recalculated from what's left. Best killing spree can't be split, so it's the overall figure.
                 </dd>
-                <dt>XP per match</dt>
+                <dt>Career XP per match</dt>
                 <dd>
                     The services don't report XP per game, so it's measured: the career XP gained between two snapshots,
                     divided by the matches played in between. On the Progress page you choose what to average over, such as
@@ -119,8 +119,18 @@
                     starts at the nearest snapshot, and needs at least 5 matches since it. Without enough history, your
                     lifetime average is used, which is only a rough guide.
                 </dd>
+                <dt>Pass XP per match</dt>
+                <dd>
+                    Measured the same way, from the active pass's XP saved in each snapshot, over the same window. Only
+                    snapshots taken while that pass was active count, and it needs 5 matches since the first one. Career XP
+                    comes in several times faster than pass XP, so the career figure isn't used for passes.
+                </dd>
                 <dt>Matches to go</dt>
-                <dd>XP still needed, divided by XP per match. Only the active pass earns XP, so passes are finished one after another.</dd>
+                <dd>
+                    XP still needed, divided by XP per match: career XP per match for Hero, pass XP per match for passes.
+                    Only the active pass earns XP, so passes are finished one after another. Until pass XP per match has
+                    been measured, passes show no figure.
+                </dd>
                 <dt>Hero forecast</dt>
                 <dd>Your average career XP per day, extended in a straight line, counting days you didn't play. It's measured over the same window as XP per match. If that window is under a day long, or you've entered a figure yourself, it uses the last 60 days instead.</dd>
                 <dt>Expected kills</dt>
