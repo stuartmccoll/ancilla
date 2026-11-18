@@ -16,6 +16,23 @@ public class FilmSourceTests
         Assert.Equal(123_456, m.CustomData.FilmLength);
         Assert.Equal(41, m.CustomData.FilmMajorVersion);
         Assert.Equal([1, 3], m.CustomData.Chunks.Select(c => c.ChunkType));
+        Assert.True(m.CustomData.HasSummary);
+    }
+
+    [Fact]
+    public void Only_a_missing_summary_chunk_is_an_unfinished_film()
+    {
+        var m = FilmSource.ParseManifest(ManifestJson(MatchId));
+        var header = m.CustomData.Chunks[0];
+        var noSummary = m with { CustomData = m.CustomData with { Chunks = [header] } };
+        Assert.False(noSummary.CustomData.HasSummary);
+        Assert.Throws<UnfinishedFilmException>(() => FilmCache.ChunkOfType(noSummary, 3));
+
+        // Two summaries, or no header, are still just unreadable.
+        var twoSummaries = m with { CustomData = m.CustomData with { Chunks = [header, m.CustomData.Chunks[1], m.CustomData.Chunks[1]] } };
+        Assert.Throws<InvalidDataException>(() => FilmCache.ChunkOfType(twoSummaries, 3));
+        var empty = m with { CustomData = m.CustomData with { Chunks = [] } };
+        Assert.Throws<InvalidDataException>(() => FilmCache.ChunkOfType(empty, 1));
     }
 
     [Theory]

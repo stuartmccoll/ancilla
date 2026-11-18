@@ -78,9 +78,11 @@ public sealed class FilmCache(string root)
     }
 
     /// <summary>The film's only chunk of <paramref name="chunkType"/> (1 = header, 3 = summary).</summary>
+    /// <exception cref="UnfinishedFilmException">The film has no summary chunk.</exception>
     public static FilmChunkInfo ChunkOfType(FilmManifest manifest, int chunkType)
     {
         var found = manifest.CustomData.Chunks.Where(c => c.ChunkType == chunkType).ToList();
+        if (found.Count == 0 && chunkType == 3) throw new UnfinishedFilmException();
         return found.Count == 1 ? found[0]
             : throw new InvalidDataException($"The film has {found.Count} chunks of type {chunkType}; expected exactly 1.");
     }

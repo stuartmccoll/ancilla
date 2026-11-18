@@ -6,16 +6,22 @@ namespace Ancilla.Theater;
 /// <summary>A decoded player: roster players in scoreboard order, then late joiners.</summary>
 public sealed record TimelinePlayer(int Index, int Team, string Gamertag, string? Xuid, bool LateJoiner);
 
-public enum FeedKind { Kill, Death, Medal, Objective }
+public enum FeedKind { Kill, Death, Medal, Objective, Pickup }
 
 /// <summary>
 /// One kill-feed line. <see cref="Kind"/> Kill: <see cref="Player"/> killed <see cref="Other"/> (null
 /// when the victim is a bot or another player with no records). Death: <see cref="Player"/> died with
 /// no killer recorded (a suicide, or killed by a bot). Medal: a medal not tied to a kill. Objective:
-/// a mode-objective event (in CTF, a flag action). <see cref="MedalNameIds"/> are the medals a kill
+/// a mode-objective event (in CTF, a flag action). Pickup: <see cref="Player"/> picked up a weapon
+/// (see <see cref="WeaponPickup"/>). <see cref="MedalNameIds"/> are the medals a kill
 /// earned, or the one medal of a Medal line; medals whose code isn't known yet are left out.
+/// <see cref="MedalCodes"/> are the same medals by their film code, known or not, so a Medal line
+/// whose code isn't known has a code but no name id. <see cref="Flag"/> is what an Objective line was
+/// in Capture the Flag, when the film shows it (<see cref="FlagEvents"/>); some, such as drops, have
+/// no objective event of their own and are added for the feed.
 /// </summary>
-public sealed record FeedEntry(uint TimeMs, FeedKind Kind, int Player, int? Other, IReadOnlyList<long> MedalNameIds);
+public sealed record FeedEntry(uint TimeMs, FeedKind Kind, int Player, int? Other, IReadOnlyList<long> MedalNameIds, IReadOnlyList<int> MedalCodes,
+    FlagAction? Flag = null);
 
 /// <summary>
 /// Per-player figures from the film. LongestStreak is kills in one life. Traded: kills after which
@@ -54,16 +60,31 @@ public sealed record DeathPoint(uint TimeMs, int Player, int Team, int? Killer, 
 /// </summary>
 public sealed record FloorFace(IReadOnlyList<MapPoint> Points, int Level);
 
+/// <summary>
+/// A weapon <see cref="Player"/> picked up, where they were, which of their two weapon slots it went
+/// into (0 or 1), and whether they dropped the weapon it replaced (<see cref="Swapped"/>). Found from
+/// the biped's inventory, not the weapon (see <see cref="Inventory"/>), so pickups during lives the
+/// film couldn't link to a player are missing. <see cref="Weapon"/> is the weapon's ID
+/// (<see cref="InventoryItem.Id"/>; the same in every film) when the film says it; which weapon each ID
+/// is hasn't been worked out.
+/// </summary>
+public sealed record WeaponPickup(uint TimeMs, int Player, int Team, MapPoint At, int WeaponSlot, bool Swapped, uint? Weapon = null);
+
 /// <summary>Where a player was at an objective event (in CTF, a flag action).</summary>
 public sealed record ObjectivePoint(uint TimeMs, int Player, int Team, MapPoint At);
 
 /// <summary>
 /// One player's movement for the animated map, sampled every <see cref="Playback.StepMs"/>: positions
 /// in tenths of a map square (X10, Y10; -1 where the player isn't placed: dead, not yet spawned, or a
-/// life the film couldn't link to them) and facing in whole degrees, anticlockwise from +X (-1 when
-/// unknown).
+/// life the film couldn't link to them), facing in whole degrees, anticlockwise from +X (-1 when
+/// unknown), and whether they're alive (<see cref="Alive"/>: <see cref="IsAlive"/>, <see cref="IsDead"/>,
+/// <see cref="NotInMatch"/> before they first appear or after they leave, or <see cref="Unknown"/> when
+/// the film's per-player list couldn't be matched to them and they aren't placed).
 /// </summary>
-public sealed record PlaybackTrack(int Player, int[] X10, int[] Y10, int[] Yaw);
+public sealed record PlaybackTrack(int Player, int[] X10, int[] Y10, int[] Yaw, int[] Alive)
+{
+    public const int IsAlive = 1, IsDead = 0, NotInMatch = 2, Unknown = -1;
+}
 
 /// <summary>Every linked player's movement through the match, for the animated map.</summary>
 public sealed record Playback(int StepMs, int Frames, IReadOnlyList<PlaybackTrack> Tracks);
@@ -76,7 +97,9 @@ public sealed record Playback(int StepMs, int Frames, IReadOnlyList<PlaybackTrac
 /// also has a <see cref="Floor"/>, lowest faces first, when the fit is good enough
 /// (<see cref="FloorPlan.MinOnMesh"/>; <see cref="FloorFit"/> is kept either way). Built from a cached film (see
 /// <see cref="FilmCache"/>) and the match's scoreboard. The film's scale is unknown, so the map is
-/// drawn on a grid scaled to the area players covered.
+/// drawn on a grid scaled to the area players covered. <see cref="RosterNotOnScoreboard"/> counts
+/// header roster players missing from the scoreboard (their records can't be decoded; 0 in every
+/// film so far).
 /// </summary>
 public sealed record MatchTimeline(
     IReadOnlyList<TimelinePlayer> Players,
@@ -93,9 +116,13 @@ public sealed record MatchTimeline(
     IReadOnlyList<FloorFace> Floor,
     FloorFit? FloorFit,
     Playback? Playback,
-    int BotsAndUnlinked)
+    int BotsAndUnlinked,
+    int RosterNotOnScoreboard = 0,
+    IReadOnlyList<WeaponPickup>? Pickups = null)
 {
     public const int TradeWindowMs = 3_000;
+    /// <summary>The <see cref="InvalidDataException"/> message when no player's records can be decoded.</summary>
+    public const string NoPlayersMessage = "No players could be decoded from this film.";
     /// <summary>Longest gap between two records of a life that counts as time in one cell.</summary>
     public const double MaxStepMs = 1_000;
     /// <summary>How old an aim record can be and still count as the facing at a moment.</summary>
@@ -117,7 +144,8 @@ public sealed record MatchTimeline(
         var summary = PacketReader.Read(cache.LoadChunk(matchId, FilmCache.ChunkOfType(cache.LoadManifest(matchId), 3)), out _);
         var walked = SummaryRecords.Walk(Summary.Payload(summary)).Records;
         var (resolved, _) = FilmPlayers.Resolve(named, walked, board);
-        if (resolved.Count == 0) throw new InvalidDataException("No players could be decoded from this film.");
+        var rosterMissing = named.Count - resolved.Count(x => !x.LateJoiner);
+        if (resolved.Count == 0) throw new InvalidDataException(NoPlayersMessage);
         var events = Summary.FromRecords(walked, resolved.Select(x => (string?)x.Gamertag).ToList());
         Summary.PairKills(events);
 
@@ -139,18 +167,19 @@ public sealed record MatchTimeline(
             switch (e.Kind)
             {
                 case SummaryEventKind.PlayerKill:
-                    var medals = medalsByKill.GetValueOrDefault(i)?.Select(j => NameId(events[j])).OfType<long>().ToList() ?? [];
-                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Kill, e.Player, e.Victim, medals));
+                    var mine = medalsByKill.GetValueOrDefault(i)?.Order().ToList() ?? [];
+                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Kill, e.Player, e.Victim,
+                        mine.Select(j => NameId(events[j])).OfType<long>().ToList(), mine.Select(j => events[j].MedalCode).ToList()));
                     if (e.Victim is not null) killerOf[i + 1] = e.Player;
                     break;
                 case SummaryEventKind.Death when !killerOf.ContainsKey(i):
-                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Death, e.Player, null, []));
+                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Death, e.Player, null, [], []));
                     break;
-                case SummaryEventKind.Medal when !medalOf.ContainsKey(i) && NameId(e) is { } id:
-                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Medal, e.Player, null, [id]));
+                case SummaryEventKind.Medal when !medalOf.ContainsKey(i):
+                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Medal, e.Player, null, NameId(e) is { } id ? [id] : [], [e.MedalCode]));
                     break;
                 case SummaryEventKind.Objective:
-                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Objective, e.Player, null, []));
+                    feed.Add(new FeedEntry(e.TimeMs, FeedKind.Objective, e.Player, null, [], []));
                     break;
             }
         }
@@ -170,6 +199,9 @@ public sealed record MatchTimeline(
         var lives = new Dictionary<int, List<int>>();
         var deathPoints = new List<DeathPoint>();
         var objectivePoints = new List<ObjectivePoint>();
+        var pickups = new List<WeaponPickup>();
+        var flagEvents = new List<(uint TimeMs, FlagEvent Event)>();
+        var isCtf = board.Players.Any(r => r.Stats?.ModeStats.ContainsKey("CaptureTheFlagStats") == true);
         var timeByCell = new Dictionary<int, float[]>();
         var arena = new HashSet<(int, int)>();
         var floor = new List<FloorFace>();
@@ -188,6 +220,7 @@ public sealed record MatchTimeline(
                 var matched = Lives.MatchDeaths(deathTicks, tracks);
                 var respawns = Lives.Respawns(deaths.Select(x => (double)x.TimeMs).ToList(), matched.Keys, tracks, pos.TickMs);
                 lives = Lives.Chain(deaths.Select(x => x.Player).ToList(), matched, respawns, tracks);
+                Lives.FillFromSpans(lives, pos.AliveSpans(deaths.Select(x => ((double)x.TimeMs, x.Player))), tracks);
                 var aims = pos.Aims.GroupBy(a => a.Slot).ToDictionary(g => g.Key, g => g.Select(a => (a.Tick, a.Aim)).ToList());
 
                 var all = pos.Bipeds.Select(b => b.Record.Position).ToList();
@@ -198,7 +231,7 @@ public sealed record MatchTimeline(
                 MapPoint At2(double x, double y) => new(padX + (x - minX) * scale + .5, padY + (maxY - y) * scale + .5);
                 MapPoint Cell(FilmPosition p) => At2(p.X, p.Y);
                 foreach (var p in all) { var c = Cell(p); arena.Add(((int)c.X, (int)c.Y)); }
-                if (navMesh is not null && (fit = FloorPlan.Fit(navMesh, all)) is { OnMesh: >= FloorPlan.MinOnMesh } good)
+                if (navMesh is not null && (fit = FloorPlan.Fit(navMesh, all, pos.Layout)) is { OnMesh: >= FloorPlan.MinOnMesh } good)
                 {
                     // Faces players came near: the mesh can reach well beyond the playable space.
                     var near = arena.SelectMany(c => Enumerable.Range(-FloorReach, 2 * FloorReach + 1)
@@ -241,10 +274,53 @@ public sealed record MatchTimeline(
                     if (At(e.Player, pos.TickAt(e.TimeMs)) is { } oa)
                         objectivePoints.Add(new ObjectivePoint(e.TimeMs, e.Player, players[e.Player].Team, Cell(oa.Position)));
 
+                // Weapon pickups: an inventory change in a weapon slot during a linked life.
+                var ownerOf = lives.SelectMany(kv => kv.Value.Select(s => (Slot: s, Player: kv.Key))).ToDictionary(x => x.Slot, x => x.Player);
+                var objectsFirst = pos.Objects.GroupBy(o => o.Record.Slot).Select(g => g.First()).ToList();
+                foreach (var c in pos.InventoryChanges ?? [])
+                {
+                    if (!c.IsWeapon || c.Emptied || !ownerOf.TryGetValue(c.Slot, out var who)) continue;
+                    var tr = tracks[c.Slot];
+                    var i = tr.Points.FindLastIndex(x => x.Tick <= c.Tick);
+                    if (i < 0) continue;
+                    var at = tr.Points[i].Position;
+                    pickups.Add(new WeaponPickup((uint)pos.TickMs[c.Tick], who, players[who].Team, Cell(at), c.InventorySlot,
+                        Inventory.SwapDrop(at, c.Tick, objectsFirst, deathTicks), c.Item));
+                }
+                pickups.Sort((a, b) => a.TimeMs.CompareTo(b.TimeMs));
+
+                // Flag actions, from the flag slot of linked lives, deaths, kills and objective events.
+                if (isCtf)
+                {
+                    var flagSlot = (pos.InventoryChanges ?? [])
+                        .Where(c => c.InventorySlot == FlagEvents.FlagSlot && ownerOf.ContainsKey(c.Slot) && (c.Emptied || c.Item == Inventory.FlagId))
+                        .Select(c => (c.Tick, ownerOf[c.Slot], !c.Emptied));
+                    var inferred = FlagEvents.Infer(players.Select(p => p.Team).ToList(), flagSlot,
+                        deaths.Select(x => (pos.TickAt(x.TimeMs), x.Player)),
+                        events.Where(e => e.Kind == SummaryEventKind.PlayerKill && e.Victim is not null).Select(e => (pos.TickAt(e.TimeMs), e.Player, e.Victim!.Value)),
+                        events.Where(e => e.Kind == SummaryEventKind.Objective).Select(e => (pos.TickAt(e.TimeMs), e.Player)));
+                    flagEvents = inferred.Select(f => ((uint)pos.TickMs[f.Tick], f)).ToList();
+                }
+
                 foreach (var (player, slots) in lives)
                     timeByCell[player] = TimeSpent(slots.Select(s => tracks[s]), pos.TickMs, Cell);
-                playback = BuildPlayback(lives, tracks, aims, pos, duration, Cell);
+                var alive = pos.AliveSpans(deaths.Select(x => ((double)x.TimeMs, x.Player)));
+                playback = BuildPlayback(lives, tracks, aims, pos, duration, Cell, alive);
             }
+        }
+
+        if (pickups.Count > 0 || flagEvents.Count > 0)
+        {
+            feed.AddRange(pickups.Select(p => new FeedEntry(p.TimeMs, FeedKind.Pickup, p.Player, null, [], [])));
+            // A flag action labels the player's objective line at that moment, or is added when the
+            // summary has none (drops, and grabs it didn't log).
+            foreach (var (ms, f) in flagEvents)
+            {
+                var i = feed.FindIndex(x => x.Kind == FeedKind.Objective && x.Flag is null && x.Player == f.Player && Math.Abs((long)x.TimeMs - ms) <= 100);
+                if (i >= 0) feed[i] = feed[i] with { Flag = f.Action };
+                else feed.Add(new FeedEntry(ms, FeedKind.Objective, f.Player, null, [], [], f.Action));
+            }
+            feed = feed.OrderBy(f => f.TimeMs).ToList();   // OrderBy is stable: events at one moment keep their order
         }
 
         // ---- Per player ----
@@ -275,7 +351,7 @@ public sealed record MatchTimeline(
                 nemesis, myLives.Count, moved, kd is { Count: > 0 } ? kd[kd.Count / 2] : null));
         }
 
-        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, floor, fit, playback, outsiders);
+        return new MatchTimeline(players, teams, duration, feed, summaries, perMinute, h2h, deathPoints, objectivePoints, timeByCell, arena, floor, fit, playback, outsiders, rosterMissing, pickups);
     }
 
     /// <summary>
@@ -302,17 +378,36 @@ public sealed record MatchTimeline(
 
     /// <summary>
     /// Samples each player's linked lives every <see cref="PlaybackStepMs"/>: the life's last position at or before
-    /// the moment (none once its track has ended), and the aim from the second before.
+    /// the moment (none once its track has ended), and the aim from the second before. With
+    /// <paramref name="alive"/> (<see cref="FilmPositions.AliveSpans"/>), each frame also says whether
+    /// the player is alive, and players with alive spans but no linked lives get a track too. A frame
+    /// with a position counts as alive whatever the list says: the two disagree on 1–7% of positions
+    /// (FORMAT.md, "Per-player list"), so the list only decides for frames with no position.
     /// </summary>
     public static Playback BuildPlayback(Dictionary<int, List<int>> lives, Dictionary<int, BipedTrack> tracks,
-        Dictionary<int, List<(int Tick, Aim Aim)>> aims, FilmPositions pos, uint durationMs, Func<FilmPosition, MapPoint> cell)
+        Dictionary<int, List<(int Tick, Aim Aim)>> aims, FilmPositions pos, uint durationMs, Func<FilmPosition, MapPoint> cell,
+        IReadOnlyList<AliveSpan>? alive = null)
     {
         var frames = (int)(durationMs / PlaybackStepMs) + 1;
         var result = new List<PlaybackTrack>();
-        foreach (var (player, slots) in lives.OrderBy(x => x.Key))
+        var spansOf = (alive ?? []).GroupBy(s => s.Player).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var player in lives.Keys.Union(spansOf.Keys).Order())
         {
-            int[] x10 = new int[frames], y10 = new int[frames], yaw = new int[frames];
+            var slots = lives.GetValueOrDefault(player) ?? [];
+            int[] x10 = new int[frames], y10 = new int[frames], yaw = new int[frames], state = new int[frames];
             Array.Fill(x10, -1); Array.Fill(y10, -1); Array.Fill(yaw, -1);
+            if (spansOf.TryGetValue(player, out var spans))
+            {
+                var (first, final) = (spans.MinBy(s => s.FirstTick), spans.MaxBy(s => s.LastTick));
+                for (var f = 0; f < frames; f++)
+                {
+                    var tick = pos.TickAt(f * (double)PlaybackStepMs);
+                    state[f] = spans.Any(s => s.Contains(tick)) ? PlaybackTrack.IsAlive
+                        : tick < first.FirstTick || (tick > final.LastTick && !final.EndsInDeath) ? PlaybackTrack.NotInMatch
+                        : PlaybackTrack.IsDead;
+                }
+            }
+            else Array.Fill(state, PlaybackTrack.Unknown);
             foreach (var slot in slots)
             {
                 var t = tracks[slot];
@@ -326,11 +421,12 @@ public sealed record MatchTimeline(
                     if (i < 0) continue;
                     var c = cell(t.Points[i].Position);
                     (x10[f], y10[f]) = ((int)Math.Round(c.X * 10), (int)Math.Round(c.Y * 10));
+                    state[f] = PlaybackTrack.IsAlive;
                     if (slotAims is not null && AimAt(slotAims, tick) is { } a && pos.TickMs[tick] - pos.TickMs[a.Tick] <= AimMaxAgeMs)
                         yaw[f] = (int)Math.Round(a.Aim.YawDegrees) % 360;
                 }
             }
-            result.Add(new PlaybackTrack(player, x10, y10, yaw));
+            result.Add(new PlaybackTrack(player, x10, y10, yaw, state));
         }
         return new Playback(PlaybackStepMs, frames, result);
     }

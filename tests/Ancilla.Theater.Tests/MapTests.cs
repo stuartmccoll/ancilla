@@ -91,7 +91,7 @@ public class PlaybackTests
         var tickMs = Enumerable.Range(0, 20).Select(i => i * 100.0).ToList();
         var life = new BipedTrack(600, Enumerable.Range(2, 8).Select(t => (t, new FilmPosition(t, 0, 0))).ToList());
         var aims = new Dictionary<int, List<(int Tick, Aim Aim)>> { [600] = [(2, new Aim(1024, 2048))] };   // 90°
-        var pos = new FilmPositions(tickMs, [], [], []);
+        var pos = new FilmPositions(tickMs, [], [], [], []);
 
         var pb = MatchTimeline.BuildPlayback(new() { [3] = [600] }, new() { [600] = life }, aims, pos, 1_900, p => new MapPoint(p.X, 5));
 
@@ -103,5 +103,28 @@ public class PlaybackTests
         Assert.Equal([-1, 50, 50, 50, -1], track.Y10[..5]);
         Assert.Equal([-1, 90, 90, 90, -1], track.Yaw[..5]);
         Assert.Equal(-1, track.X10[^1]);
+        Assert.Equal([-1, 1, 1, 1, -1], track.Alive[..5]);   // no per-player list given: alive only where placed
+    }
+
+    [Fact]
+    public void The_per_player_list_says_when_each_player_is_alive_where_no_position_does()
+    {
+        var tickMs = Enumerable.Range(0, 20).Select(i => i * 100.0).ToList();
+        var life = new BipedTrack(600, Enumerable.Range(2, 8).Select(t => (t, new FilmPosition(t, 0, 0))).ToList());
+        var pos = new FilmPositions(tickMs, [], [], [], []);
+        // Player 3 is listed for ticks 2–5 and 12–13 (dying at 5); their track runs to tick 9, and a
+        // position counts as alive. Player 4 is listed for ticks 0–19 but has no linked life: alive, never placed.
+        AliveSpan[] alive = [new(3, 2, 5, EndsInDeath: true), new(3, 12, 13), new(4, 0, 19)];
+
+        var pb = MatchTimeline.BuildPlayback(new() { [3] = [600] }, new() { [600] = life }, [], pos, 1_900, p => new MapPoint(p.X, 5), alive);
+
+        Assert.Equal([3, 4], pb.Tracks.Select(t => t.Player));
+        var (three, four) = (pb.Tracks[0], pb.Tracks[1]);
+        // Frames at 0, 250, 500, 750, 1000, 1250, 1500, 1750 ms are ticks 0, 2, 5, 7, 10, 12, 15, 17:
+        // not yet in, alive, alive, placed, dead, alive again, then gone with no death (left the match).
+        Assert.Equal([2, 1, 1, 1, 0, 1, 2, 2], three.Alive);
+        Assert.Equal([-1, 20, 50, 70, -1], three.X10[..5]);
+        Assert.All(four.Alive, a => Assert.Equal(PlaybackTrack.IsAlive, a));
+        Assert.All(four.X10, x => Assert.Equal(-1, x));
     }
 }

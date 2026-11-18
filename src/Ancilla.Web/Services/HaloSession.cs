@@ -417,6 +417,8 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         {
             var raw = await Client.GetFilmManifestJsonAsync(matchId);
             var manifest = FilmSource.ParseManifest(raw);
+            // Without a summary there's no timeline, so don't download the rest of the film.
+            if (!manifest.CustomData.HasSummary) throw new UnfinishedFilmException();
             films.SaveManifest(matchId, raw);
             films.SaveScoreboard(matchId, board);
             var source = new FilmSource(httpFactory.CreateClient());

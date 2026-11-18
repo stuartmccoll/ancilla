@@ -72,8 +72,8 @@
                     Tokens expire after a few hours anyway.
                 </li>
                 <li>
-                    <strong>Career snapshots</strong> (your career XP and matches played, with a timestamp) are saved each
-                    time your progress loads, to power the XP-per-match rate and the Hero forecast. They're stored on this
+                    <strong>Progress snapshots</strong> (your career XP, matches played and your active pass's XP, with a
+                    timestamp) are saved each time your progress loads, to power the XP-per-match rates and the Hero forecast. They're stored on this
                     machine at <code class="path">@Snapshots.DisplayPath</code>.
                 </li>
                 <li>
@@ -111,7 +111,7 @@
                     service record minus your Firefight record. Counts subtract exactly. Accuracy and average KDA are
                     recalculated from what's left. Best killing spree can't be split, so it's the overall figure.
                 </dd>
-                <dt>XP per match</dt>
+                <dt>Career XP per match</dt>
                 <dd>
                     The services don't report XP per game, so it's measured: the career XP gained between two snapshots,
                     divided by the matches played in between. On the Progress page you choose what to average over, such as
@@ -119,8 +119,18 @@
                     starts at the nearest snapshot, and needs at least 5 matches since it. Without enough history, your
                     lifetime average is used, which is only a rough guide.
                 </dd>
+                <dt>Pass XP per match</dt>
+                <dd>
+                    Measured the same way, from the active pass's XP saved in each snapshot, over the same window. Only
+                    snapshots taken while that pass was active count, and it needs 5 matches since the first one. Career XP
+                    comes in several times faster than pass XP, so the career figure isn't used for passes.
+                </dd>
                 <dt>Matches to go</dt>
-                <dd>XP still needed, divided by XP per match. Only the active pass earns XP, so passes are finished one after another.</dd>
+                <dd>
+                    XP still needed, divided by XP per match: career XP per match for Hero, pass XP per match for passes.
+                    Only the active pass earns XP, so passes are finished one after another. Until pass XP per match has
+                    been measured, passes show no figure.
+                </dd>
                 <dt>Hero forecast</dt>
                 <dd>Your average career XP per day, extended in a straight line, counting days you didn't play. It's measured over the same window as XP per match. If that window is under a day long, or you've entered a figure yourself, it uses the last 60 days instead.</dd>
                 <dt>Expected kills</dt>
@@ -150,7 +160,24 @@
                 <dt>Medals on a kill</dt>
                 <dd>Each medal is matched to the same player's kill nearest in time, within half a second. Medals not tied to a kill (such as Steaktacular) show on their own line. Medals the app can't name yet are left out.</dd>
                 <dt>Objective</dt>
-                <dd>In Capture the Flag, a flag steal, capture, capture assist, return or flag carrier kill (and sometimes a pickup). The film doesn't say which. In Firefight, an award every 5 seconds for holding an objective.</dd>
+                <dd>In Firefight, an award every 5 seconds for holding an objective. In Capture the Flag, see flag actions.</dd>
+                <dt>Flag actions</dt>
+                <dd>
+                    The film records when a player's flag slot fills or empties, and an objective award for most flag actions,
+                    but not which action it was. Ancilla follows each team's flag (at its base, carried or dropped) to tell
+                    them apart: picking it up from its base is taking it, picking it up where it fell is picking up the dropped
+                    flag, emptying the slot with an award is a capture and without one a drop, an award for killing the carrier
+                    is stopping them, and an award while your team's flag is dropped is a return. A dropped flag nobody touches
+                    is assumed to go home after 15 seconds. Checked against the scoreboard, captures, assists and returns almost
+                    always match, and steals, pick-ups and carrier kills are within one or two in a match.
+                </dd>
+                <dt>Picked up a weapon</dt>
+                <dd>
+                    The film doesn't record a weapon disappearing when someone picks it up, but it does record the
+                    player's weapon slot changing. Usually the weapon they gave up drops at their feet at the same moment.
+                    Pickups during lives the film couldn't link to a player aren't shown, and which weapon it was isn't
+                    known yet.
+                </dd>
                 <dt>Best streak</dt>
                 <dd>Most kills in one life. It matches the scoreboard's best killing spree.</dd>
                 <dt>Traded</dt>
@@ -201,10 +228,18 @@
                     link to them. Kills flash for a moment where the victim died. It never plays on its own, and with
                     reduced motion turned on in your system settings it leaves out the trails and the fading.
                 </dd>
+                <dt>Alive, dead or not in the match</dt>
+                <dd>
+                    The film lists the players who are alive in every packet, so the list under the animation can say who's
+                    dead even when there's no position to show. A player on the map counts as alive. "Alive, position
+                    unknown" is a player the film lists but doesn't place (also everyone during the intro, before anyone
+                    moves). "Not in the match" is before a player first appears, or after they leave. The list loses a
+                    player now and then, so the two disagree for a few percent of the time.
+                </dd>
                 <dt>Objective events on the map</dt>
                 <dd>Where the player was at each objective event.</dd>
                 <dt>Kill distance</dt>
-                <dd>The median distance between a player and their victim at the moment of the kill, across the floor, in the film's own units. Compare it between players in a match, not with real-world distances.</dd>
+                <dd>The median distance between a player and their victim at the moment of the kill, across the floor, in the film's own units, whose size differs from map to map. Compare it between players in a match, not between maps or with real-world distances.</dd>
             </dl>
         </section>
 

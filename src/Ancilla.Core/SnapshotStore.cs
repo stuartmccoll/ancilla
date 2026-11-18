@@ -68,7 +68,8 @@ public sealed class SnapshotStore(string path)
     {
         var all = (await LoadAsync(ct)).ToList();
         var last = all.LastOrDefault();
-        if (last is null || last.MatchesCompleted != snapshot.MatchesCompleted || last.CareerXpEarned != snapshot.CareerXpEarned)
+        if (last is null || last.MatchesCompleted != snapshot.MatchesCompleted || last.CareerXpEarned != snapshot.CareerXpEarned
+            || last.ActivePass != snapshot.ActivePass || last.ActivePassXpEarned != snapshot.ActivePassXpEarned)
         {
             all.Add(snapshot);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

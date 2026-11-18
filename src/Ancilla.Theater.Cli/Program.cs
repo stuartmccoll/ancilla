@@ -23,6 +23,7 @@ try
         "timeline" => Timeline.Run(cache, ResolveMatch(rest.FirstOrDefault()), showNames, !args.Contains("--no-feed"), Console.Out),
         "track" => Track(ResolveMatch(rest.FirstOrDefault())),
         "rounds" => RoundsFired(ResolveMatch(rest.FirstOrDefault())),
+        "floor" => await FloorAsync(ResolveMatch(rest.FirstOrDefault())),
         "dump" => Dump(ResolveMatch(rest.FirstOrDefault()), rest.Length > 1 ? ParseNumber(rest[1], "chunk index") : 0),
         _ => Help(),
     };
@@ -61,6 +62,7 @@ int Help()
                                 --show-names   label players with gamertags instead of T0 P1
                                 --no-feed      leave out the kill feed
         Ancilla.Theater track [matchId]        biped positions as CSV (tick, ms, slot, x, y, z), for controlled tests
+        Ancilla.Theater floor [matchId]        fit the map's navmesh to the film (scale, origin); fetching it needs HALO_SPARTAN_TOKEN
         Ancilla.Theater dump [matchId] [index] write chunk <index> decompressed, for hex tools
         """);
     Console.WriteLine($"Cache: {cache.DisplayRoot}");
@@ -238,7 +240,7 @@ void InspectReplication(Action<bool, string> check, List<SlotTable> tables, List
 
 // Checks on biped records read past their position (EntityRecords.FindBipedUpdates): the command
 // tick, aim and ammo. Only records whose command tick landed are used.
-void InspectBipedUpdates(Action<bool, string> check, List<(int Tick, BipedUpdate Update)> updates)
+void InspectBipedUpdates(Action<bool, string> check, List<(int Tick, BipedUpdate Update)> updates, IReadOnlyList<double> tickMs, PositionLayout layout)
 {
     Console.WriteLine("\nBiped components (type-0 records past the position)");
     var withTick = updates.Where(u => u.Update.CommandTick is not null).ToList();
@@ -252,6 +254,57 @@ void InspectBipedUpdates(Action<bool, string> check, List<(int Tick, BipedUpdate
     // 98.8–99.9% per film; the rest are chance matches of a biped header.
     check(top * 50 >= withTick.Count * 49,
         $"command ticks are the packet count plus the film's offset (its four most common, {string.Join(", ", offsets.Take(4).Select(x => x.Key))}): {top:N0} of {withTick.Count:N0}");
+
+    // (a2) Velocity matches the change in position, horizontally (film Z has its own scale, about 2.8
+    // times X and Y, while velocity has one scale on all three axes). Windows where the decoded
+    // velocity itself holds steady (direction within 5°, speed within 5%, 4 records either side) are
+    // straight runs, so the chord between their ends is the path.
+    var dirErrors = new List<double>(); var speedRatios = new List<double>();
+    double Angle(BipedVelocity a, BipedVelocity b) =>
+        Math.Acos(Math.Clamp((a.X * b.X + a.Y * b.Y) / (a.HorizontalSpeed * b.HorizontalSpeed), -1, 1)) * 180 / Math.PI;
+    foreach (var g in updates.Where(u => u.Update.Position is not null && u.Update.Velocity is not null).GroupBy(u => u.Update.Slot))
+    {
+        var l = g.ToList();
+        for (var i = 4; i + 4 < l.Count; i++)
+        {
+            var (a, c) = (l[i - 4], l[i + 4]);
+            var (va, v, vc) = (a.Update.Velocity!.Value, l[i].Update.Velocity!.Value, c.Update.Velocity!.Value);
+            var dt = (tickMs[c.Tick] - tickMs[a.Tick]) / 1000;
+            if (v.HorizontalSpeed < 10 || va.HorizontalSpeed < 10 || vc.HorizontalSpeed < 10 || dt <= 0 || dt > 0.25 || Angle(va, v) > 5 || Angle(vc, v) > 5
+                || Math.Abs(va.HorizontalSpeed - v.HorizontalSpeed) > 0.05 * v.HorizontalSpeed || Math.Abs(vc.HorizontalSpeed - v.HorizontalSpeed) > 0.05 * v.HorizontalSpeed) continue;
+            var (p, q) = (a.Update.Position!.Value, c.Update.Position!.Value);
+            var moved = new BipedVelocity((q.X - p.X) / dt, (q.Y - p.Y) / dt, (q.Z - p.Z) / dt);
+            if (moved.HorizontalSpeed < 10) continue;
+            dirErrors.Add(Angle(moved, v)); speedRatios.Add(moved.HorizontalSpeed / v.HorizontalSpeed);
+        }
+    }
+    if (dirErrors.Count >= 100)
+    {
+        dirErrors.Sort(); speedRatios.Sort();
+        double dir = dirErrors[dirErrors.Count / 2], ratio = speedRatios[speedRatios.Count / 2];
+        // See FORMAT.md, "Velocity"; set from the 11 PvP films (2026-11-18). With another position
+        // layout the film units differ (1.33 on the 21/18/16 map), so only the direction is checked.
+        var what = $"velocity matches the change in position on {dirErrors.Count:N0} steady runs: " +
+            $"median horizontal direction error {dir:F1}°, median horizontal speed moved ÷ velocity {ratio:F2}";
+        if (layout == PositionLayout.Standard) check(dir <= 5 && ratio is >= 0.9 and <= 1.1, what);
+        else check(dir <= 5, what + " (other position layout: speed not checked)");
+    }
+
+    // (a3) A velocity of just 01 means standing still: by the slot's next record, 1–2 ticks later, the
+    // biped has moved at most 1 film unit a tick.
+    int stillPairs = 0, stayed = 0;
+    foreach (var g in updates.Where(u => u.Update.Position is not null).GroupBy(u => u.Update.Slot))
+        foreach (var (a, b) in g.Zip(g.Skip(1)))
+        {
+            if (a.Update.Velocity is not { Speed: 0 } || b.Tick - a.Tick is < 1 or > 2) continue;
+            stillPairs++;
+            var (p, q) = (a.Update.Position!.Value, b.Update.Position!.Value);
+            var d = Math.Sqrt((double)(q.X - p.X) * (q.X - p.X) + (double)(q.Y - p.Y) * (q.Y - p.Y) + (double)(q.Z - p.Z) * (q.Z - p.Z));
+            if (d <= b.Tick - a.Tick) stayed++;
+        }
+    // 90–98% per film on the 12 PvP films and Firefight (2026-11-18).
+    if (stillPairs < 50) Console.WriteLine($"  [--] a biped whose velocity says it's standing still stays put: {stayed} of {stillPairs}; too few to check");
+    else check(stayed * 10 >= stillPairs * 8, $"a biped whose velocity says it's standing still stays put (≤ 1 film unit a tick): {stayed:N0} of {stillPairs:N0}");
 
     // (b) Pitch stays within 90° of level.
     var aims = updates.Where(u => u.Update.Aim is not null).ToList();
@@ -287,10 +340,94 @@ void InspectBipedUpdates(Action<bool, string> check, List<(int Tick, BipedUpdate
         $"ammo counts drop one round at a time: {oneRound:N0} of {down:N0} drops ({up:N0} rises: reloads and pickups)");
 }
 
+// Weapon pickups (FORMAT.md, "Weapon pickups"): a change in one of a biped's weapon slots should
+// come with a swapped-out weapon dropped at the player, and a change in the flag slot with an
+// objective event; both far more often than 4 s earlier. PvP only, like the positions.
+void InspectPickups(Action<bool, string> check, List<SummaryEvent> events, List<(int Tick, BipedUpdate Update)> updates,
+    List<(int Tick, EntityPosition Record)> bipeds, List<(int Tick, EntityPosition Record)> objects, IReadOnlyList<double> tickMs, bool ctf)
+{
+    Console.WriteLine("\nWeapon pickups (inventory changes)");
+    var tracks = Lives.Tracks(bipeds);
+    var changes = Inventory.Changes(updates).Where(c => tracks.ContainsKey(c.Slot)).ToList();
+    int TickOf(double ms) => (tickMs is List<double> l ? l.BinarySearch(ms) : -1) is var b && b >= 0 ? b : Math.Max(0, ~b - 1);
+    var deathTicks = events.Where(e => e.Kind == SummaryEventKind.Death).Select(e => TickOf(e.TimeMs)).ToList();
+    var objectiveMs = events.Where(e => e.Kind == SummaryEventKind.Objective).Select(e => (double)e.TimeMs).ToList();
+    var objectsFirst = objects.GroupBy(o => o.Record.Slot).Select(g => g.First()).ToList();
+    FilmPosition? At(int slot, int tick) => tracks[slot] is var t && tick >= t.FirstTick && tick <= t.LastTick
+        ? t.Points[Math.Max(0, t.Points.FindLastIndex(p => p.Tick <= tick))].Position : null;
+    const int Earlier = 240;   // 4 s
+    var weapons = changes.Where(c => c.IsWeapon && !c.Emptied && c.Tick >= Earlier && At(c.Slot, c.Tick) is not null && At(c.Slot, c.Tick - Earlier) is not null).ToList();
+    var swaps = weapons.Count(c => Inventory.SwapDrop(At(c.Slot, c.Tick)!.Value, c.Tick, objectsFirst, deathTicks));
+    var swapsEarlier = weapons.Count(c => Inventory.SwapDrop(At(c.Slot, c.Tick - Earlier)!.Value, c.Tick - Earlier, objectsFirst, deathTicks));
+    Console.WriteLine($"  {changes.Count} inventory changes: {changes.Count(c => c.IsWeapon)} in weapon slots, {changes.Count(c => c.InventorySlot == 2)} in the flag slot");
+    // 43–67% against 0–7% in the films with 20 or more (2026-11-18); smaller counts are too noisy to judge.
+    if (weapons.Count < 20) Console.WriteLine($"  [--] a weapon-slot change drops the weapon it replaced at the player: {swaps} of {weapons.Count} (4 s earlier: {swapsEarlier}); too few to check");
+    else
+        check(swaps >= 4 * Math.Max(1, swapsEarlier) && swaps * 4 >= weapons.Count,
+            $"a weapon-slot change drops the weapon it replaced at the player: {swaps} of {weapons.Count} (4 s earlier: {swapsEarlier})");
+    // Weapon IDs: a misread would be a random 32-bit value, so IDs read where they start are ones seen in other films.
+    var withId = changes.Where(c => c.IsWeapon && !c.Emptied && c.Item is not null).ToList();
+    var known = withId.Count(c => Inventory.KnownWeapons.Contains(c.Item!.Value));
+    var line = $"weapon-slot changes name a weapon seen in other films: {known} of {withId.Count} with an ID " +
+               $"({changes.Count(c => c.IsWeapon)} changes, {withId.Select(c => c.Item).Distinct().Count()} different IDs)";
+    // 85–100% per film (2026-11-18). The list comes from these films, but each ID in it was read in at least two.
+    if (withId.Count < 10) Console.WriteLine($"  [--] {line}; too few to check");
+    else check(known * 10 >= withId.Count * 8, line);
+    var flagIds = changes.Where(c => c.InventorySlot == 2 && c.Item is not null).ToList();
+    if (flagIds.Count > 0) Console.WriteLine($"  flag-slot changes with the flag's ID: {flagIds.Count(c => c.Item == Inventory.FlagId)} of {flagIds.Count} with an ID");
+    var flags = changes.Where(c => c.InventorySlot == 2 && c.Tick >= Earlier).ToList();
+    int Objective(int tick) => objectiveMs.Any(o => Math.Abs(o - tickMs[tick]) <= 1000) ? 1 : 0;
+    var withObjective = flags.Sum(c => Objective(c.Tick)); var earlier = flags.Sum(c => Objective(c.Tick - Earlier));
+    // Information only: drops have no objective event. The flag actions are checked against the
+    // scoreboard below (InspectFlags), which is far stronger.
+    if (ctf) Console.WriteLine($"  [--] a flag-slot change comes with an objective event within 1 s: {withObjective} of {flags.Count} (4 s earlier: {earlier})");
+}
+
+// Flag actions (FlagEvents, as the match timeline labels them) against the scoreboard's per-player
+// CTF stats. Players are compared by XUID; nothing is printed per player.
+void InspectFlags(Action<bool, string> check, string matchId, MatchStats board)
+{
+    Console.WriteLine("\nFlag actions (flag slot, deaths, kills and objective events)");
+    var t = MatchTimeline.Build(cache, matchId, board);
+    int Stat(MatchPlayer r, string name) =>
+        r.Stats?.ModeStats.TryGetValue("CaptureTheFlagStats", out var c) == true && c.TryGetProperty(name, out var v) ? v.GetInt32() : 0;
+    var rows = t.Players.Select(p => board.Players.FirstOrDefault(r => r.Xuid == p.Xuid)).ToList();
+    (FlagAction Action, string Stat)[] pairs = [(FlagAction.Steal, "FlagSteals"), (FlagAction.Grab, "FlagGrabs"), (FlagAction.Capture, "FlagCaptures"),
+        (FlagAction.CaptureAssist, "FlagCaptureAssists"), (FlagAction.Return, "FlagReturns"), (FlagAction.CarrierKill, "FlagCarriersKilled")];
+    var results = new Dictionary<FlagAction, (int Found, int Actual, int Exact, int Players)>();
+    foreach (var (action, stat) in pairs)
+    {
+        int found = 0, actual = 0, exact = 0, n = 0;
+        for (var i = 0; i < t.Players.Count; i++)
+        {
+            if (rows[i] is not { } row) continue;
+            var mine = t.Feed.Count(f => f.Player == i && f.Flag == action);
+            var theirs = Stat(row, stat);
+            (found, actual, n) = (found + mine, actual + theirs, n + 1);
+            if (mine == theirs) exact++;
+        }
+        results[action] = (found, actual, exact, n);
+        Console.WriteLine($"  {action,-13} {found,3} found, {actual,3} on the scoreboard; {exact} of {n} players exact");
+    }
+    Console.WriteLine($"  drops (not on the scoreboard): {t.Feed.Count(f => f.Flag == FlagAction.Drop)}");
+    // Set just above the worst seen in 13 CTF films (2026-11-18): captures off by at most 1 in total
+    // and 1 player; the rest by at most 2 in total and 3 players.
+    var cap = results[FlagAction.Capture];
+    check(Math.Abs(cap.Found - cap.Actual) <= 1 && cap.Players - cap.Exact <= 1,
+        $"flag captures match the scoreboard: {cap.Found} found, {cap.Actual} on it; {cap.Exact} of {cap.Players} players exact");
+    foreach (var a in new[] { FlagAction.Steal, FlagAction.Grab, FlagAction.Return, FlagAction.CarrierKill })
+    {
+        var r = results[a];
+        check(Math.Abs(r.Found - r.Actual) <= Math.Max(2, r.Actual / 5) && r.Players - r.Exact <= 3,
+            $"flag {a switch { FlagAction.Steal => "steals", FlagAction.Grab => "grabs", FlagAction.Return => "returns", _ => "carrier kills" }} match the scoreboard to within 2: " +
+            $"{r.Found} found, {r.Actual} on it; {r.Exact} of {r.Players} players exact");
+    }
+}
+
 // Checks that type-0 biped records carry player positions, against the summary's deaths. PvP only:
 // in Firefight the AI share the biped slots and AI deaths aren't in the summary.
 void InspectPositions(Action<bool, string> check, List<SummaryEvent> events, IReadOnlyList<int> teamOf, IReadOnlyList<int> spawnsOf, List<(double Ms, int Bytes)> tickData,
-    List<(int Tick, EntityPosition Record)> bipeds, List<(int Tick, EntityPosition Record)> objects)
+    List<(int Tick, EntityPosition Record)> bipeds, List<(int Tick, EntityPosition Record)> objects, List<int[]?> playerLists, bool ctf)
 {
     Console.WriteLine("\nPositions (type-0 entity records)");
     var deaths = events.Where(e => e.Kind == SummaryEventKind.Death).ToList();
@@ -328,6 +465,42 @@ void InspectPositions(Action<bool, string> check, List<SummaryEvent> events, IRe
     // Information, not a check: 85–100% per film, lower when several players respawn together.
     Console.WriteLine($"  [--] the new slot nearest 8 s after a death is the one the player's next death ends: {agree} of {pairs}");
     var lives = Lives.Chain(deaths.Select(d => d.Player).ToList(), matched, respawns, tracks);
+    var chainedCount = lives.Values.Sum(l => l.Count);
+
+    // The per-player list at the end of each packet: parsed, and a player's entry gone at each death.
+    // Thresholds sit just under the lowest seen in the PvP films (88% parsed, 84% of deaths; 2026-11-18).
+    var parsed = playerLists.Count(l => l is not null);
+    check(parsed * 100 >= playerLists.Count * 85, $"the per-player list parses in {parsed:N0} of {playerLists.Count:N0} type-0 packets");
+    var alive = PlayerList.Spans(PlayerList.Presence(playerLists), deaths.Select((d, i) => (deathTick[i], d.Player)).ToList());
+    var endsSpan = deaths.Select((d, i) => alive.Any(s => s.Player == d.Player && Math.Abs(s.LastTick - deathTick[i]) <= PlayerList.DeathWindowTicks)).Count(x => x);
+    check(endsSpan * 100 >= deaths.Count * 80, $"a death ends one of that player's alive spans in the per-player list within 0.5 s: {endsSpan} of {deaths.Count}");
+    // Lives the chaining missed, linked from the list's alive spans. A linked life ending in a death
+    // should be the track that death ends.
+    var before = lives.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+    var filled = Lives.FillFromSpans(lives, alive, tracks);
+    var endedByDeath = 0; var endingInDeath = 0;
+    foreach (var (player, slots) in lives)
+        foreach (var slot in slots.Except(before.GetValueOrDefault(player) ?? []))
+        {
+            var span = alive.FirstOrDefault(s => s.Player == player && Math.Abs(tracks[slot].FirstTick - s.FirstTick) <= 60);
+            if (span is not { EndsInDeath: true }) continue;
+            endingInDeath++;
+            if (Math.Abs(tracks[slot].LastTick - span.LastTick) <= 60) endedByDeath++;
+        }
+    Console.WriteLine($"  [--] lives linked from the list's alive spans: {filled} (chaining found {chainedCount}); " +
+                      $"of those ending in a death, {endedByDeath} of {endingInDeath} end within 1 s of it");
+    // Where the two disagree: a chained life's positions while the list says that player is dead.
+    long placed = 0, deadButPlaced = 0;
+    foreach (var (player, slots) in lives)
+        foreach (var slot in slots)
+            foreach (var (tick, _) in tracks[slot].Points)
+            {
+                placed++;
+                var mine = alive.Where(s => s.Player == player).ToList();
+                if (mine.Count > 0 && !mine.Any(s => s.Contains(tick))) deadButPlaced++;
+            }
+    Console.WriteLine($"  [--] chained lives' positions while the list says the player is dead: {deadButPlaced:N0} of {placed:N0}; " +
+                      $"players with alive spans {alive.Select(s => s.Player).Distinct().Count()} of {spawnsOf.Count}");
     var livesMatchSpawns = Enumerable.Range(0, spawnsOf.Count).Count(p => lives.GetValueOrDefault(p)?.Count == spawnsOf[p]);
     // Lives without a death at either end (a player with no deaths, a quitter's last life) can't be
     // chained, so a player can be short; never over.
@@ -367,7 +540,9 @@ void InspectPositions(Action<bool, string> check, List<SummaryEvent> events, IRe
     var c1 = FirstAt(firstEight.MaxBy(s => FirstAt(s).HorizontalDistance(c0)));
     int BaseOf(int s) => FirstAt(s).HorizontalDistance(c0) <= FirstAt(s).HorizontalDistance(c1) ? 0 : 1;
     var byTeam = matched.GroupBy(m => teamOf[deaths[m.Key].Player]).Select(g => g.CountBy(m => BaseOf(m.Value)).Max(x => x.Value)).Sum();
-    check(byTeam * 10 >= matched.Count * 9, $"each team's lives start at one base: {byTeam} of {matched.Count} matched slots");
+    // CTF only: in Slayer players spawn all over the map (66 of 92 at "one base" in one film).
+    if (ctf) check(byTeam * 10 >= matched.Count * 9, $"each team's lives start at one base: {byTeam} of {matched.Count} matched slots");
+    else Console.WriteLine($"  [--] each team's lives start at one base: {byTeam} of {matched.Count} matched slots; not checked outside CTF");
 }
 
 string ResolveMatch(string? matchId) =>
@@ -377,9 +552,50 @@ string ResolveMatch(string? matchId) =>
 
 // Every biped candidate in a slot seen at least 30 times, unfiltered by coordinate range: a solo
 // custom game may drop no objects, which is where FilterBipeds takes its range from.
+// Research: fits the map's navmesh to the film's biped positions and prints the placement (scale,
+// origin, share of positions on the mesh). The navmesh is cached next to the film as navmesh.blob;
+// fetching it needs HALO_SPARTAN_TOKEN for the map's metadata (the blob itself is public).
+async Task<int> FloorAsync(string matchId)
+{
+    var path = Path.Combine(cache.MatchDir(matchId), UgcAsset.NavMeshFile);
+    if (!File.Exists(path))
+    {
+        var token = Environment.GetEnvironmentVariable("HALO_SPARTAN_TOKEN");
+        if (string.IsNullOrWhiteSpace(token)) { Console.Error.WriteLine("No cached navmesh: set HALO_SPARTAN_TOKEN to fetch it."); return 1; }
+        var board = cache.LoadScoreboard(matchId) ?? throw new InvalidDataException("No scoreboard cached for this match.");
+        using var http = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromMinutes(2) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Ancilla-Theater/0.1");
+        var asset = board.MatchInfo.MapVariant ?? throw new InvalidDataException("The scoreboard names no map.");
+        var map = await new HaloWaypointClient(http, token).GetMapAsync(asset);
+        if (map.BlobFileUri(UgcAsset.NavMeshFile) is not { } uri) { Console.WriteLine("This map has no navmesh (343-built maps don't)."); return 0; }
+        // A separate client without the token's header: the blob host is public.
+        using var plain = new HttpClient { Timeout = TimeSpan.FromMinutes(2), MaxResponseContentBufferSize = 32 << 20 };
+        await File.WriteAllBytesAsync(path, await plain.GetByteArrayAsync(uri));
+    }
+    var mesh = NavMesh.Parse(await File.ReadAllBytesAsync(path));
+    var pos = FilmPositions.Load(cache, matchId);
+    var positions = pos.Bipeds.Select(b => b.Record.Position).ToList();
+    var l = pos.Layout ?? PositionLayout.Standard;
+    Console.WriteLine($"Position layout {l.XBits}/{l.YBits}/{l.ZBits}{(pos.LayoutDetected ? "" : " (assumed)")}, {positions.Count:N0} biped positions, {mesh.Faces.Count:N0} navmesh faces");
+    if (FloorPlan.Fit(mesh, positions, l) is not { } fit) { Console.WriteLine("No fit."); return 1; }
+    Console.WriteLine($"Best fit: {fit.Scale:F1} film units per world unit, origin ({fit.OriginX:F0}, {fit.OriginY:F0}), {fit.OnMesh:P1} of positions on the mesh");
+    return 0;
+}
+
+// The film's position layout (PositionLayout.Detect), or the standard one when it can't be detected.
+(PositionLayout Layout, bool Detected) LayoutOf(string matchId)
+{
+    var m = cache.LoadManifest(matchId);
+    var payloads = m.CustomData.Chunks.Where(c => c.ChunkType == 2).OrderBy(c => c.Index)
+        .SelectMany(c => PacketReader.Read(cache.LoadChunk(matchId, c), out _)).Where(p => p.Type == 0).Select(p => p.Payload).ToList();
+    var d = PositionLayout.Detect(payloads, why => Console.WriteLine($"  [--] position layout: {why}"));
+    return (d ?? PositionLayout.Standard, d is not null);
+}
+
 int Track(string matchId)
 {
     var m = cache.LoadManifest(matchId);
+    var (trackLayout, _) = LayoutOf(matchId);
     var ticks = new List<double>();
     var bipeds = new List<(int Tick, EntityPosition Record)>();
     ulong? firstUs = null;
@@ -388,7 +604,7 @@ int Track(string matchId)
         {
             firstUs ??= p.TimestampUs;
             if (p.Type != 0) continue;
-            bipeds.AddRange(EntityRecords.Find(p.Payload.Span).Bipeds.Select(r => (ticks.Count, r)));
+            bipeds.AddRange(EntityRecords.Find(p.Payload.Span, trackLayout).Bipeds.Select(r => (ticks.Count, r)));
             ticks.Add((p.TimestampUs - firstUs.Value) / 1000.0);
         }
     var perSlot = bipeds.CountBy(b => b.Record.Slot).ToDictionary();
@@ -424,7 +640,7 @@ int RoundsFired(string matchId)
         foreach (var p in PacketReader.Read(cache.LoadChunk(matchId, c), out _))
         {
             if (p.Type != 0) continue;
-            foreach (var u in EntityRecords.FindBipedUpdates(p.Payload.Span))
+            foreach (var u in EntityRecords.FindBipedUpdates(p.Payload.Span, pos.Layout))
                 if (u.Rounds is { } r && (u.Checked || u.Components[0] == u.AmmoComponent))
                     (counts.TryGetValue((u.Slot, u.AmmoComponent!.Value), out var l) ? l : counts[(u.Slot, u.AmmoComponent!.Value)] = []).Add((tick, r, u.Checked));
             tick++;
@@ -497,6 +713,9 @@ int Inspect(string matchId)
     Console.WriteLine($"Match {matchId}");
     Console.WriteLine($"  film v{m.CustomData.FilmMajorVersion}, {chunks.Count} chunks, length {TimeSpan.FromMilliseconds(m.CustomData.FilmLength):mm\\:ss\\.fff}, " +
                       $"types {string.Join(", ", chunks.GroupBy(c => c.ChunkType).OrderBy(g => g.Key).Select(g => $"{g.Key}×{g.Count()}"))}");
+    var (layout, layoutDetected) = LayoutOf(matchId);
+    Console.WriteLine($"  position layout: X {layout.XBits}, Y {layout.YBits}, Z {layout.ZBits} bits" +
+                      (layoutDetected ? "" : " (not detected: too few biped records or no clear answer; assuming the standard one)"));
 
     // ---- Packet layer (type 2 and 3 chunks) ----
     Console.WriteLine("\nPacket layer");
@@ -512,6 +731,7 @@ int Inspect(string matchId)
     var bipedCandidates = new List<(int Tick, EntityPosition Record)>();
     var objectCandidates = new List<(int Tick, EntityPosition Record)>();
     var checkedUpdates = new List<(int Tick, BipedUpdate Update)>();   // biped records whose command tick landed
+    var playerLists = new List<int[]?>();                              // each type-0 packet's per-player list
     foreach (var c in chunks.Where(c => c.ChunkType != 1).OrderBy(c => c.Index))
     {
         var data = cache.LoadChunk(matchId, c);
@@ -538,10 +758,11 @@ int Inspect(string matchId)
                 switch (p.Type)
                 {
                     case 0:
-                        var (found, objects) = EntityRecords.Find(span1);
+                        var (found, objects) = EntityRecords.Find(span1, layout);
                         bipedCandidates.AddRange(found.Select(r => (tickData.Count, r)));
                         objectCandidates.AddRange(objects.Select(r => (tickData.Count, r)));
-                        checkedUpdates.AddRange(EntityRecords.FindBipedUpdates(span1).Where(u => u.Checked).Select(u => (tickData.Count, u)));
+                        checkedUpdates.AddRange(EntityRecords.FindBipedUpdates(span1, layout).Where(u => u.Checked).Select(u => (tickData.Count, u)));
+                        playerLists.Add(PlayerList.Parse(span1));
                         tickData.Add(((p.TimestampUs - firstStart.Value.Us) / 1000.0, p.Payload.Length));
                         break;
                     case 1:
@@ -739,7 +960,7 @@ int Inspect(string matchId)
         Check(crossTeam, "every victim is on the other team (unless the killer has betrayals)");
 
         // Objective events (code 5): in CTF, one per flag steal, capture, capture assist, return and
-        // carrier kill, plus some flag pickups; in Firefight, a 5-second award for holding an objective.
+        // carrier kill, plus some flag grabs; in Firefight, a 5-second award for holding an objective.
         var objectives = events.Where(e => e.Kind == SummaryEventKind.Objective).ToList();
         int Ctf(MatchPlayer pl, string stat) =>
             pl.Stats?.ModeStats.TryGetValue("CaptureTheFlagStats", out var ctf) == true && ctf.TryGetProperty(stat, out var v) ? v.GetInt32() : 0;
@@ -747,16 +968,24 @@ int Inspect(string matchId)
         {
             string[] counted = ["FlagSteals", "FlagCaptures", "FlagCaptureAssists", "FlagReturns", "FlagCarriersKilled"];
             var extras = Enumerable.Range(0, rows.Count).Select(p => Count(p, SummaryEventKind.Objective) - counted.Sum(s => Ctf(rows[p], s))).ToList();
-            Check(extras.All(x => x is 0 or 1) && Enumerable.Range(0, rows.Count).All(p => extras[p] == 0 || Ctf(rows[p], "FlagGrabs") > 0 && Ctf(rows[p], "FlagSecures") > 0),
-                $"each player's objective events = flag steals + captures + capture assists + returns + carrier kills, or 1 more for a player with grabs and secures (extras {string.Join(" ", extras)})");
+            // Some flag grabs log one too (18 of 30 in twelve CTF films), so a player can have up to their grabs more.
+            Check(Enumerable.Range(0, rows.Count).All(p => extras[p] >= 0 && extras[p] <= Ctf(rows[p], "FlagGrabs")),
+                $"each player's objective events = flag steals + captures + capture assists + returns + carrier kills, plus at most their flag grabs " +
+                $"(extras {string.Join(" ", extras)}; grabs {string.Join(" ", rows.Select(r => Ctf(r, "FlagGrabs")))})");
             // A carrier kill logs an objective event at the killer's own kill, at the same moment.
             var atOwnKill = Enumerable.Range(0, rows.Count).Select(p => objectives.Count(o => o.Player == p
                 && events.Any(k => k.Player == p && k.Kind == SummaryEventKind.PlayerKill && Math.Abs((long)k.TimeMs - o.TimeMs) <= 5))).ToList();
             Check(Enumerable.Range(0, rows.Count).All(p => atOwnKill[p] <= Ctf(rows[p], "FlagCarriersKilled")),
                 $"objective events at the player's own kill never exceed their flag carrier kills ({atOwnKill.Sum()} against {rows.Sum(r => Ctf(r, "FlagCarriersKilled"))})");
         }
-        Check(objectives.All(o => !events.Any(k => k.Kind == SummaryEventKind.PlayerKill && k.Player != o.Player && Math.Abs((long)k.TimeMs - o.TimeMs) <= 5)),
-            "an objective event never shares a moment (5 ms) with another player's kill");
+        // The objective player's own death doesn't count: a player can score one (a capture or return,
+        // probably) in the instant they're killed (1 of 50 in one film).
+        bool KillAt(SummaryEvent o, bool ofThem) => events.Any(k => k.Kind == SummaryEventKind.PlayerKill && k.Player != o.Player
+            && Math.Abs((long)k.TimeMs - o.TimeMs) <= 5 && (k.Victim == o.Player) == ofThem);
+        var sharing = objectives.Count(o => KillAt(o, false));
+        var atOwnDeath = objectives.Count(o => KillAt(o, true));
+        Check(sharing == 0, $"an objective event never shares a moment (5 ms) with another player's kill, other than of that player " +
+            $"({sharing} of {objectives.Count} do; {atOwnDeath} at the player's own death)");
         if (board.MatchInfo.GameVariantCategory == GameVariantFirefight && objectives.Count > 1)
         {
             // Firefight: bursts of 5-second awards, one burst per objective completed.
@@ -773,11 +1002,16 @@ int Inspect(string matchId)
 
     InspectReplication(Check, slotTables, events, board, humans.Count,
         (type6Ok, type12Ok, type8MaxCount), (tickMarkers, tickLayoutMisses, tickFollowedByType0, maxPresentSlots), tickData);
-    InspectBipedUpdates(Check, checkedUpdates);
+    InspectBipedUpdates(Check, checkedUpdates, tickData.Select(x => x.Ms).ToList(), layout);
+    var isCtf = board?.Players.Any(r => r.Stats?.ModeStats.ContainsKey("CaptureTheFlagStats") == true) == true;
     if (board is not null && board.MatchInfo.GameVariantCategory != GameVariantFirefight)
         InspectPositions(Check, events, filmPlayers.Select(x => x.Row.LastTeamId).ToList(),
             filmPlayers.Select(x => x.Row.Stats?.CoreStats.Spawns ?? 0).ToList(), tickData,
-            EntityRecords.FilterBipeds(bipedCandidates, objectCandidates), objectCandidates);
+            EntityRecords.FilterBipeds(bipedCandidates, objectCandidates), objectCandidates, playerLists, isCtf);
+    if (board is not null && board.MatchInfo.GameVariantCategory != GameVariantFirefight)
+        InspectPickups(Check, events, checkedUpdates, EntityRecords.FilterBipeds(bipedCandidates, objectCandidates), objectCandidates,
+            tickData.Select(x => x.Ms).ToList(), isCtf);
+    if (board is not null && isCtf) InspectFlags(Check, matchId, board);
 
     Console.WriteLine(failures == 0 ? "\nAll checks passed." : $"\n{failures} check(s) failed.");
     return failures == 0 ? 0 : 2;

@@ -38,6 +38,11 @@ progress { width: 100%; max-width: 24rem; }
 .player-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .75rem; }
 .player-controls .play { min-width: 5.5rem; }
 .player-controls .scrub { flex: 1 1 12rem; min-width: 8rem; accent-color: var(--accent); }
+.roster { list-style: none; margin: .75rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: .85rem; }
+.roster li { white-space: nowrap; }
+.roster .state { color: var(--muted); }
+.roster li[data-state="dead"], .roster li[data-state="out"] { color: var(--muted); }
+.roster li[data-state="dead"] .key, .roster li[data-state="out"] .key { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
 .player-controls .clock { font-variant-numeric: tabular-nums; font-size: .9rem; color: var(--muted); min-width: 6.5rem; }
 .key.ring { background: transparent; border: 2px solid var(--muted); box-sizing: border-box; }
 .key.diamond { border-radius: 1px; transform: rotate(45deg) scale(.85); }

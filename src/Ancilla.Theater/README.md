@@ -210,36 +210,48 @@ In order of value:
    and `inspect` checks them. Player positions are found: type 0 records are addressed by type 1
    slot and carry a component list (see FORMAT.md), and `inspect` checks them; `Lives` chains them
    into each player's lives, and `timeline` shows distances and a death map. **To do:**
-   - [x] **Per-player list decoded** (FORMAT.md, "Per-player list"): who is alive at every tick.
-     It showed the lives chaining isn't the gap: chained tracks already cover 91–99.6% of alive
-     time in most films. Not in the code yet; the animation can use it for alive and dead states.
-   - [ ] **Find the missing biped tracks.** Lives the chaining misses mostly have no decoded biped
-     records (two films cover only 65% and 77% of alive time). Look at what `EntityRecords.Find`
-     skips during those lives.
+   - [x] **Per-player list** (FORMAT.md, "Per-player list"): who is alive at every tick, in
+     `Format/PlayerList.cs` and checked by `inspect`. The timeline's animation uses it for each
+     player's alive, dead and not-in-the-match states.
+   - [x] **The "missing" biped tracks** weren't missing records: the low coverage counted the
+     intro as alive time, and what's left is an idle player, one biped that all but stops
+     updating, and tracks the chaining doesn't link (FORMAT.md, "Coverage").
+   - [ ] **Close the list's last gaps.** It still disagrees with biped tracks on 1–7% of positions,
+     probably another entry variant. It now links the lives the chaining misses where one track fits
+     (5 of 36); the other 31 have no biped records to link (FORMAT.md, "Linking lives from the list").
    - [x] **Aim (component 21), the command tick (25) and ammo counts (30/33/36/39)** are read by
      `EntityRecords.FindBipedUpdates`, and `inspect` checks them (FORMAT.md, "Biped component
      widths").
-   - [ ] **Decode velocity (component 1).** It's 31 bits after a position and another width
-     without one. Velocity against the change in position may give the coordinate scale.
+   - [x] **Velocity (component 1)** is decoded (`BipedVelocity`, checked by `inspect`): a cube-face
+     direction and a small-float speed, in half film units a second. It's stored in film units, so
+     it doesn't give the world scale, but it shows film Z is on its own scale, about 2.8 times X
+     and Y's. A velocity of just `01` (2 bits) means standing still.
+   - [x] **Weapon pickups** show in the picker's inventory, not as an object vanishing
+     (`Format/Inventory.cs`, FORMAT.md "Weapon pickups"). Each pickup has the weapon's ID, the
+     first 32 bits of its type-info (FORMAT.md, "Which weapon"). Next: name the IDs (a controlled
+     game picking up known weapons). The flag slot is decoded and flag actions are labelled in the
+     feed (`FlagEvents`, checked against the scoreboard; FORMAT.md "The flag slot").
    - [ ] **Count rounds fired** from the ammo counts and compare them with the scoreboard's shots
      fired. It matched exactly in a controlled custom game; matchmade films need the ammo
      component on its own (no command tick to check it) and the `[1]` kind handled.
+   - [x] **Position widths per map** (`PositionLayout.Detect`): 18/15/18 on most maps, 20/17/17 on
+     Bazaar, 21/18/16 on one Slayer map, read from each film's records. Next: where they come from,
+     and the Slayer map's scale (positions move 1.33× velocity there).
    - [x] Controlled recordings fixed the axes: Z is vertical, X and Y share one scale, and yaw is
-     measured from +X. The scale is still unknown.
+     measured from +X. The scale comes from the navmesh (about 72 film units to a world unit).
 5. **The web app's match timeline.** Started: the decoder is a library, the console is
    `Ancilla.Theater.Cli`, and `/matches/{id}/timeline` shows `MatchTimeline`. To do:
-   - [ ] Make the console's `timeline` command render `MatchTimeline` too, so the analysis lives
-     in one place (it still has its own copy of the streak, traded and revenge logic).
-   - [ ] Label CTF objective events (steal, capture, return, carrier kill) once a flag-state model
-     can tell them apart.
+   - [x] The console's `timeline` command writes `MatchTimeline`, so the analysis lives in one place.
+   - [x] Label CTF objective events (steal, grab, capture, assist, drop, return, carrier kill) with a
+     flag-state model (`FlagEvents`), checked against the scoreboard by `inspect`.
    - [x] Map layers: deaths with facing, kills from killer to victim, time-spent heatmap, objective
      events.
    - [x] Floor plan from the Forge map's navmesh (`NavMesh` in Core, `FloorPlan` here), fitted per
      film; 343-built maps (Bazaar) have none.
    - [x] Animated movement on the map (`MatchTimeline.Playback`, drawn in the browser by
      `MatchTimelinePage.razor.js`).
-   - [ ] Weapon pickups: dropped objects that vanish next to a biped (untested), then which weapon
-     (`weapon-state-type-info`, 43–46).
+   - [x] Weapon pickups in the feed, from the picker's inventory. The page says "picked up a
+     weapon" until the weapon IDs have names; the console's `timeline` shows the ID.
 
 **Open questions from FORMAT.md:** the extra XUID-range values in each header stream; whether the
 123-value table after the registry describes type 1's 123 static slots; the layouts of packet types

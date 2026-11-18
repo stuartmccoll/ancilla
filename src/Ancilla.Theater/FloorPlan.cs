@@ -27,25 +27,41 @@ public static class FloorPlan
     private const double MinScale = 64, MaxScale = 80, OriginRange = 320;
     private const int MaxCells = 4_000_000, CoarseSample = 600, FineSample = 3_000;
 
-    /// <summary>The best placement, or null when there are no positions.</summary>
-    public static FloorFit? Fit(NavMesh mesh, IReadOnlyList<FilmPosition> positions)
+    /// <summary>
+    /// The best placement, or null when there are no positions. On maps with the standard position
+    /// layout the origin is near 16,384 on both axes; for other layouts (<paramref name="layout"/>) where
+    /// it is isn't known, so the search starts by lining up the middle of the positions with the
+    /// middle of the mesh, over a wider range.
+    /// </summary>
+    public static FloorFit? Fit(NavMesh mesh, IReadOnlyList<FilmPosition> positions, PositionLayout? layout = null)
     {
         if (positions.Count == 0 || mesh.Faces.Count == 0) return null;
         var cover = Coverage.Of(mesh);
         var coarse = Sample(positions, CoarseSample);
         var fine = Sample(positions, FineSample);
 
-        var best = (Score: -1.0, K: NominalScale, X: NominalOrigin, Y: NominalOrigin);
-        for (var k = MinScale; k <= MaxScale; k += 0.5)
-            for (var ox = NominalOrigin - OriginRange; ox <= NominalOrigin + OriginRange; ox += 16)
-                for (var oy = NominalOrigin - OriginRange; oy <= NominalOrigin + OriginRange; oy += 16)
+        double cx = NominalOrigin, cy = NominalOrigin, range = OriginRange, step = 16, kMin = MinScale, kMax = MaxScale, kStep = 0.5;
+        if (layout is not null && layout != PositionLayout.Standard)
+        {
+            double Mid(IEnumerable<double> v) { var o = v.Order().ToList(); return (o[o.Count / 100] + o[o.Count - 1 - o.Count / 100]) / 2; }
+            var points = mesh.Faces.SelectMany(f => f.Points).ToList();
+            double mx = (points.Min(p => p.X) + points.Max(p => p.X)) / 2, my = (points.Min(p => p.Y) + points.Max(p => p.Y)) / 2;
+            cx = Mid(fine.Select(p => (double)p.X)) - NominalScale * mx;
+            cy = Mid(fine.Select(p => (double)p.Y)) - NominalScale * my;
+            // Film units may be finer too: velocity says 1.33 times on the 21/18/16 map (about 96).
+            (range, step, kMin, kMax, kStep) = (4 * OriginRange, 32, 60, 110, 1);
+        }
+        var best = (Score: -1.0, K: NominalScale, X: cx, Y: cy);
+        for (var k = kMin; k <= kMax; k += kStep)
+            for (var ox = cx - range; ox <= cx + range; ox += step)
+                for (var oy = cy - range; oy <= cy + range; oy += step)
                     if (cover.Score(coarse, k, ox, oy) is var s && Better(s, k, best.Score, best.K)) best = (s, k, ox, oy);
 
         var (_, k0, x0, y0) = best;
         best = (cover.Score(fine, k0, x0, y0), k0, x0, y0);
-        for (var k = k0 - 0.5; k <= k0 + 0.5; k += 0.1)
-            for (var ox = x0 - 16; ox <= x0 + 16; ox += 2)
-                for (var oy = y0 - 16; oy <= y0 + 16; oy += 2)
+        for (var k = k0 - kStep; k <= k0 + kStep; k += 0.1)
+            for (var ox = x0 - step; ox <= x0 + step; ox += 2)
+                for (var oy = y0 - step; oy <= y0 + step; oy += 2)
                     if (cover.Score(fine, k, ox, oy) is var s && Better(s, k, best.Score, best.K)) best = (s, k, ox, oy);
         return new FloorFit(best.K, best.X, best.Y, best.Score);
     }

@@ -124,6 +124,23 @@ public class NavMeshTests
     }
 
     [Fact]
+    public void A_placement_far_from_the_usual_origin_is_found_for_another_position_layout()
+    {
+        var mesh = NavMesh.Parse(Blob(Vertices, Faces));
+        const double k = 72, ox = 65_000, oy = 130_000;
+        var positions = new List<FilmPosition>();
+        for (var x = 0.5; x < 20; x += 0.7)
+            for (var y = 0.5; y < 30; y += 0.7)
+                if (y < 10 || x < 10) positions.Add(new FilmPosition((int)(ox + k * x), (int)(oy + k * y), 0));
+
+        var fit = FloorPlan.Fit(mesh, positions, new PositionLayout(21, 18, 16))!;
+        Assert.InRange(fit.OnMesh, 0.99, 1);
+        var (fx, fy) = fit.ToFilm(0, 0);
+        Assert.InRange(Math.Abs(fx - ox), 0, k);
+        Assert.InRange(Math.Abs(fy - oy), 0, k);
+    }
+
+    [Fact]
     public void Floor_faces_away_from_play_are_dropped_and_the_rest_get_height_levels()
     {
         var mesh = NavMesh.Parse(Blob(Vertices, Faces));

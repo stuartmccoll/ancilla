@@ -11,7 +11,8 @@ public sealed record BipedTrack(int Slot, List<(int Tick, FilmPosition Position)
 /// Turns biped position records into per-player lives, using the summary's deaths. A death ends the
 /// victim's biped track within a few ticks (<see cref="MatchDeaths"/>), and the victim's next life
 /// is a new biped slot about 8 s later in CTF (<see cref="Chain"/>). Lives that neither end in a death
-/// nor follow one (a player with no deaths) aren't assigned.
+/// nor follow one (a player with no deaths) aren't assigned by the chaining; the per-player list fills
+/// in some (<see cref="FillFromSpans"/>).
 /// </summary>
 public static class Lives
 {
@@ -76,5 +77,34 @@ public static class Lives
         }
         foreach (var l in lives.Values) l.Sort((a, b) => tracks[a].FirstTick.CompareTo(tracks[b].FirstTick));
         return lives;
+    }
+
+    /// <summary>
+    /// Adds lives the chaining missed, from the per-player list's alive spans (<see cref="PlayerList.Spans"/>):
+    /// for a span none of the player's lives overlaps, the one unclaimed track that starts within
+    /// <paramref name="windowTicks"/> of the span's start and ends before the span does (plus the
+    /// window). Spans with no such track, or more than one, are left alone. Most missing lives have no
+    /// biped records at all, so this closes only a few (5 of 36 across 15 films, 2026-11-18). Returns
+    /// how many it added; <paramref name="lives"/> is changed in place.
+    /// </summary>
+    public static int FillFromSpans(Dictionary<int, List<int>> lives, IReadOnlyList<AliveSpan> spans,
+        IReadOnlyDictionary<int, BipedTrack> tracks, int windowTicks = 60)
+    {
+        var claimed = lives.Values.SelectMany(x => x).ToHashSet();
+        var added = 0;
+        foreach (var s in spans)
+        {
+            var mine = lives.GetValueOrDefault(s.Player) ?? [];
+            if (mine.Any(slot => tracks[slot].FirstTick <= s.LastTick && tracks[slot].LastTick >= s.FirstTick)) continue;
+            var candidates = tracks.Values.Where(t => !claimed.Contains(t.Slot)
+                && Math.Abs(t.FirstTick - s.FirstTick) <= windowTicks && t.LastTick <= s.LastTick + windowTicks).Take(2).ToList();
+            if (candidates.Count != 1) continue;
+            var list = lives.TryGetValue(s.Player, out var l) ? l : lives[s.Player] = [];
+            list.Add(candidates[0].Slot);
+            list.Sort((a, b) => tracks[a].FirstTick.CompareTo(tracks[b].FirstTick));
+            claimed.Add(candidates[0].Slot);
+            added++;
+        }
+        return added;
     }
 }

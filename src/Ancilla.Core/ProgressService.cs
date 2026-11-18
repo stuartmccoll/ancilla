@@ -35,12 +35,15 @@ public sealed class ProgressService(HaloWaypointClient client, SnapshotStore sna
 
         var matches = srTask.Result.MatchesCompleted;
 
-        // Record a snapshot so future runs can measure actual XP gained per match.
-        var now = new ProgressSnapshot(DateTimeOffset.UtcNow, matches, career.XpEarned);
+        // Record a snapshot so future runs can measure actual XP gained per match, for career and pass.
+        var active = passes.FirstOrDefault(p => p.IsActive);
+        var now = new ProgressSnapshot(DateTimeOffset.UtcNow, matches, career.XpEarned, active?.Path, active?.XpEarned);
         var history = await snapshots.AppendAsync(now, ct);
 
-        var estimate = ProgressMath.Estimate(history, career.XpEarned, matches, window ?? XpAverageWindow.Default, xpPerMatchOverride);
-        return new ProgressReport(me.Gamertag, matches, career, passes, estimate, history);
+        var w = window ?? XpAverageWindow.Default;
+        var estimate = ProgressMath.Estimate(history, career.XpEarned, matches, w, xpPerMatchOverride);
+        return new ProgressReport(me.Gamertag, matches, career, passes, estimate, history,
+            ProgressMath.EstimatePassXpPerMatch(history, active, matches, w));
     }
 }
 
@@ -106,9 +109,39 @@ public static class ProgressMath
         return new HeroForecast(first, perDay, matches / days, matches == 0 ? 0 : (double)xp / matches, days, toHero, eta);
     }
 
-    /// <summary>Recalculates a report's XP per match for a different window, without calling the API.</summary>
+    /// <summary>
+    /// Recalculates a report's XP per match for a different window, without calling the API. A manual
+    /// figure is career XP; pass XP per match stays measured.
+    /// </summary>
     public static ProgressReport WithEstimate(ProgressReport r, XpAverageWindow window, double? manual) =>
-        r with { Estimate = Estimate(r.History, r.Career.XpEarned, r.MatchesCompleted, window, manual) };
+        r with
+        {
+            Estimate = Estimate(r.History, r.Career.XpEarned, r.MatchesCompleted, window, manual),
+            PassEstimate = EstimatePassXpPerMatch(r.History, r.ActivePass, r.MatchesCompleted, window),
+        };
+
+    /// <summary>
+    /// Battle pass XP per match, measured like career XP (see <see cref="FindBaseline"/>) but only
+    /// across snapshots that recorded the same active pass. Career XP comes in several times faster
+    /// than pass XP, so the career figure can't stand in for it. Null until there's a baseline at
+    /// least <paramref name="minMatches"/> matches back with this pass active, or when no pass is
+    /// active or it's finished (no XP goes to it).
+    /// </summary>
+    public static XpPerMatchEstimate? EstimatePassXpPerMatch(
+        IReadOnlyList<ProgressSnapshot> history, TrackStatus? active, int matchesNow, XpAverageWindow window, int minMatches = 5)
+    {
+        if (active is null || active.IsComplete) return null;
+        // The pass's own history, as if its XP were career XP, so the career baseline rules apply.
+        var own = history.Where(s => s.ActivePass == active.Path && s.ActivePassXpEarned is not null)
+            .Select(s => s with { CareerXpEarned = s.ActivePassXpEarned!.Value }).ToList();
+        var lifetimeWindow = window.Lifetime ? XpAverageWindow.All.First(x => x.Key == "all") : window;
+        if (FindBaseline(own, active.XpEarned, matchesNow, lifetimeWindow, out var partial, minMatches) is not { } baseline) return null;
+        var games = matchesNow - baseline.MatchesCompleted;
+        var xp = active.XpEarned - baseline.CareerXpEarned;
+        var shortNote = partial ? $"; only {games} recorded so far" : "";
+        return new XpPerMatchEstimate((double)xp / games,
+            $"Measured: {xp:N0} pass XP over {games:N0} matches since {baseline.TakenAt.ToLocalTime():d MMM yyyy}{shortNote}");
+    }
 
     public static XpPerMatchEstimate Estimate(
         IReadOnlyList<ProgressSnapshot> history, long careerXpNow, int matchesNow,

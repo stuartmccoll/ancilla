@@ -244,6 +244,19 @@ public class TimelineRunTests
     }
 
     [Fact]
+    public void A_film_with_no_summary_is_an_unfinished_film()
+    {
+        using var t = new TempCache();
+        var id = Guid.NewGuid().ToString();
+        WriteFilm(t.Cache, id, Roster, Events, Board(id));
+        // A match that didn't end normally: its manifest lists no summary chunk.
+        t.Cache.SaveManifest(id, ManifestJson(id).Replace("\"ChunkType\": 3", "\"ChunkType\": 2").Replace("\"HasGameEnded\": true", "\"HasGameEnded\": false"));
+
+        Assert.False(t.Cache.LoadManifest(id).CustomData.HasSummary);
+        Assert.Throws<UnfinishedFilmException>(() => MatchTimeline.Build(t.Cache, id, Board(id), positions: false));
+    }
+
+    [Fact]
     public void A_roster_player_missing_from_the_scoreboard_is_an_error()
     {
         using var t = new TempCache();
