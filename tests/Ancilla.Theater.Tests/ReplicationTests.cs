@@ -130,13 +130,17 @@ public class EntityRecordsTests
     private static BitWriter Aim(BitWriter w, int yaw, int pitch) => w.Write(1, 1).Write((ulong)yaw, 12).Write((ulong)pitch, 12);
     private static BitWriter Tick(BitWriter w, int tick, bool more) { w.Write(1, 1).Write((ulong)tick, 8); return more ? w.Write(0, 1) : w; }
     private static BitWriter Ammo(BitWriter w, int rounds) => w.Write(0, 1).Write((ulong)rounds, 8).Write(0b1011, 4);
+    // Velocity: [00] [sign] [face × 87,381 + u × 294 + v] [speed: exponent 4, mantissa 6].
+    private static BitWriter Velocity(BitWriter w, int sign, int face, int u, int v, int exponent, int mantissa) =>
+        w.Write(0, 2).Write((ulong)sign, 1).Write((ulong)(face * 87_381 + u * 294 + v), 18).Write((ulong)(exponent << 6 | mantissa), 10);
 
     [Fact]
     public void Reads_position_aim_command_tick_and_ammo_from_one_biped_record()
     {
         var w = new BitWriter().Write(0b11, 2);
         Header(w, 600, [0, 1, 5, 21, 25, 30]);
-        Position(w, (16_000, 18_000, 231_038)).Write(0x5555_5555, 31).Write(0x0AAA_AAAA, 29);
+        // Velocity: along +X (face 0, sign 0), the other two components near 0, speed (64 + 3) << 2 = 268 steps.
+        Velocity(Position(w, (16_000, 18_000, 231_038)), 0, 0, 146, 147, 3, 3).Write(0x0AAA_AAAA, 29);
         Tick(Aim(w, 3288, 3020), 200, more: true);
         Ammo(w, 27).Write(0, 8);
 
@@ -147,6 +151,129 @@ public class EntityRecordsTests
         Assert.Equal(new Aim(3288, 3020), u.Aim);
         Assert.Equal(200, u.CommandTick);
         Assert.Equal((30, 27), (u.AmmoComponent!.Value, u.Rounds!.Value));
+        var v = u.Velocity!.Value;
+        Assert.Equal(134, v.Speed, 3);                       // 268 steps of half a film unit a second
+        Assert.True(v.X > 133.9 && Math.Abs(v.Y) < 1 && Math.Abs(v.Z) < 1);
+    }
+
+    [Fact]
+    public void Reads_velocity_without_a_position()
+    {
+        // Falling straight down: face 2 (Z), sign 1, u and v at the middle; speed (64 + 0) << 4 = 1,024 steps.
+        var w = new BitWriter().Write(0b1, 1);
+        Tick(Velocity(Header(w, 512, [1, 25]), 1, 2, 146, 147, 5, 0), 9, more: false).Write(0, 8);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 512);
+        Assert.True(u.Checked);
+        Assert.Null(u.Position);
+        Assert.Equal(-512, u.Velocity!.Value.Z, 0);
+        Assert.True(u.Velocity!.Value.HorizontalSpeed < 3);                 // 294 steps have no exact 0: 0.34% each way
+    }
+
+    // Packets of [0, 25] records for four bipeds wandering in small steps, in the given layout, with
+    // command ticks that are the packet count plus 37.
+    private static List<ReadOnlyMemory<byte>> Wandering(PositionLayout l, int packets)
+    {
+        var rng = new Random(7);
+        var at = Enumerable.Range(0, 4).Select(_ => (X: 1 << (l.XBits - 2), Y: 1 << (l.YBits - 2), Z: 1 << (l.ZBits - 2))).ToArray();
+        var result = new List<ReadOnlyMemory<byte>>();
+        for (var t = 0; t < packets; t++)
+        {
+            var w = new BitWriter().Write(0b1, 1);
+            for (var s = 0; s < at.Length; s++)
+            {
+                at[s] = (at[s].X + rng.Next(-12, 13), at[s].Y + rng.Next(-12, 13), at[s].Z + 2 * rng.Next(-3, 4));
+                Header(w, 520 + s, [0, 25]).Write(0, 2).Write((ulong)at[s].X, l.XBits).Write((ulong)at[s].Y, l.YBits).Write((ulong)at[s].Z, l.ZBits).Write(0, 1);
+                Tick(w, (t + 37) & 0xFF, more: false);
+            }
+            result.Add(w.Write(0, 120).ToArray());
+        }
+        return result;
+    }
+
+    [Theory]
+    [InlineData(18, 15, 18)]
+    [InlineData(20, 17, 17)]
+    [InlineData(21, 18, 16)]
+    public void Detects_a_films_position_layout(int x, int y, int z)
+    {
+        var layout = new PositionLayout(x, y, z);
+        Assert.Equal(layout, PositionLayout.Detect(Wandering(layout, 300)));
+    }
+
+    [Fact]
+    public void Does_not_guess_a_layout_from_too_few_records()
+    {
+        var why = new List<string>();
+        Assert.Null(PositionLayout.Detect(Wandering(PositionLayout.Standard, 20), why.Add));
+        Assert.Contains("too few", Assert.Single(why));
+    }
+
+    [Fact]
+    public void Reads_positions_in_another_layout()
+    {
+        var layout = new PositionLayout(21, 18, 16);
+        var w = new BitWriter().Write(0b11, 2);
+        Header(w, 600, [0, 25]).Write(0, 2).Write(1_000_000, 21).Write(200_000, 18).Write(40_000, 16).Write(0, 1);
+        Tick(w, 5, more: false).Write(0, 8);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray(), layout), r => r.Slot == 600);
+        Assert.True(u.Checked);
+        Assert.Equal(new FilmPosition(1_000_000, 200_000, 40_000), u.Position);
+        Assert.DoesNotContain(EntityRecords.FindBipedUpdates(w.ToArray()), r => r.Slot == 600 && r.Checked);   // the standard layout doesn't check
+    }
+
+    [Fact]
+    public void Reads_a_velocity_of_01_as_standing_still()
+    {
+        var w = new BitWriter().Write(0b1, 1);
+        Tick(Position(Header(w, 520, [0, 1, 25]), (16_000, 18_000, 231_038)).Write(0b01, 2), 42, more: false).Write(0, 8);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 520);
+        Assert.True(u.Checked);
+        Assert.Equal(42, u.CommandTick);
+        Assert.Equal(BipedVelocity.Still, u.Velocity);
+        Assert.Equal(0, u.Velocity!.Value.Speed);
+    }
+
+    // Synthetic item IDs; real ones are in Inventory.KnownWeapons.
+    private const uint ItemA = 0x1234_5678, ItemB = 0xCAFE_F00D, Variant = 0x0BAD_CAFE;
+
+    [Theory]
+    [InlineData(1, true)]    // emptied with a stamp: a flag captured or dropped
+    [InlineData(0, false)]   // empty, no stamp: the slot's state at the start of play
+    public void Reads_an_empty_inventory_slot(int stamped, bool expectStamped)
+    {
+        var w = new BitWriter();
+        Tick(Aim(Header(w, 532, [21, 25, 42, 45]), 100, 2048), 9, more: true);
+        w.Write(0b000_010_1, 7).Write(0, 1).Write((ulong)stamped, 1).Write(0xAB, 8).Write(0, 80);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 532);
+        Assert.Equal(new InventoryItem(45, null, Stamped: expectStamped), u.Item);
+        Assert.True(u.Item!.Value.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(0b11, 2, null)]           // [11]: 2 bits
+    [InlineData(0b10_0110_0110_1010, 14, null)]   // [10] [value:12]: 14 bits
+    [InlineData(0b0_0001_1011, 9, 27)]    // [0] [rounds:8]: 9 bits
+    public void Reads_the_item_id_after_each_ammo_form(int ammo, int ammoBits, int? rounds)
+    {
+        var w = new BitWriter().Write(0b101, 3);
+        Tick(Position(Header(w, 530, [0, 25, 30, 31, 42, 43]), (16_000, 18_000, 231_038)), 9, more: true);
+        // 42 is 7 bits; type-info starts with its presence bit, then the ID and the variant.
+        w.Write((ulong)ammo, ammoBits).Write(1027, 11).Write(0b001_000_1, 7).Write(1, 1).Write(ItemA, 32).Write(Variant, 32).Write(0x5555, 16);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 530);
+        Assert.True(u.Checked);
+        Assert.Equal(new InventoryItem(43, ItemA, Variant), u.Item);
+        Assert.Equal(rounds, u.Rounds);
+    }
+
+    [Fact]
+    public void Reads_the_second_weapon_slot_after_its_own_ammo()
+    {
+        var w = new BitWriter();
+        Tick(Aim(Header(w, 531, [21, 25, 33, 34, 42, 44]), 100, 2048), 9, more: true);
+        w.Write(0, 1).Write(12, 8).Write(1030, 11).Write(0b000_001_1, 7).Write(1, 1).Write(ItemB, 32).Write(Variant, 32).Write(0, 16);
+        var u = Assert.Single(EntityRecords.FindBipedUpdates(w.ToArray()), x => x.Slot == 531);
+        Assert.Equal(new InventoryItem(44, ItemB, Variant), u.Item);
+        Assert.Equal((33, 12), (u.AmmoComponent!.Value, u.Rounds!.Value));
     }
 
     [Fact]
@@ -179,9 +306,9 @@ public class EntityRecordsTests
     [Fact]
     public void Leaves_records_it_cannot_check_unchecked()
     {
-        // Velocity without a position has another width, so reading stops before the tick.
+        // Component 4 (body vitality) isn't read, so reading stops before the tick.
         var w = new BitWriter();
-        Tick(Aim(Header(w, 600, [1, 21, 25]).Write(0x5555_5555, 31), 100, 2048), 7, more: false);
+        Tick(Aim(Header(w, 600, [4, 21, 25]).Write(0x1555_5555, 29), 100, 2048), 7, more: false);
         Assert.DoesNotContain(EntityRecords.FindBipedUpdates(w.Write(0, 8).ToArray()), x => x.Slot == 600);
 
         // An ammo component on its own has no tick: a candidate, not checked.
@@ -209,6 +336,25 @@ public class LivesTests
 {
     private static BipedTrack Track(int slot, int first, int last) =>
         new(slot, Enumerable.Range(first, last - first + 1).Select(t => (t, new FilmPosition(t, 0, 0))).ToList());
+
+    [Fact]
+    public void Fills_a_missed_life_from_the_lists_alive_span_only_when_one_track_fits()
+    {
+        var tracks = new[] { Track(600, 100, 900), Track(601, 2_000, 2_500), Track(602, 2_010, 2_400), Track(603, 3_000, 3_500), Track(604, 4_000, 4_300) }
+            .ToDictionary(t => t.Slot);
+        var lives = new Dictionary<int, List<int>> { [0] = [600] };
+        AliveSpan[] spans =
+        [
+            new(0, 100, 900, true),      // already chained
+            new(1, 2_000, 2_500, true),  // two tracks start here: ambiguous, left alone
+            new(0, 3_010, 3_520, true),  // one track fits
+            new(2, 3_990, 4_100),        // the only track starting here runs on well past the span
+        ];
+        Assert.Equal(1, Lives.FillFromSpans(lives, spans, tracks));
+        Assert.Equal([600, 603], lives[0]);
+        Assert.False(lives.ContainsKey(1));
+        Assert.False(lives.ContainsKey(2));
+    }
 
     [Fact]
     public void Chains_each_players_lives_through_deaths_and_8_second_respawns()

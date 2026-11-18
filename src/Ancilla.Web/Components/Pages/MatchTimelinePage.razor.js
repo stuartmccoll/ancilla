@@ -8,6 +8,8 @@ const TRAIL_MS = 3000;          // how much of each player's recent path to draw
 const FLASH_MS = 1500;          // how long a kill or objective event stays on the map
 const JUMP = 150;               // tenths of a square: a bigger step between samples is a respawn, not movement
 const TEAM_COLOURS = ["var(--viz-1)", "var(--viz-2)"];
+// A player's state with no position on the map, from the film's per-player list (PlaybackTrack.Alive).
+const STATES = { 1: ["unplaced", "alive, position unknown"], 0: ["dead", "dead"], 2: ["out", "not in the match"] };
 const players = new Map();      // root element → its player
 
 export function start(root, data) {
@@ -53,6 +55,7 @@ class Player {
         this.clock = root.querySelector(".clock");
         this.speedSelect = root.querySelector("select.speed");
 
+        this.roster = new Map([...root.querySelectorAll(".roster li")].map(li => [Number(li.dataset.player), { li, state: li.querySelector(".state") }]));
         this.events = el("g", {}, this.svg);
         this.marks = data.players.map(p => {
             const g = el("g", {}, this.svg);
@@ -143,9 +146,17 @@ class Player {
         this.scrub.value = String(Math.round(t));
         this.clock.textContent = `${clock(t)} / ${clock(data.durationMs)}`;
 
+        const frame = Math.floor(t / data.stepMs);
         data.players.forEach((p, k) => {
-            const m = this.marks[k], pos = this.at(p, t);
-            m.g.setAttribute("opacity", !this.focus || this.focus.has(p.player) ? "1" : ".2");
+            const m = this.marks[k], pos = this.at(p, t), inFocus = !this.focus || this.focus.has(p.player);
+            m.g.setAttribute("opacity", inFocus ? "1" : ".2");
+            const [state, text] = pos ? ["alive", "alive"] : STATES[p.alive[frame]] ?? ["unknown", "—"];
+            const row = this.roster.get(p.player);
+            if (row) {
+                row.li.dataset.state = state;
+                row.li.hidden = !inFocus;
+                if (row.state.textContent !== text) row.state.textContent = text;
+            }
             if (!pos) { m.g.setAttribute("visibility", "hidden"); return; }
             m.g.setAttribute("visibility", "visible");
             m.dot.setAttribute("cx", pos.x); m.dot.setAttribute("cy", pos.y);

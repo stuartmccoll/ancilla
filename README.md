@@ -96,8 +96,9 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   events, and an animation of everyone's movement (play, scrub, speed, kill flashes), drawn on the
   map's own floor plan for Forge maps (from the map's navmesh). Hover over a death or kill for its
   details. The map starts on you; a table per player (best streak, traded and revenge kills, nemesis, objectives, kill
-  distance) and the kill feed with each kill's medals. Filter the map by player or team, and the
-  feed by player.
+  distance) and the kill feed with each kill's medals, weapon pickups and, in CTF, flag actions (taken,
+  picked up, captured, dropped, returned, carrier stopped). Filter the map by player
+  or team, and the feed by player.
 - **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,
   kills above/below what the matchmaker expected, and CSR across ranked games.
 - **Insights**: over your last 50/100/200 PvP games:

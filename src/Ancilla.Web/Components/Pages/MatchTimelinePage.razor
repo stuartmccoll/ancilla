@@ -246,10 +246,16 @@ else
                                 </select>
                             </label>
                         </div>
+                        <ul class="roster" aria-label="Each player's state at the time shown">
+                            @foreach (var tr in pb.Tracks)
+                            {
+                                <li data-player="@tr.Player"><span class="key @TeamClass(tr.Player)"></span>@Name(tr.Player) <span class="state"></span></li>
+                            }
+                        </ul>
                     </div>
                     <p class="legend">
                         @for (var k = 0; k < t.Teams.Count && k < 2; k++) { <span class="key @($"team{k}")"></span> @Fmt.TeamName(t.Teams[k]) }
-                        <span class="muted">· each dot is a player, with the way they're facing and a trail of the last 3 seconds. Kills flash as a cross where the victim died. Players disappear while dead, and during lives the film couldn't link to them. @MapNote @FloorNote(t)</span>
+                        <span class="muted">· each dot is a player, with the way they're facing and a trail of the last 3 seconds. Kills flash as a cross where the victim died. The list under the controls says who's alive, dead or not in the match at each moment, including players alive somewhere the film couldn't place them. @MapNote @FloorNote(t)</span>
                     </p>
                     <details class="table-view">
                         <summary>Show as table</summary>
@@ -262,7 +268,7 @@ else
                                         <tr><td class="l">@Fmt.Clock((uint)(f * pb.StepMs))</td>
                                             @foreach (var tr in pb.Tracks.Where(x => InFocus(x.Player)))
                                             {
-                                                <td class="l">@(tr.X10[f] < 0 ? "—" : $"{Fmt.Pct(tr.X10[f] / 10.0 * 100 / MatchTimeline.MapWidth, 0)} across, {Fmt.Pct(tr.Y10[f] / 10.0 * 100 / MatchTimeline.MapHeight, 0)} down")</td>
+                                                <td class="l">@(tr.X10[f] >= 0 ? $"{Fmt.Pct(tr.X10[f] / 10.0 * 100 / MatchTimeline.MapWidth, 0)} across, {Fmt.Pct(tr.Y10[f] / 10.0 * 100 / MatchTimeline.MapHeight, 0)} down" : StateText(tr.Alive[f]))</td>
                                             }
                                         </tr>
                                     }
@@ -342,7 +348,7 @@ else
         <table class="feed">
             <thead><tr><th class="l">Time</th><th class="l">What happened</th><th class="l">Medals</th></tr></thead>
             <tbody>
-                @foreach (var f in t.Feed.Where(f => _feedPlayer < 0 || f.Player == _feedPlayer || f.Other == _feedPlayer))
+                @foreach (var f in t.Feed.Where(f => (_feedPlayer < 0 || f.Player == _feedPlayer || f.Other == _feedPlayer) && !(f.Kind == FeedKind.Medal && f.MedalNameIds.Count == 0)))
                 {
                     <tr>
                         <td class="l">@Fmt.Clock(f.TimeMs)</td>
@@ -353,7 +359,8 @@ else
                                 case FeedKind.Kill: <span> killed </span>@if (f.Other is { } v) { <span class="key @TeamClass(v)"></span>@Name(v) } else { <span>a bot or another player</span> } break;
                                 case FeedKind.Death: <span class="muted"> died (no killer recorded: a suicide, or killed by a bot)</span> break;
                                 case FeedKind.Medal: <span class="muted"> earned a medal</span> break;
-                                case FeedKind.Objective: <span class="muted"> completed an objective</span> break;
+                                case FeedKind.Objective: <span class="muted"> @FlagText(f.Flag)</span> break;
+                                case FeedKind.Pickup: <span class="muted"> picked up a weapon</span> break;
                             }
                         </td>
                         <td class="l">@string.Join(", ", f.MedalNameIds.Select(MedalName))</td>
@@ -377,6 +384,18 @@ else
     private Layer _layer = Layer.Deaths;
 
     private enum Layer { Deaths, Kills, Time, Objectives, Movement }
+
+    private static string FlagText(FlagAction? a) => a switch
+    {
+        FlagAction.Steal => "took the enemy flag from its base",
+        FlagAction.Grab => "picked up the dropped enemy flag",
+        FlagAction.Capture => "captured the flag",
+        FlagAction.CaptureAssist => "assisted a flag capture",
+        FlagAction.Drop => "dropped the flag",
+        FlagAction.Return => "returned their flag",
+        FlagAction.CarrierKill => "stopped the flag carrier",
+        _ => "completed an objective",
+    };
 
     // ---- Hover cards on the deaths and kills maps (Index is the death's position in Deaths) ----
     private (Layer Layer, int Index)? _hot;
@@ -472,6 +491,15 @@ else
         catch (JSDisconnectedException) { }
     }
 
+    // What the movement table says for a moment with no position (the module uses the same words).
+    private static string StateText(int alive) => alive switch
+    {
+        PlaybackTrack.IsAlive => "alive, position unknown",
+        PlaybackTrack.IsDead => "dead",
+        PlaybackTrack.NotInMatch => "not in the match",
+        _ => "—",
+    };
+
     private object PlaybackData(MatchTimeline t)
     {
         var pb = t.Playback!;
@@ -481,7 +509,7 @@ else
         {
             stepMs = pb.StepMs,
             durationMs = t.DurationMs,
-            players = pb.Tracks.Select(x => new { player = x.Player, team = Team(x.Player), name = Name(x.Player), x = x.X10, y = x.Y10, yaw = x.Yaw }),
+            players = pb.Tracks.Select(x => new { player = x.Player, team = Team(x.Player), name = Name(x.Player), x = x.X10, y = x.Y10, yaw = x.Yaw, alive = x.Alive }),
             kills = t.Deaths.Where(d => d.Killer is not null).Select(d => new
             {
                 t = d.TimeMs, player = d.Killer!.Value, other = d.Player, team = Team(d.Killer.Value),
