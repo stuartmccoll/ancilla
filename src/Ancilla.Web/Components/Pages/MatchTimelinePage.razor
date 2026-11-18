@@ -528,6 +528,10 @@ else
             // The map starts on the signed-in player when they're in the match.
             _mapFocus = _timeline.Players.FirstOrDefault(p => p.Xuid is not null && p.Xuid == Session.Xuid)?.Index ?? -1;
         }
+        catch (UnfinishedFilmException)
+        {
+            _error = "This match didn't end normally, so its film has no end-of-match summary. The timeline is built from that summary, so it can't be shown for this match.";
+        }
         catch (InvalidDataException)
         {
             _error = "This match's film couldn't be read. Films from older game versions, or matches with no film, aren't supported yet.";
