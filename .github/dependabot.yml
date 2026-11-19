@@ -1,4 +1,4 @@
-# Keeps NuGet packages (today only the test project's: xUnit, the test SDK, coverlet) and the
+# Keeps NuGet packages (today only the test projects': xUnit, bUnit, Playwright, axe and friends) and the
 # GitHub Actions used by CI up to date. Minor and patch updates for each ecosystem arrive as one
 # grouped PR a week; major updates get their own PR, since they can need code changes.
 version: 2

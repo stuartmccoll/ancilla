@@ -6,6 +6,9 @@
 
 <p class="back"><a href="matches/players">&larr; Players</a></p>
 
+@* The names are shown side by side below; this gives the page a heading for screen readers and focus. *@
+<h1 class="visually-hidden">You and @(_them?.Gamertag ?? "another player")</h1>
+
 @if (_error is not null)
 {
     <p class="error" role="alert">@_error</p>

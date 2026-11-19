@@ -41,6 +41,27 @@ jobs:
       # CLAUDE.md asks for a build with zero warnings, so any warning fails CI.
       - name: Build
         run: dotnet build --no-restore --configuration Release -warnaserror
-      # The tests use synthetic films only; nothing here needs a Spartan token.
+      # Synthetic data only (films, and a fake Halo backend); nothing here needs a Spartan token.
+      # The browser tests run in their own job below.
       - name: Test
-        run: dotnet test --no-build --configuration Release
+        run: dotnet test --no-build --configuration Release --filter "FullyQualifiedName!~Ancilla.Web.E2E"
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        run: dotnet build tests/Ancilla.Web.E2E --configuration Release -warnaserror
+      # The Playwright package pins its Chromium build; install it and the libraries it needs.
+      - name: Install Chromium
+        run: pwsh tests/Ancilla.Web.E2E/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      # The app runs on a loopback port against the fake backend; axe checks every page in every theme.
+      - name: Test
+        run: dotnet test tests/Ancilla.Web.E2E --no-build --configuration Release

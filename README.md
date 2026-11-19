@@ -18,7 +18,7 @@ src/Ancilla.Core     API client, models, calculations, caching, snapshot store (
 src/Ancilla.Web      Blazor Web App (interactive server rendering)
 src/Ancilla.Theater  Theater film decoding and match analysis, used by the web app (see src/Ancilla.Theater/README.md)
 src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline)
-tests/               unit tests for Ancilla.Theater, on synthetic films (dotnet test)
+tests/               unit, component and browser tests on synthetic data (dotnet test; see Tests)
 ```
 
 ## Run
@@ -69,6 +69,32 @@ network (`--urls http://0.0.0.0:...`, a tunnel, a hosting service) without addin
 With `HALO_SPARTAN_TOKEN` set, **everyone** who opens the app is signed in as you.
 
 Never commit a token. `.gitignore` already leaves out `.env` files and `appsettings.*.local.json`.
+
+## Tests
+
+```powershell
+dotnet test                                    # every test project, browser tests included
+dotnet test tests/Ancilla.Web.Tests            # or one project at a time
+```
+
+Nothing needs a Spartan token or a network connection to Halo. The tests come in four layers:
+
+| Project | What it covers | Tools |
+|---|---|---|
+| `tests/Ancilla.Core.Tests` | The API client (URLs, headers, ID checks, error messages), progress and service record maths, caching, snapshots | xUnit |
+| `tests/Ancilla.Theater.Tests` | Theater film decoding, on films built bit by bit | xUnit |
+| `tests/Ancilla.Web.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), and every page and shared component rendered without a browser | xUnit, bUnit |
+| `tests/Ancilla.Web.E2E` | The real app in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
+
+`tests/Ancilla.Testing` holds a fake of the Halo Waypoint services (`FakeHalo`) that answers the
+same URLs as the real ones, from a made-up world (`HaloWorld`): Noble Six and the rest of Noble Team,
+Blue Team and a few Sangheili, playing Slayer, Oddball, CTF, free-for-all and Firefight. Service
+records are added up from its matches, so filtered and unfiltered figures agree. The component and
+browser tests use it in place of halowaypoint.com, and the browser tests sign in with its token
+through `HALO_SPARTAN_TOKEN`.
+
+The first browser test run downloads Chromium (about 150 MB) through Playwright. CI runs the browser
+tests in their own Ubuntu job.
 
 ## Pages
 

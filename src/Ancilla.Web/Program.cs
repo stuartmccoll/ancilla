@@ -48,3 +48,6 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+// Lets the browser tests (tests/Ancilla.Web.E2E) host the app with WebApplicationFactory.
+public partial class Program;
