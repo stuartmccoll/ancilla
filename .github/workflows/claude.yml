@@ -24,11 +24,28 @@ jobs:
       issues: read
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
+
+      # CLAUDE.md asks for every change to be verified by building with zero warnings and running
+      # the tests, so give Claude the same toolchain CI uses (see ci.yml).
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # Builds once up front, so Claude's own builds are incremental and Playwright's script exists.
+      - name: Build
+        run: dotnet build --configuration Debug
+
+      # The browser tests need Chromium and its system libraries, as in ci.yml's browser job.
+      - name: Install Chromium
+        run: pwsh tests/Ancilla.Web.E2E/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
 
       - name: Run Claude Code
         id: claude
@@ -43,8 +60,15 @@ jobs:
           # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
           # prompt: 'Update the pull request description to include a summary of changes.'
 
-          # Optional: Add claude_args to customize behavior and configuration
+          # Let Claude verify its own work the way CLAUDE.md asks: build, test, privacy check.
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr *)'
+          claude_args: >-
+            --allowed-tools
+            "Bash(dotnet restore *)"
+            "Bash(dotnet build *)"
+            "Bash(dotnet build)"
+            "Bash(dotnet test *)"
+            "Bash(dotnet test)"
+            "Bash(.github/scripts/privacy-check.sh)"
 
