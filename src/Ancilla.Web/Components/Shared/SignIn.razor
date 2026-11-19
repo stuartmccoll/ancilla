@@ -1,11 +1,14 @@
 @inject HaloSession Session
 
+@* Pages set their own titles, but signed out they aren't rendered, so this is the only one. *@
+<PageTitle>Sign in · Ancilla</PageTitle>
+
 <section class="card signin">
     <h1>Sign in</h1>
     <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
         <label for="token">Spartan token</label>
         <input id="token" type="password" autocomplete="off" spellcheck="false"
-               placeholder="Paste the 343-spartan-token cookie value" @bind="_token" />
+               placeholder="Paste the 343-spartan-token cookie value" @bind="_token" @bind:event="oninput" />
         <p class="hint">
             Sign in at halowaypoint.com, then DevTools &rsaquo; Application &rsaquo; Cookies &rsaquo;
             <code>343-spartan-token</code>. Tokens last a few hours and are only held in server memory

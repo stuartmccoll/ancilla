@@ -1,0 +1,81 @@
+using System.Net;
+using Ancilla.Core;
+using Ancilla.Testing;
+using Ancilla.Theater;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Playwright;
+
+namespace Ancilla.Web.E2E;
+
+/// <summary>
+/// The real app on a random loopback port. Its outgoing HTTP goes to a <see cref="FakeHalo"/>
+/// instead of halowaypoint.com, and <c>HALO_SPARTAN_TOKEN</c> is the fake's token, so every new
+/// page load signs in as Noble Six the way a developer's local setup does. Snapshots and films go
+/// to a temporary folder. One app and one browser are shared by every test.
+/// </summary>
+public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "ancilla-e2e-" + Guid.NewGuid().ToString("N"));
+    private IPlaywright? _playwright;
+
+    public FakeHalo Halo { get; } = new();
+    public Uri BaseUri { get; private set; } = null!;
+    public IBrowser Browser { get; private set; } = null!;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Development");
+        builder.ConfigureAppConfiguration(c => c.AddInMemoryCollection([new("HALO_SPARTAN_TOKEN", Spartans.Token)]));
+        builder.ConfigureTestServices(services =>
+        {
+            // Every outgoing request lands on the fake. A new handler each time: the factory disposes them.
+            services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(Halo.CreateHandler));
+            services.AddSingleton(new SnapshotStore(Path.Combine(_root, "snapshots.json")));
+            services.AddSingleton(new FilmCache(Path.Combine(_root, "films")));
+        });
+    }
+
+    public async Task InitializeAsync()
+    {
+        UseKestrel(k => k.Listen(IPAddress.Loopback, 0));
+        StartServer();
+        var addresses = Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses;
+        BaseUri = new Uri(addresses.Single().TrimEnd('/') + "/");
+
+        // Downloads Chromium the first time; a no-op once it's there (CI installs it beforehand).
+        var exit = Microsoft.Playwright.Program.Main(["install", "chromium"]);
+        if (exit != 0) throw new InvalidOperationException($"Playwright couldn't install Chromium (exit code {exit}).");
+        _playwright = await Playwright.CreateAsync();
+        Browser = await _playwright.Chromium.LaunchAsync();
+    }
+
+    /// <summary>A fresh browser context (cookies, storage) and page, kept offline apart from the app.</summary>
+    public async Task<IPage> NewPageAsync()
+    {
+        var context = await Browser.NewContextAsync(new() { BaseURL = BaseUri.ToString(), Locale = "en-GB" });
+        context.SetDefaultTimeout(15_000);
+        // The only outside request the app makes is for Google Fonts; tests don't need it.
+        await context.RouteAsync(url => !url.StartsWith(BaseUri.ToString(), StringComparison.Ordinal), route => route.AbortAsync());
+        return await context.NewPageAsync();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        if (Browser is not null) await Browser.CloseAsync();
+        _playwright?.Dispose();
+        await DisposeAsync();
+        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+    }
+}
+
+[CollectionDefinition(Name)]
+public sealed class AppCollection : ICollectionFixture<AppFixture>
+{
+    public const string Name = "app";
+}

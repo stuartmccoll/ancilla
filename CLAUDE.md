@@ -8,7 +8,8 @@ token. See README.md for features, the API endpoint table and data quirks.
 
 ```powershell
 dotnet build                                                   # from the repo root (Ancilla.sln)
-dotnet test                                                    # tests/Ancilla.Theater.Tests
+dotnet test                                                    # every test project (first run downloads Chromium)
+dotnet test --filter "FullyQualifiedName!~Ancilla.Web.E2E"     # everything but the browser tests
 .github/scripts/privacy-check.sh                               # no tokens, XUIDs, film data or machine paths
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
 dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
@@ -19,14 +20,28 @@ hot reloaded and force a restart. A restart drops every session, so the user sig
 `HALO_SPARTAN_TOKEN` is set. If you change a record's shape or other structure, tell the user
 a restart is coming.
 
-`tests/Ancilla.Theater.Tests` (xUnit) covers `Ancilla.Theater` and the Core pieces it uses. Its films
-are synthetic, built bit by bit in `Synthetic.cs`: never add real film data or real gamertags or
-XUIDs as fixtures. Core and Web otherwise have no tests. Verify changes by building with zero
-warnings, running the tests and, for UI changes, running the app. CI (`.github/workflows/ci.yml`)
-runs the privacy check, then builds with warnings as errors and runs the tests on Ubuntu and
-Windows, for every pull request and every push to `main`. Dependabot (`.github/dependabot.yml`) opens weekly PRs
+Tests (see the README's Tests section for the full table):
+
+- `tests/Ancilla.Core.Tests` (xUnit): the API client, progress and service record maths, caches, snapshots.
+- `tests/Ancilla.Theater.Tests` (xUnit): film decoding. Its films are synthetic, built bit by bit in `Synthetic.cs`.
+- `tests/Ancilla.Web.Tests` (xUnit, bUnit): web services, `HaloSession`, and pages and components rendered
+  without a browser. Derive from `Components/ComponentTest`; click through its `Click`/`OnRenderer`
+  helpers, because pages re-render as background data arrives.
+- `tests/Ancilla.Web.E2E` (Playwright, axe): the real app in Chromium on a loopback port, signed in via
+  `HALO_SPARTAN_TOKEN`, with axe run on every main page in every theme.
+- `tests/Ancilla.Testing`: `FakeHalo`, a fake of the Halo services serving a made-up `HaloWorld`. Pages
+  and the browser tests talk to it instead of halowaypoint.com. Add new endpoints here when you add them
+  to `HaloWaypointClient`, and new pages to the routes in `SmokeTests` and `AccessibilityTests`.
+
+All test data is made up and Halo-themed (Noble Team, Blue Team, Sangheili). Never add real film
+data, API responses, gamertags or XUIDs as fixtures. Write XUIDs in hex (`Spartans.Xuid`), so the privacy
+check never sees a decimal one. Verify changes by building with zero warnings and running the tests.
+For UI changes, also run the app. CI (`.github/workflows/ci.yml`) runs the privacy check, then builds
+with warnings as errors and runs the tests on Ubuntu and Windows, with the browser tests in a separate
+Ubuntu job, for every pull request and every push to `main`. Dependabot (`.github/dependabot.yml`) opens weekly PRs
 updating NuGet packages and the Actions CI uses; minor and patch updates come grouped. Every page needs a real Spartan token,
-so you usually can't check pages end to end yourself. Say so rather than claiming a page works.
+so you can't check pages against live data yourself; the fake backend shows they work, not that the
+real API still returns what the fake does. Say so rather than claiming a page works.
 
 ## Layout
 
@@ -43,7 +58,7 @@ so you usually can't check pages end to end yourself. Say so rather than claimin
 - `branding/`: source logo and the full favicon suite. The icons the app uses are copied into
   `src/Ancilla.Web/wwwroot`, and the navbar logo is inlined in `Components/Shared/Logo.razor`
   (charcoal parts use `currentColor` so it follows each theme).
-- `tests/Ancilla.Theater.Tests`: unit tests on synthetic films (see Commands).
+- `tests/`: unit, component and browser tests, and the fake Halo backend they share (see Commands).
 - `src/Ancilla.Theater`: library that decodes Theater films into match analysis (see its `README.md`
   and `FORMAT.md`). `MatchTimeline` is what the web app's match timeline page shows. It references
   `Ancilla.Core`, and the web app references it.
