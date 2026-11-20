@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using Ancilla.Theater.Format;
-using static Ancilla.Theater.Tests.Synthetic;
+using static Ancilla.Testing.Synthetic;
 
 namespace Ancilla.Theater.Tests;
 

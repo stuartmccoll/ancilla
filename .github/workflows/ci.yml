@@ -44,7 +44,20 @@ jobs:
       # Synthetic data only (films, and a fake Halo backend); nothing here needs a Spartan token.
       # The browser tests run in their own job below.
       - name: Test
-        run: dotnet test --no-build --configuration Release --filter "FullyQualifiedName!~Ancilla.Web.E2E"
+        run: >-
+          dotnet test --no-build --configuration Release --filter "FullyQualifiedName!~Ancilla.Web.E2E"
+          --collect:"XPlat Code Coverage" --results-directory TestResults
+      # Coverage is reported, not enforced. ReportGenerator merges the test projects' reports and
+      # writes a summary to the job's page; the fake backend and generated regex code are left out.
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          dotnet tool restore
+          dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage \
+            -reporttypes:"MarkdownSummaryGithub" -title:"Coverage (${{ matrix.os }})" \
+            -assemblyfilters:"-Ancilla.Testing" -classfilters:"-System.Text.RegularExpressions.Generated*"
+          cat coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
 
   browser:
     name: Browser tests

@@ -4,9 +4,10 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Ancilla.Core;
+using Ancilla.Theater;
 using Ancilla.Theater.Format;
 
-namespace Ancilla.Theater.Tests;
+namespace Ancilla.Testing;
 
 /// <summary>
 /// Builds films from scratch, bit by bit, so tests never need a real film. Real films hold other
@@ -151,21 +152,28 @@ public static class Synthetic
                 new StatsBlock { CoreStats = new CoreStats { Kills = t.Kills, Score = 1 } })).ToList(),
             players.ToList());
 
-    /// <summary>A manifest's raw JSON with one header chunk and one summary chunk.</summary>
-    public static string ManifestJson(string matchId, long filmLengthMs = 300_000) => $$"""
+    public const string BlobPrefix = "https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/film/abc/def/";
+
+    /// <summary>
+    /// A manifest's raw JSON with one header chunk and one summary chunk. Without a summary chunk
+    /// (<paramref name="finished"/> false) it's a match that didn't end normally. Chunk sizes are
+    /// what the cache checks a downloaded chunk against.
+    /// </summary>
+    public static string ManifestJson(string matchId, long filmLengthMs = 300_000, string blobPrefix = BlobPrefix, bool finished = true,
+        int headerSize = 0, int summarySize = 0) => $$"""
         {
           "FilmStatusBond": 1,
           "CustomData": {
             "FilmLength": {{filmLengthMs}},
             "Chunks": [
-              { "Index": 0, "ChunkStartTimeOffsetMilliseconds": 0, "DurationMilliseconds": 0, "ChunkSize": 0, "FileRelativePath": "/filmChunk0", "ChunkType": 1 },
-              { "Index": 1, "ChunkStartTimeOffsetMilliseconds": 0, "DurationMilliseconds": 0, "ChunkSize": 0, "FileRelativePath": "/filmChunk1", "ChunkType": 3 }
+              { "Index": 0, "ChunkStartTimeOffsetMilliseconds": 0, "DurationMilliseconds": 0, "ChunkSize": {{headerSize}}, "FileRelativePath": "/filmChunk0", "ChunkType": 1 },
+              { "Index": 1, "ChunkStartTimeOffsetMilliseconds": 0, "DurationMilliseconds": 0, "ChunkSize": {{summarySize}}, "FileRelativePath": "/filmChunk1", "ChunkType": {{(finished ? 3 : 2)}} }
             ],
-            "HasGameEnded": true,
+            "HasGameEnded": {{(finished ? "true" : "false")}},
             "MatchId": "{{matchId}}",
             "FilmMajorVersion": 41
           },
-          "BlobStoragePathPrefix": "https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/film/abc/def/",
+          "BlobStoragePathPrefix": "{{blobPrefix}}",
           "AssetId": "{{Guid.Empty}}"
         }
         """;
@@ -178,10 +186,16 @@ public static class Synthetic
         cache.SaveManifest(matchId, raw);
         cache.SaveScoreboard(matchId, board);
         var manifest = FilmSource.ParseManifest(raw);
-        cache.SaveChunk(matchId, FilmCache.ChunkOfType(manifest, 1), Zlib(Header(roster)));
-        var summary = Packet(9, 1_000, SummaryPayload(events)).Concat(Packet(7, 2_000)).ToArray();
-        cache.SaveChunk(matchId, FilmCache.ChunkOfType(manifest, 3), Zlib(summary));
+        cache.SaveChunk(matchId, FilmCache.ChunkOfType(manifest, 1), HeaderChunk(roster));
+        cache.SaveChunk(matchId, FilmCache.ChunkOfType(manifest, 3), SummaryChunk(events));
     }
+
+    /// <summary>A header chunk as it's stored: compressed.</summary>
+    public static byte[] HeaderChunk(IReadOnlyList<HeaderPlayer> roster) => Zlib(Header(roster));
+
+    /// <summary>A summary chunk as it's stored: the summary packet, an end packet, compressed.</summary>
+    public static byte[] SummaryChunk(IReadOnlyList<Event> events) =>
+        Zlib(Packet(9, 1_000, SummaryPayload(events)).Concat(Packet(7, 2_000)).ToArray());
 }
 
 /// <summary>Writes bits most-significant first, the order films use.</summary>

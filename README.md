@@ -77,6 +77,17 @@ dotnet test                                    # every test project, browser tes
 dotnet test tests/Ancilla.Web.Tests            # or one project at a time
 ```
 
+Coverage (CI writes the same summary to each build-and-test job's page):
+
+```powershell
+dotnet test --filter "FullyQualifiedName!~Ancilla.Web.E2E" --collect:"XPlat Code Coverage" --results-directory TestResults
+dotnet tool restore
+dotnet reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:coverage -reporttypes:"Html;TextSummary" -assemblyfilters:"-Ancilla.Testing" -classfilters:"-System.Text.RegularExpressions.Generated*"
+```
+
+Open `coverage/index.html` for line-by-line detail. Coverage is reported, not enforced. The browser
+tests aren't counted, because the app they drive runs in its own process.
+
 Nothing needs a Spartan token or a network connection to Halo. The tests come in four layers:
 
 | Project | What it covers | Tools |
@@ -89,7 +100,9 @@ Nothing needs a Spartan token or a network connection to Halo. The tests come in
 `tests/Ancilla.Testing` holds a fake of the Halo Waypoint services (`FakeHalo`) that answers the
 same URLs as the real ones, from a made-up world (`HaloWorld`): Noble Six and the rest of Noble Team,
 Blue Team and a few Sangheili, playing Slayer, Oddball, CTF, free-for-all and Firefight. Service
-records are added up from its matches, so filtered and unfiltered figures agree. The component and
+records are added up from its matches, so filtered and unfiltered figures agree. Its two custom games
+have Theater films, built bit by bit (`Synthetic.cs`, which the Theater tests share): one with a short
+kill feed and one that ended without a summary. The component and
 browser tests use it in place of halowaypoint.com, and the browser tests sign in with its token
 through `HALO_SPARTAN_TOKEN`.
 

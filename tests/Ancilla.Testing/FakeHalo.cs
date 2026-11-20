@@ -94,8 +94,11 @@ public sealed partial class FakeHalo
         foreach (var (match, status) in _failures)
             if (match(uri)) return Status(status);
 
-        // Public blob hosts (film chunks, navmeshes) need no token. None exist in this world.
-        if (uri.Host.StartsWith("blobs-", StringComparison.Ordinal)) return Status(HttpStatusCode.NotFound);
+        // Public blob hosts (film chunks, navmeshes) need no token. Only film chunks exist in this world.
+        if (uri.Host.StartsWith("blobs-", StringComparison.Ordinal))
+            return World.Films.Values.Select(f => f.Chunks.GetValueOrDefault(uri.GetLeftPart(UriPartial.Path))).FirstOrDefault(c => c is not null) is { } chunk
+                ? Bytes(chunk)
+                : Status(HttpStatusCode.NotFound);
 
         if (!headers.TryGetValue("x-343-authorization-spartan", out var token) || token != Spartans.Token)
         {
@@ -166,15 +169,19 @@ public sealed partial class FakeHalo
                 ? Ok(new SkillResponse<MatchSkill>([new($"xuid({Spartans.NobleSix.Xuid})", 0, skill)]))
                 : Status(HttpStatusCode.NotFound);
         if (CsrPath().Match(path) is { Success: true } c)
-            return c.Groups[1].Value == HaloWorld.Ids.RankedArena
+            return World.RankedPlaylistIds.Contains(c.Groups[1].Value)
                 ? Ok(new SkillResponse<PlaylistCsr>([new($"xuid({Spartans.NobleSix.Xuid})", 0, HaloWorld.RankedArenaCsr)]))
                 : Status(HttpStatusCode.BadRequest);   // unranked playlists answer 400
         return Status(HttpStatusCode.NotFound);
     }
 
-    private static HttpResponseMessage Discovery(string path)
+    private HttpResponseMessage Discovery(string path)
     {
-        if (UgcPath().Match(path) is not { Success: true } m) return Status(HttpStatusCode.NotFound);   // films included
+        if (FilmPath().Match(path) is { Success: true } f)
+            return World.Films.TryGetValue(f.Groups[1].Value, out var film)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(film.Manifest, Encoding.UTF8, "application/json") }
+                : Status(HttpStatusCode.NotFound);
+        if (UgcPath().Match(path) is not { Success: true } m) return Status(HttpStatusCode.NotFound);
         IReadOnlyList<HaloWorld.Asset> pool = m.Groups[1].Value switch
         {
             "maps" => HaloWorld.Maps,
@@ -200,6 +207,8 @@ public sealed partial class FakeHalo
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
     }
 
+    private static HttpResponseMessage Bytes(byte[] data) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(data) };
+
     private static HttpResponseMessage Status(HttpStatusCode status) => new(status) { Content = new StringContent("") };
 
     private static Dictionary<string, string> ParseQuery(string query) =>
@@ -220,6 +229,8 @@ public sealed partial class FakeHalo
     private static partial Regex MatchSkillPath();
     [GeneratedRegex(@"^/hi/playlist/([0-9a-f-]{36})/csrs$")]
     private static partial Regex CsrPath();
+    [GeneratedRegex(@"^/hi/films/matches/([0-9a-f-]{36})/spectate$")]
+    private static partial Regex FilmPath();
     [GeneratedRegex(@"^/hi/(maps|ugcGameVariants|playlists)/([0-9a-f-]{36})/versions/([0-9a-f-]{36})$")]
     private static partial Regex UgcPath();
 }
