@@ -37,6 +37,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
+          # Don't leave this job's read-only GITHUB_TOKEN in git's config. Git sends that saved
+          # header ahead of the Claude app token the action puts in the remote URL, so Claude's
+          # pushes went out as github-actions[bot] and were refused with a 403.
+          persist-credentials: false
 
       # CLAUDE.md asks for every change to be verified by building with zero warnings and running
       # the tests, so give Claude the same toolchain CI uses (see ci.yml).
