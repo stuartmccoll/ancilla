@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Shared test support: a fake Halo Waypoint backend with Halo-themed synthetic data. Not a test project. -->
+  <!-- Shared test support: a fake Halo Waypoint backend with Halo-themed synthetic data, and synthetic
+       Theater films built bit by bit. Not a test project. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -9,7 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Ancilla.Core/Ancilla.Core.csproj" />
+    <!-- Ancilla.Theater brings Ancilla.Core with it. -->
+    <ProjectReference Include="../../src/Ancilla.Theater/Ancilla.Theater.csproj" />
     <!-- For IHttpClientFactory, so pages can be tested against the fake. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>

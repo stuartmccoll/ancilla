@@ -33,7 +33,7 @@ page uses `MatchTimeline`, and the research console in `src/Ancilla.Theater.Cli`
 ## Running it
 
 `dotnet test` from the repo root runs the unit tests in `tests/Ancilla.Theater.Tests`. They build
-films from scratch (`Synthetic.cs`), so they need no token and no cached films.
+films from scratch (`tests/Ancilla.Testing/Synthetic.cs`), so they need no token and no cached films.
 
 ```bash
 export HALO_SPARTAN_TOKEN='v4=...'      # raw or URL-encoded (v4%3D...) both work

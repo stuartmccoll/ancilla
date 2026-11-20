@@ -62,6 +62,51 @@ public sealed class ProgressPageTests : ComponentTest
     }
 }
 
+public sealed class ProgressForecastTests : ComponentTest
+{
+    [Fact]
+    public async Task Snapshots_days_apart_give_a_Hero_date()
+    {
+        await H.Snapshots.AppendAsync(new ProgressSnapshot(DateTimeOffset.UtcNow.AddDays(-10), 0, 0));
+        await SignInAsync();
+        var cut = Render<Progress>();
+        cut.WaitForAssertion(() => Assert.Contains("In about", cut.Markup), Wait);
+        Assert.DoesNotContain("Needs snapshots at least a day apart", cut.Markup);
+    }
+
+    [Fact]
+    public async Task A_figure_entered_by_hand_replaces_the_measured_one()
+    {
+        await SignInAsync();
+        var cut = Render<Progress>();
+        cut.WaitForAssertion(() => cut.Find(".xp-tile select"), Wait);
+        OnRenderer(cut, () => cut.Find(".xp-tile select").Change("manual"));
+        OnRenderer(cut, () => cut.Find(".xp-tile input[type=number]").Change("750"));
+        Assert.Equal(750, Session.XpOverride);
+        Assert.Equal("750", cut.Find(".xp-tile .value").TextContent);
+
+        // Going back to a measured window drops the hand-entered figure.
+        OnRenderer(cut, () => cut.Find(".xp-tile select").Change(XpAverageWindow.All[0].Key));
+        Assert.Null(Session.XpOverride);
+        Assert.Empty(cut.FindAll(".xp-tile input[type=number]"));
+    }
+
+    [Fact]
+    public async Task Pass_columns_sort_up_then_down_then_back()
+    {
+        await SignInAsync();
+        var cut = Render<Progress>();
+        cut.WaitForAssertion(() => cut.Find("table.passes"), Wait);
+        string Sort() => cut.FindAll("table.passes th")[0].GetAttribute("aria-sort")!;
+        void Header() => OnRenderer(cut, () => cut.FindAll("table.passes th button.sort")[0].Click());
+
+        Assert.Equal("none", Sort());
+        Header(); Assert.Equal("ascending", Sort());
+        Header(); Assert.Equal("descending", Sort());
+        Header(); Assert.Equal("none", Sort());
+    }
+}
+
 public sealed class StatsPageTests : ComponentTest
 {
     private static string Tile(IRenderedComponent<Stats> cut, string label) =>
@@ -271,6 +316,92 @@ public sealed class TimelinePageTests : ComponentTest
         Click(cut, "section.intro button", "Load the timeline");
         cut.WaitForAssertion(() => Assert.NotNull(cut.Find("p.error[role=alert]")), Wait);
         Assert.Equal(1, Requests("/spectate"));
+    }
+
+    private IRenderedComponent<MatchTimelinePage> Loaded(string matchId)
+    {
+        var cut = Render<MatchTimelinePage>(p => p.Add(x => x.MatchId, matchId));
+        Click(cut, "section.intro button", "Load the timeline");
+        cut.WaitForAssertion(() => Assert.Contains("Kill feed", cut.Markup), Wait);
+        return cut;
+    }
+
+    private static List<string> Feed(IRenderedComponent<MatchTimelinePage> cut) =>
+        cut.FindAll("table.feed tbody tr").Select(r => string.Join(" | ", r.Children.Select(c => c.TextContent.Trim()))).ToList();
+
+    [Fact]
+    public async Task A_film_shows_the_kill_feed_players_and_kills_by_minute()
+    {
+        await SignInAsync();
+        var cut = Loaded(HaloWorld.FilmMatchId);
+
+        Assert.Equal(
+        [
+            $"0:30 | {NobleSix.Gamertag} killed {Kelly.Gamertag} | ",
+            $"0:33 | {NobleSix.Gamertag} killed {Linda.Gamertag} | a medal",   // not in the medal book
+            $"1:15 | {Linda.Gamertag} killed {Fred.Gamertag} | ",
+            $"1:40 | {NobleSix.Gamertag} died (no killer recorded: a suicide, or killed by a bot) | ",
+            $"2:10 | {Kelly.Gamertag} killed {NobleSix.Gamertag} | ",
+        ], Feed(cut));
+
+        // Players by team, then kills; the signed-in player's row is marked.
+        var rows = cut.FindAll("section.scroll tbody tr");
+        Assert.Equal([NobleSix.Gamertag, Fred.Gamertag, Kelly.Gamertag, Linda.Gamertag], rows.Select(r => r.Children[0].TextContent.Trim()));
+        Assert.Equal("me", rows[0].ClassName);
+        Assert.Equal(["2", "2", "2", Kelly.Gamertag], rows[0].Children.Skip(1).Take(3).Select(c => c.TextContent).Append(rows[0].Children[6].TextContent));
+
+        // Kills by minute, with a table alternative: Eagle got both kills in the first minute.
+        var minutes = cut.FindAll("details.table-view tbody tr");
+        Assert.Equal("1 2 0", string.Join(" ", minutes[0].Children.Select(c => c.TextContent)));
+        Assert.Equal(minutes.Count, cut.FindAll("svg.minutes rect.team0").Count);   // one bar per team per minute
+        Assert.DoesNotContain("Map", cut.FindAll("h2").Select(h => h.TextContent));   // this film has no positions
+    }
+
+    [Fact]
+    public async Task The_kill_feed_can_show_one_player()
+    {
+        await SignInAsync();
+        var cut = Loaded(HaloWorld.FilmMatchId);
+        OnRenderer(cut, () => cut.Find("section.card label.filter select").Change("1"));   // Fred
+        Assert.Equal([$"1:15 | {Linda.Gamertag} killed {Fred.Gamertag} | "], Feed(cut));
+    }
+
+    [Fact]
+    public async Task A_film_already_on_disk_shows_straight_away()
+    {
+        await SignInAsync();
+        await Session.GetTimelineAsync(HaloWorld.FilmMatchId);
+        var cut = Render<MatchTimelinePage>(p => p.Add(x => x.MatchId, HaloWorld.FilmMatchId));
+        cut.WaitForAssertion(() => Assert.Contains("Kill feed", cut.Markup), Wait);
+        Assert.Empty(cut.FindAll("section.intro"));
+        Assert.Equal(1, Requests("/spectate"));
+    }
+
+    [Fact]
+    public async Task An_unfinished_match_explains_why_there_is_no_timeline()
+    {
+        await SignInAsync();
+        var cut = Render<MatchTimelinePage>(p => p.Add(x => x.MatchId, HaloWorld.UnfinishedFilmMatchId));
+        Click(cut, "section.intro button", "Load the timeline");
+        cut.WaitForAssertion(() => Assert.Contains("didn't end normally", cut.Find("p.error").TextContent), Wait);
+        Assert.Empty(cut.FindAll("button"));   // trying again wouldn't help
+    }
+
+    [Fact]
+    public async Task A_film_that_cannot_be_read_says_so()
+    {
+        var film = H.World.Films[HaloWorld.FilmMatchId];
+        var header = film.Chunks.Keys.Single(k => k.EndsWith("filmChunk0"));
+        var empty = Synthetic.HeaderChunk([]);   // a header with no players in it
+        H.World.Films[HaloWorld.FilmMatchId] = film with
+        {
+            Manifest = film.Manifest.Replace($"\"ChunkSize\": {film.Chunks[header].Length},", $"\"ChunkSize\": {empty.Length},"),
+            Chunks = film.Chunks.ToDictionary(c => c.Key, c => c.Key == header ? empty : c.Value),
+        };
+        await SignInAsync();
+        var cut = Render<MatchTimelinePage>(p => p.Add(x => x.MatchId, HaloWorld.FilmMatchId));
+        Click(cut, "section.intro button", "Load the timeline");
+        cut.WaitForAssertion(() => Assert.Contains("couldn't be read", cut.Find("p.error").TextContent), Wait);
     }
 }
 

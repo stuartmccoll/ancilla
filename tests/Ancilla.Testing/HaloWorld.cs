@@ -87,6 +87,10 @@ public sealed class HaloWorld
         Now = now ?? DateTimeOffset.UtcNow;
         for (var i = 0; i < matchmade; i++) Games.Add(Matchmade(i));
         for (var i = 0; i < CustomCount; i++) Games.Add(Custom(matchmade + i, i));
+        // Films belong to the two custom games, which come straight after the matchmade ones. In the
+        // default world these are FilmMatchId and UnfinishedFilmMatchId.
+        foreach (var (id, finished) in new[] { (Ids.Match(matchmade), true), (Ids.Match(matchmade + 1), false) })
+            Films[id] = MakeFilm(GameById(id), finished);
     }
 
     public static UserProfile Profile(Spartan s) => new(s.Xuid, s.Gamertag);
@@ -301,6 +305,44 @@ public sealed class HaloWorld
         }
     }
 
+    // ---- Films -------------------------------------------------------------------------
+
+    /// <summary>A Theater film: its manifest's raw JSON, and its chunks by URL.</summary>
+    public sealed record Film(string Manifest, IReadOnlyDictionary<string, byte[]> Chunks);
+
+    /// <summary>Films the fake serves, by match ID. Other matches have none (the service answers 404).</summary>
+    public Dictionary<string, Film> Films { get; } = [];
+
+    /// <summary>The first custom game, with a short film: Noble Six and Fred against Kelly and Linda.</summary>
+    public static string FilmMatchId => Ids.Match(MatchmadeCount);
+
+    /// <summary>The second custom game, whose film has no end-of-match summary.</summary>
+    public static string UnfinishedFilmMatchId => Ids.Match(MatchmadeCount + 1);
+
+    /// <summary>The film's events, in the summary's order: a death follows the kill that caused it.</summary>
+    public static IReadOnlyList<Synthetic.Event> FilmEvents { get; } =
+    [
+        Synthetic.Kill(NobleSix.Gamertag, 30_000), Synthetic.Death(Kelly.Gamertag, 30_001),
+        Synthetic.Kill(NobleSix.Gamertag, 33_000), Synthetic.Death(Linda.Gamertag, 33_001),
+        Synthetic.Medal(NobleSix.Gamertag, 33_000, 0),                     // a Double Kill
+        Synthetic.Kill(Linda.Gamertag, 75_000), Synthetic.Death(Fred.Gamertag, 75_001),
+        Synthetic.Death(NobleSix.Gamertag, 100_000),                        // no killer: a suicide
+        Synthetic.Kill(Kelly.Gamertag, 130_000), Synthetic.Death(NobleSix.Gamertag, 130_001),
+    ];
+
+    private static Film MakeFilm(Game g, bool finished)
+    {
+        var prefix = $"https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/film/{g.Id}/";
+        var roster = g.Stats.Players
+            .Select(p => All.First(s => s.Xuid == p.Xuid))
+            .Select(s => new Synthetic.HeaderPlayer(ulong.Parse(s.Xuid), s.Gamertag))
+            .ToList();
+        var (header, summary) = (Synthetic.HeaderChunk(roster), Synthetic.SummaryChunk(FilmEvents));
+        return new Film(
+            Synthetic.ManifestJson(g.Id, blobPrefix: prefix, finished: finished, headerSize: header.Length, summarySize: summary.Length),
+            new Dictionary<string, byte[]> { [prefix + "filmChunk0"] = header, [prefix + "filmChunk1"] = summary });
+    }
+
     // ---- Skill -------------------------------------------------------------------------
 
     public static Csr CsrOf(int value)
@@ -331,6 +373,9 @@ public sealed class HaloWorld
         var mmrs = g.Stats.MatchInfo.TeamsEnabled ? new Dictionary<string, double> { ["0"] = 1450 + i, ["1"] = 1440 - i } : null;
         return new MatchSkill(1450 + i, recap, perf, g.Me.LastTeamId, mmrs);
     }
+
+    /// <summary>Playlists that answer with a CSR; the rest answer 400, as unranked playlists do.</summary>
+    public HashSet<string> RankedPlaylistIds { get; } = [Ids.RankedArena];
 
     public static PlaylistCsr RankedArenaCsr => new(CsrOf(1452), CsrOf(1490), CsrOf(1530));
 

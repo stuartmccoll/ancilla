@@ -21,3 +21,7 @@ secrets.json
 
 # Career snapshots, if the "Snapshots" setting ever points inside the repo
 snapshots.json
+
+# Coverage output (see the README's Tests section)
+TestResults/
+coverage/

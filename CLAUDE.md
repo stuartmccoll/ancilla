@@ -24,14 +24,15 @@ Tests (see the README's Tests section for the full table):
 
 - `tests/Ancilla.Core.Tests` (xUnit): the API client, progress and service record maths, caches, snapshots.
 - `tests/Ancilla.Data.Tests` (xUnit): the SQLite archive, its migrations, snapshot import and export.
-- `tests/Ancilla.Theater.Tests` (xUnit): film decoding. Its films are synthetic, built bit by bit in `Synthetic.cs`.
+- `tests/Ancilla.Theater.Tests` (xUnit): film decoding. Its films are synthetic, built bit by bit in
+  `tests/Ancilla.Testing/Synthetic.cs`.
 - `tests/Ancilla.Web.Tests` (xUnit, bUnit): web services, `HaloSession`, and pages and components rendered
   without a browser. Derive from `Components/ComponentTest`; click through its `Click`/`OnRenderer`
   helpers, because pages re-render as background data arrives.
 - `tests/Ancilla.Web.E2E` (Playwright, axe): the real app in Chromium on a loopback port, signed in via
   `HALO_SPARTAN_TOKEN`, with axe run on every main page in every theme.
-- `tests/Ancilla.Testing`: `FakeHalo`, a fake of the Halo services serving a made-up `HaloWorld`. Pages
-  and the browser tests talk to it instead of halowaypoint.com. Add new endpoints here when you add them
+- `tests/Ancilla.Testing`: `FakeHalo`, a fake of the Halo services serving a made-up `HaloWorld`
+  (films included, for its two custom games). Pages and the browser tests talk to it instead of halowaypoint.com. Add new endpoints here when you add them
   to `HaloWaypointClient`, and new pages to the routes in `SmokeTests` and `AccessibilityTests`.
 
 All test data is made up and Halo-themed (Noble Team, Blue Team, Sangheili). Never add real film
@@ -39,7 +40,8 @@ data, API responses, gamertags or XUIDs as fixtures. Write XUIDs in hex (`Sparta
 check never sees a decimal one. Verify changes by building with zero warnings and running the tests.
 For UI changes, also run the app. CI (`.github/workflows/ci.yml`) runs the privacy check, then builds
 with warnings as errors and runs the tests on Ubuntu and Windows, with the browser tests in a separate
-Ubuntu job, for every pull request and every push to `main`. Dependabot (`.github/dependabot.yml`) opens weekly PRs
+Ubuntu job, for every pull request and every push to `main`. Each build-and-test job writes a coverage
+summary to its page (reported, not enforced); see the README for running it locally. Dependabot (`.github/dependabot.yml`) opens weekly PRs
 updating NuGet packages and the Actions CI uses; minor and patch updates come grouped. Every page needs a real Spartan token,
 so you can't check pages against live data yourself; the fake backend shows they work, not that the
 real API still returns what the fake does. Say so rather than claiming a page works.
