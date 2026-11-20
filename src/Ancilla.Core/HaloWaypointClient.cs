@@ -28,12 +28,16 @@ public sealed class HaloWaypointClient
 
     private readonly HttpClient _http;
     private readonly string _spartanToken;
+    private readonly HaloDiagnostics? _diagnostics;
     private string? _clearance;
 
-    public HaloWaypointClient(HttpClient http, string spartanToken)
+    public HaloWaypointClient(HttpClient http, string spartanToken, HaloDiagnostics? diagnostics = null)
     {
         _http = http;
+        _diagnostics = diagnostics;
         _spartanToken = NormaliseToken(spartanToken);
+        diagnostics?.Redactor.Register(_spartanToken);
+        diagnostics?.Redactor.Register(_spartanToken["v4=".Length..]);
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("Ancilla/1.0");
     }
@@ -59,6 +63,7 @@ public sealed class HaloWaypointClient
                 $"{Settings}/oban/flight-configurations/titles/hi/audiences/RETAIL/players/xuid({xuid})/active?sandbox=UNUSED&build={FlightBuild}",
                 needsClearance: false, ct);
             _clearance = flight.FlightConfigurationId;
+            _diagnostics?.Redactor.Register(_clearance);
         }
         catch (HttpRequestException)
         {
@@ -66,6 +71,7 @@ public sealed class HaloWaypointClient
             var history = await GetMatchHistoryAsync(xuid, 0, 1, MatchHistoryType.All, ct);
             _clearance = history.Results.FirstOrDefault()?.MatchInfo.ClearanceId
                 ?? throw new InvalidOperationException("Could not determine a clearance (flight) ID.");
+            _diagnostics?.Redactor.Register(_clearance);
         }
         return _clearance;
     }
@@ -177,7 +183,16 @@ public sealed class HaloWaypointClient
         if (needsClearance)
             req.Headers.Add("343-clearance", await GetClearanceAsync(xuid!, ct));
 
-        var res = await _http.SendAsync(req, ct);
+        var endpoint = HaloDiagnostics.EndpointName(url);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        HttpResponseMessage res;
+        try { res = await _http.SendAsync(req, ct); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _diagnostics?.RecordCall(endpoint, null, clock.Elapsed, ok: false);
+            throw;
+        }
+        _diagnostics?.RecordCall(endpoint, (int)res.StatusCode, clock.Elapsed, res.IsSuccessStatusCode);
         if (!res.IsSuccessStatusCode)
         {
             using var _ = res;

@@ -20,6 +20,9 @@ public abstract class ComponentTest : BunitContext
         Services.AddSingleton(H.Films);
         Services.AddSingleton(H.Cache);
         Services.AddSingleton(H.Assets);
+        Services.AddSingleton(H.Log);
+        Services.AddSingleton(H.Diagnostics);
+        Services.AddSingleton(H.Report);
     }
 
     protected Harness H { get; }

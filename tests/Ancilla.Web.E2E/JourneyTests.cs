@@ -102,4 +102,25 @@ public sealed class JourneyTests(AppFixture app)
         await Expect(matches).ToHaveTextAsync(ff.ToString());
         await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Firefight", Exact = true })).ToHaveAttributeAsync("aria-pressed", "true");
     }
+
+    [Fact]
+    public async Task The_log_holds_no_private_data()
+    {
+        var page = await app.NewPageAsync();
+        await page.OpenAsync("matches");
+        await Expect(page.Locator("main h1")).ToContainTextAsync("Matches");
+        await page.OpenAsync("diagnostics");
+        await Expect(page.Locator("main h1")).ToHaveTextAsync("Diagnostics");
+        await Expect(page.Locator("main")).ToContainTextAsync("halostats");
+
+        var text = string.Concat(Directory.GetFiles(app.LogFolder).Select(File.ReadAllText));
+        Assert.Contains("halostats", text);
+        Assert.DoesNotContain(Spartans.Token["v4=".Length..], text);
+        foreach (var s in Spartans.All)
+        {
+            Assert.DoesNotContain(s.Xuid, text);
+            Assert.DoesNotContain(s.Gamertag, text);
+        }
+        Assert.DoesNotContain(app.LogFolder, text);
+    }
 }

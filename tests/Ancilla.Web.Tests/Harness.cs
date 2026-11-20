@@ -30,10 +30,16 @@ public sealed class Harness : IDisposable
     public SnapshotStore Snapshots { get; }
     public FilmCache Films { get; }
     public IConfiguration Config { get; }
+    public Redactor Redactor { get; } = new();
+    public DiagnosticLog Log => _log ??= new DiagnosticLog(Path.Combine(Root, "logs"), Redactor);
+    private DiagnosticLog? _log;
+    public HaloDiagnostics Diagnostics => _diagnostics ??= new HaloDiagnostics(Redactor, Log);
+    private HaloDiagnostics? _diagnostics;
+    public DiagnosticsReport Report => new(Diagnostics, Cache, Assets, Snapshots, Films);
 
     public HaloWorld World => Halo.World;
 
-    public HaloSession NewSession() => new(Halo.Factory, Cache, Assets, Films, Config);
+    public HaloSession NewSession() => new(Halo.Factory, Cache, Assets, Films, Config, Diagnostics);
 
     public async Task<HaloSession> SignedInAsync()
     {
@@ -44,6 +50,11 @@ public sealed class Harness : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true);
+        // A late background request may still be writing its log line, so try again.
+        for (var attempt = 0; attempt < 5 && Directory.Exists(Root); attempt++)
+        {
+            try { Directory.Delete(Root, recursive: true); }
+            catch (IOException) { Thread.Sleep(50); }
+        }
     }
 }

@@ -1,0 +1,111 @@
+@page "/diagnostics"
+@inject HaloSession Session
+@inject DiagnosticsReport Report
+@inject IJSRuntime JS
+
+<PageTitle>Diagnostics · Ancilla</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Diagnostics</h1>
+        <p>How the app and Halo's services are doing. Nothing here includes your token, gamertag, player IDs or file paths.</p>
+    </div>
+    <div class="actions">
+        <button @onclick="CopyAsync">Copy diagnostics</button>
+        <button class="secondary" @onclick="RefreshAsync">Refresh</button>
+    </div>
+</div>
+
+<p class="muted" role="status">@_status</p>
+
+@if (_d is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="content">
+        <section class="card">
+            <h2>This app</h2>
+            <dl class="defs">
+                <dt>Version</dt><dd>@_d.Version</dd>
+                <dt>System</dt><dd>@_d.Os</dd>
+                <dt>Runtime</dt><dd>@_d.Runtime</dd>
+                <dt>Requests</dt><dd>@_d.InFlight running, @_d.Queued waiting (at most 8 run at once)</dd>
+            </dl>
+        </section>
+
+        <section class="card">
+            <h2>Halo services</h2>
+            @if (_d.Endpoints.Count == 0)
+            {
+                <p class="muted">No calls yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <caption class="visually-hidden">Calls to each Halo service since the app started</caption>
+                        <thead><tr><th scope="col">Service</th><th scope="col">Calls</th><th scope="col">Errors</th><th scope="col">Last status</th><th scope="col">Last call took</th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _d.Endpoints)
+                            {
+                                <tr>
+                                    <th scope="row">@e.Endpoint</th>
+                                    <td>@e.Calls</td>
+                                    <td>@e.Errors</td>
+                                    <td>@(e.LastStatus?.ToString() ?? "no response")</td>
+                                    <td>@e.LastMilliseconds.ToString("0") ms</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="card">
+            <h2>Stored data</h2>
+            <dl class="defs">
+                <dt>Shared data (in memory)</dt><dd>@_d.SharedEntries entries</dd>
+                <dt>Images (in memory)</dt><dd>@_d.Images, @DiagnosticsReport.Size(_d.ImageBytes)</dd>
+                <dt>Progress snapshots</dt><dd>@_d.Snapshots, @DiagnosticsReport.Size(_d.SnapshotBytes)</dd>
+                <dt>Theater films</dt><dd>@_d.Films, @DiagnosticsReport.Size(_d.FilmBytes)</dd>
+                <dt>Log files</dt><dd>@DiagnosticsReport.Size(_d.LogBytes) in <code class="path">@_d.LogFolder</code></dd>
+            </dl>
+        </section>
+
+        <section class="card">
+            <h2>Reporting a problem</h2>
+            <p>
+                Choose <em>Copy diagnostics</em>, then paste it into a
+                <a href="@DiagnosticsReport.BugTemplateUrl" target="_blank" rel="noopener noreferrer">new bug report</a>.
+                The copy is redacted the same way as the log files.
+            </p>
+        </section>
+    </div>
+}
+
+@code {
+    private DiagnosticsSnapshot? _d;
+    private string _status = "";
+
+    protected override async Task OnInitializedAsync() => _d = await Report.TakeAsync(Session);
+
+    private async Task RefreshAsync()
+    {
+        _d = await Report.TakeAsync(Session);
+        _status = "Refreshed.";
+    }
+
+    private async Task CopyAsync()
+    {
+        _d = await Report.TakeAsync(Session);
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Report.ToText(_d));
+            _status = "Copied. Paste it into your bug report.";
+        }
+        catch (JSException) { _status = "Couldn't copy. Your browser may have blocked it."; }
+    }
+}

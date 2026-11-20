@@ -381,3 +381,28 @@ public sealed class StaticPageTests : ComponentTest
         Assert.Equal("Not Found", cut.Find("h3").TextContent);
     }
 }
+
+public sealed class DiagnosticsPageTests : ComponentTest
+{
+    [Fact]
+    public async Task Shows_service_health_and_copies_a_redacted_summary()
+    {
+        await SignInAsync();
+        var cut = Render<Diagnostics>();
+        Assert.Equal("Diagnostics", cut.Find("h1").TextContent);
+        Assert.Contains("profile/users/me", cut.Markup);   // sign-in made a call
+        Assert.Contains("at most 8 run at once", cut.Markup);
+
+        var copy = JSInterop.SetupVoid(i => i.Identifier == "navigator.clipboard.writeText");
+        copy.SetVoidResult();
+        Click(cut, "button", "Copy diagnostics");
+        copy.VerifyInvoke("navigator.clipboard.writeText");
+        var text = (string)copy.Invocations.Single().Arguments[0]!;
+        Assert.Contains("profile/users/me: 1 calls", text);
+        Assert.DoesNotContain(Spartans.NobleSix.Xuid, text);
+        Assert.DoesNotContain(Spartans.NobleSix.Gamertag, text);
+        Assert.DoesNotContain(Spartans.Token, text);
+        cut.WaitForAssertion(() => Assert.StartsWith("Copied", cut.Find("[role=status]").TextContent), Wait);
+        Assert.Contains(cut.FindAll("a"), a => a.GetAttribute("href")!.Contains("template=bug.yml"));
+    }
+}

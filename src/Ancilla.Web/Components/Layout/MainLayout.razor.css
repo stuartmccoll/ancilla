@@ -54,6 +54,7 @@
     display: block; width: 100%; text-align: left; background: none; color: var(--text);
     padding: .5rem .6rem; border-radius: var(--radius-sm); font-weight: 500;
 }
+a.menu-item { text-decoration: none; }
 .menu-item:hover, .menu-item:focus-visible { background: var(--track); }
 
 /* ---- Section tabs ---- */

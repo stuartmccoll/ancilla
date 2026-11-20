@@ -11,6 +11,15 @@ public sealed class AssetCache
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<(byte[] Bytes, string ContentType)>>> _items = new();
 
+    /// <summary>How many images are held, and their total size in bytes.</summary>
+    public (int Count, long Bytes) Size()
+    {
+        int n = 0; long bytes = 0;
+        foreach (var lazy in _items.Values)
+            if (lazy.IsValueCreated && lazy.Value.IsCompletedSuccessfully) { n++; bytes += lazy.Value.Result.Bytes.Length; }
+        return (n, bytes);
+    }
+
     /// <returns>The relative URL the page should use.</returns>
     public async Task<string> EnsureAsync(string key, Func<Task<(byte[] Bytes, string ContentType)>> fetch)
     {

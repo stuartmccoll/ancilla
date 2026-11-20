@@ -98,7 +98,7 @@ tests in their own Ubuntu job.
 
 ## Pages
 
-Home · Progress · Stats › Service record, Medals · Matches › History, Trends, Insights, Players · About
+Home · Progress · Stats › Service record, Medals · Matches › History, Trends, Insights, Players · About · Diagnostics (from the user menu and the footer)
 
 - **Home** (where you land): profile header plus an overview card per section: career and
   active-pass progress, headline stats and top medals, your last 10 results with a K/D sparkline
@@ -136,6 +136,10 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   for a head-to-head: per-game averages side by side and the list of shared matches.
 - **About**: what the app is, where the data comes from, what happens to your token and data,
   how each derived number is worked out, and the disclaimer.
+- **Diagnostics**: app version, operating system, how each Halo service has been answering (calls,
+  errors, last status and time), cache sizes (shared data, images, snapshots, films, logs) and how many
+  requests are running or waiting. **Copy diagnostics** puts a redacted text summary on the clipboard
+  for a [bug report](.github/ISSUE_TEMPLATE/bug.yml).
 
 Firefight (PvE) games are left out of Trends and Insights, because kills against AI would swamp the
 scale. Every chart has a "Show as table" view. Every page has a footer stating that this is an
@@ -176,6 +180,17 @@ To add a theme (e.g. Xbox 360):
   ```powershell
   dotnet run --project src/Ancilla.Web -- --Snapshots="$HOME\Documents\Ancilla\snapshots.json"
   ```
+
+### Logs
+
+The app writes a log to a `logs` folder next to the snapshots: one `ancilla-yyyyMMdd.log` a day, rolled
+at 2 MB and kept for a week. It records each call to Halo by service name, result and time taken (never
+the URL, which holds IDs), plus start-up and sign-in. Before any line is written, `Redactor` removes
+Spartan tokens, clearance IDs, XUIDs (decimal, hex and `xuid(...)`), gamertags, film download URLs and
+absolute paths. To store logs elsewhere, set the `Logs` setting to a folder.
+
+To check the logs the browser tests produce, set `ANCILLA_E2E_LOGS` to a folder when running them, then run
+`.github/scripts/privacy-check.sh --log <folder>`. CI does this in the browser tests job.
 
 ### How XP per match is worked out
 
