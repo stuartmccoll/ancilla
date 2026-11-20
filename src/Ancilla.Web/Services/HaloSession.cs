@@ -52,7 +52,7 @@ public sealed class MatchListState
 /// (finished matches, maps, medals) goes through the shared <see cref="HaloCache"/>.
 /// The token lives only inside the client object, in server memory.
 /// </summary>
-public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config)
+public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config, HaloDiagnostics diagnostics)
 {
     private readonly ConcurrentDictionary<string, Task<MatchTimeline>> _timelines = new();
     // The ranked-playlist list isn't discoverable by name without a version ID, so seed the common one.
@@ -63,7 +63,9 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     private readonly ConcurrentDictionary<string, UserProfile> _users = new();
     private readonly ConcurrentDictionary<string, string> _playlistNames = new(KnownPlaylists);
-    private readonly SemaphoreSlim _throttle = new(8);
+    private const int MaxParallel = 8;
+    private readonly SemaphoreSlim _throttle = new(MaxParallel);
+    private int _waiting;
     private readonly SemaphoreSlim _historyLock = new(1);
     private readonly Dictionary<MatchHistoryType, List<MatchHistoryEntry>> _history = [];
     private readonly HashSet<MatchHistoryType> _historyComplete = [];
@@ -97,6 +99,18 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     /// <summary>Raised (possibly off the UI thread) whenever match rows load or fill in.</summary>
     public event Action? MatchesChanged;
 
+    /// <summary>Requests waiting for one of the 8 slots, for the Diagnostics page.</summary>
+    public int QueueLength => Volatile.Read(ref _waiting);
+    /// <summary>Requests running right now.</summary>
+    public int InFlight => MaxParallel - _throttle.CurrentCount;
+
+    private async Task EnterThrottleAsync()
+    {
+        Interlocked.Increment(ref _waiting);
+        try { await _throttle.WaitAsync(); }
+        finally { Interlocked.Decrement(ref _waiting); }
+    }
+
     public HaloWaypointClient Client => _client ?? throw new InvalidOperationException("Not signed in.");
     public string Xuid => Me?.Xuid ?? throw new InvalidOperationException("Not signed in.");
 
@@ -113,11 +127,14 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     public async Task SignInAsync(string token)
     {
-        var client = new HaloWaypointClient(httpFactory.CreateClient(), token);
+        var client = new HaloWaypointClient(httpFactory.CreateClient(), token, diagnostics);
         var me = await client.GetMeAsync();   // validates the token
         Reset();
         _client = client;
         Me = me;
+        diagnostics.Redactor.Register(me.Gamertag);
+        diagnostics.Redactor.Register(me.Xuid);
+        diagnostics.Info("Signed in");
         try { ServiceTag = (await client.GetAppearanceAsync(me.Xuid)).Appearance?.ServiceTag; }
         catch (HttpRequestException) { /* cosmetic only */ }
         Changed?.Invoke();
@@ -196,7 +213,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         };
         var results = await Task.WhenAll(categories.Select(async c =>
         {
-            await _throttle.WaitAsync();
+            await EnterThrottleAsync();
             try { return new ModeRecord(c, await RawRecord(c, filter.IsRanked)); }
             catch (HttpRequestException) { return null; }   // one missing mode shouldn't hide the rest
             finally { _throttle.Release(); }
@@ -226,7 +243,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         var xuid = Xuid;
         var results = await Task.WhenAll(ids.Select(async id =>
         {
-            await _throttle.WaitAsync();
+            await EnterThrottleAsync();
             try
             {
                 var r = await client.GetPlaylistCsrAsync(id, xuid);
@@ -268,7 +285,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         var done = 0;
         var results = await Task.WhenAll(entries.Select(async e =>
         {
-            await _throttle.WaitAsync();
+            await EnterThrottleAsync();
             try { return new RecentMatch(e, await GetMatchAsync(e.MatchId)); }
             catch (HttpRequestException) { return null; }
             finally
@@ -285,7 +302,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     {
         var pairs = await Task.WhenAll(matchIds.Distinct().Select(async id =>
         {
-            await _throttle.WaitAsync();
+            await EnterThrottleAsync();
             try { return (id, skill: await GetSkillAsync(id)); }
             finally { _throttle.Release(); }
         }));
@@ -353,7 +370,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     private async Task FillRowAsync(MatchRow row)
     {
-        await _throttle.WaitAsync();
+        await EnterThrottleAsync();
         try
         {
             var info = row.Entry.MatchInfo;
@@ -428,7 +445,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
             {
                 if (!films.HasChunk(matchId, c))
                 {
-                    await _throttle.WaitAsync();
+                    await EnterThrottleAsync();
                     try { films.SaveChunk(matchId, c, await source.GetChunkAsync(manifest, c)); }
                     finally { _throttle.Release(); }
                 }
@@ -470,7 +487,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         {
             return await cache.GetOrAddAsync($"navmesh:{map.AssetId}:{map.VersionId}", async () =>
             {
-                await _throttle.WaitAsync();
+                await EnterThrottleAsync();
                 try
                 {
                     using var http = httpFactory.CreateClient();
@@ -523,7 +540,11 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         {
             try
             {
-                foreach (var u in await Client.GetUsersAsync(chunk)) _users[u.Xuid] = u;
+                foreach (var u in await Client.GetUsersAsync(chunk))
+                {
+                    _users[u.Xuid] = u;
+                    diagnostics.Redactor.Register(u.Gamertag);
+                }
             }
             catch (HttpRequestException) { /* fall back to showing no gamertag */ }
         }

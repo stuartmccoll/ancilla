@@ -1,6 +1,7 @@
 @page "/about"
 @inject SnapshotStore Snapshots
 @inject Ancilla.Theater.FilmCache Films
+@inject DiagnosticLog Log
 
 <PageTitle>About · Ancilla</PageTitle>
 
@@ -81,6 +82,15 @@
                     it (usually 9–30 MB each), and kept on this machine at <code class="path">@Films.DisplayRoot</code> so
                     they needn't be downloaded again. A film holds the gamertags of everyone in the match. Delete the
                     folder to remove them.
+                </li>
+                <li>
+                    <strong>Log files</strong> record what the app did, to help with bug reports: each call to Halo's
+                    services by service name, result and time taken (never the address, which holds IDs), and the app
+                    starting and signing in. Before anything is written, tokens, player IDs, gamertags, film download
+                    addresses and file paths are removed. They're kept on this machine at
+                    <code class="path">@Log.DisplayFolder</code>, one file a day, for a week. The
+                    <a href="diagnostics">Diagnostics</a> page shows how the services are doing and can copy a redacted
+                    summary for a bug report.
                 </li>
                 <li>
                     <strong>Your theme choice</strong> is kept in a browser cookie.

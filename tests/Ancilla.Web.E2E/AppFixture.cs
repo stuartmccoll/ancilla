@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Playwright;
 
 namespace Ancilla.Web.E2E;
@@ -25,6 +26,8 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     private IPlaywright? _playwright;
 
     public FakeHalo Halo { get; } = new();
+    /// <summary>Where the app writes its log during the tests.</summary>
+    public string LogFolder => Path.Combine(_root, "logs");
     public Uri BaseUri { get; private set; } = null!;
     public IBrowser Browser { get; private set; } = null!;
 
@@ -36,6 +39,11 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         {
             // Every outgoing request lands on the fake. A new handler each time: the factory disposes them.
             services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(Halo.CreateHandler));
+            // Replace the logging the app set up, so the log lands in the temporary folder.
+            services.RemoveAll<DiagnosticLog>();
+            services.RemoveAll<HaloDiagnostics>();
+            services.AddSingleton(sp => new DiagnosticLog(LogFolder, sp.GetRequiredService<Redactor>()));
+            services.AddSingleton(sp => new HaloDiagnostics(sp.GetRequiredService<Redactor>(), sp.GetRequiredService<DiagnosticLog>()));
             services.AddSingleton(new SnapshotStore(Path.Combine(_root, "snapshots.json")));
             services.AddSingleton(new FilmCache(Path.Combine(_root, "films")));
         });
@@ -70,6 +78,12 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         if (Browser is not null) await Browser.CloseAsync();
         _playwright?.Dispose();
         await DisposeAsync();
+        // CI sets this so the privacy check can scan the log these tests produced.
+        if (Environment.GetEnvironmentVariable("ANCILLA_E2E_LOGS") is { Length: > 0 } keep && Directory.Exists(LogFolder))
+        {
+            Directory.CreateDirectory(keep);
+            foreach (var f in Directory.GetFiles(LogFolder)) File.Copy(f, Path.Combine(keep, Path.GetFileName(f)), overwrite: true);
+        }
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 }

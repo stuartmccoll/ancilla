@@ -18,6 +18,13 @@ builder.Services.AddSingleton(new SnapshotStore(builder.Configuration["Snapshots
 // Theater films (9–30 MB each, every player's gamertag and XUID) are cached on disk outside the
 // repo, in the same folder Ancilla.Theater.Cli uses, and downloaded only when a timeline is asked for.
 builder.Services.AddSingleton(new FilmCache(builder.Configuration["Films"] ?? FilmCache.DefaultRoot));
+// Local log files with tokens, XUIDs, gamertags and paths redacted. See About > Your token and privacy.
+var redactor = new Redactor();
+var log = new DiagnosticLog(builder.Configuration["Logs"] ?? DiagnosticLog.DefaultFolder, redactor);
+builder.Services.AddSingleton(redactor);
+builder.Services.AddSingleton(log);
+builder.Services.AddSingleton(new HaloDiagnostics(redactor, log));
+builder.Services.AddSingleton<DiagnosticsReport>();
 builder.Services.AddSingleton<HaloCache>();
 builder.Services.AddSingleton<AssetCache>();
 builder.Services.AddScoped<HaloSession>();
@@ -47,6 +54,7 @@ app.MapGet("/assets/{**key}", (string key, AssetCache assets, HttpContext ctx) =
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+app.Services.GetRequiredService<HaloDiagnostics>().Info($"Ancilla {DiagnosticsReport.AppVersion} started");
 app.Run();
 
 // Lets the browser tests (tests/Ancilla.Web.E2E) host the app with WebApplicationFactory.

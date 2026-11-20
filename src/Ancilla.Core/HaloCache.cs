@@ -11,6 +11,9 @@ public sealed class HaloCache
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<object?>>> _items = new();
 
+    /// <summary>How many entries are held.</summary>
+    public int Count => _items.Count;
+
     public async Task<T> GetOrAddAsync<T>(string key, Func<Task<T>> factory)
     {
         var lazy = _items.GetOrAdd(key, _ => new Lazy<Task<object?>>(async () => await factory()));

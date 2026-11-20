@@ -1,0 +1,23 @@
+name: Bug report
+description: Something in Ancilla doesn't work or shows the wrong thing
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. Please don't paste your Spartan token, other people's gamertags or player IDs.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Which page, what you did, what you expected and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: In Ancilla, open Diagnostics (from the user menu or the footer), choose "Copy diagnostics" and paste it here. It's already redacted.
+      render: text
+    validations:
+      required: true
