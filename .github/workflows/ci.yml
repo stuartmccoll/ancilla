@@ -63,5 +63,10 @@ jobs:
       - name: Install Chromium
         run: pwsh tests/Ancilla.Web.E2E/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
       # The app runs on a loopback port against the fake backend; axe checks every page in every theme.
+      # The tests copy the log the app wrote to ANCILLA_E2E_LOGS, for the next step to scan.
       - name: Test
         run: dotnet test tests/Ancilla.Web.E2E --no-build --configuration Release
+        env:
+          ANCILLA_E2E_LOGS: ${{ runner.temp }}/ancilla-logs
+      - name: No tokens, XUIDs or machine paths in the log
+        run: .github/scripts/privacy-check.sh --log "${{ runner.temp }}/ancilla-logs"

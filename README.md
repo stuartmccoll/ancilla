@@ -190,7 +190,7 @@ Spartan tokens, clearance IDs, XUIDs (decimal, hex and `xuid(...)`), gamertags, 
 absolute paths. To store logs elsewhere, set the `Logs` setting to a folder.
 
 To check the logs the browser tests produce, set `ANCILLA_E2E_LOGS` to a folder when running them, then run
-`.github/scripts/privacy-check.sh --log <folder>`.
+`.github/scripts/privacy-check.sh --log <folder>`. CI does this in the browser tests job.
 
 ### How XP per match is worked out
 

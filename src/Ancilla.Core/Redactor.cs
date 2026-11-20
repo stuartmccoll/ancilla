@@ -65,14 +65,14 @@ public sealed partial class Redactor
     [GeneratedRegex(@"(?<![0-9A-Za-z])(?:0x)?0009[0-9A-Fa-f]{12}(?![0-9A-Za-z])")]
     private static partial Regex HexXuid();
 
-    // 2533274790395904 to 2814749767106559.
+    // The same range in decimal: 16 digits, 0x0009_0000_0000_0000 to 0x0009_FFFF_FFFF_FFFF.
     [GeneratedRegex(@"(?<!\d)2[5-8]\d{14}(?!\d)")]
     private static partial Regex DecimalXuid();
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])[A-Za-z]:\\[^\s""'<>|*?]+")]
     private static partial Regex WindowsPath();
 
-    // Two or more segments, so "/health" or an endpoint name stays but "/home/someone/x" goes.
+    // Two or more segments, so "/health" or an endpoint name stays but "/srv/data/x" goes.
     [GeneratedRegex(@"(?<![\w.:/<>\]\)-])/[\w.~-]+(?:/[\w.~-]+)+")]
     private static partial Regex UnixPath();
 }
