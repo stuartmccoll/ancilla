@@ -157,18 +157,18 @@ public sealed class ArchiveTests : IDisposable
     }
 
     [Fact]
-    public void One_players_data_never_shows_up_for_another()
+    public async Task One_players_data_never_shows_up_for_another()
     {
         var store = Open();
         var other = Spartans.Kat.Xuid;
         store.PutHistory(Me, MatchHistoryType.All, World.Games.Take(5).Select(g => g.Entry));
         store.PutSkill(Me, World.Games[0].Id, new MatchSkill(1200, null, null, 0, null));
-        store.SnapshotsFor(Me).AppendAsync(new ProgressSnapshot(DateTimeOffset.UtcNow, 10, 1000)).Wait();
+        await store.SnapshotsFor(Me).AppendAsync(new ProgressSnapshot(DateTimeOffset.UtcNow, 10, 1000));
 
         Assert.Equal(0, store.CountHistory(other, MatchHistoryType.All));
         Assert.Empty(store.GetHistory(other, MatchHistoryType.All));
         Assert.False(store.TryGetSkill(other, World.Games[0].Id, out _));
-        Assert.Empty(store.SnapshotsFor(other).LoadAsync().Result);
+        Assert.Empty(await store.SnapshotsFor(other).LoadAsync());
         Assert.Equal(0, store.Summary(other).Matches);
         Assert.Equal(5, store.Summary(Me).Matches);
     }
