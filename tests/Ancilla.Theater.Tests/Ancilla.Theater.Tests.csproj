@@ -16,10 +16,12 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Ancilla.Testing" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Ancilla.Theater/Ancilla.Theater.csproj" />
+    <ProjectReference Include="../Ancilla.Testing/Ancilla.Testing.csproj" />
   </ItemGroup>
 
 </Project>

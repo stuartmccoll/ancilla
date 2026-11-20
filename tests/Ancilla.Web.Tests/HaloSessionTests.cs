@@ -166,6 +166,37 @@ public sealed class HaloSessionTests : IDisposable
         Assert.Same(ranked, await s.GetRankedAsync());
     }
 
+    [Fact]
+    public async Task Ranked_playlists_get_their_names_from_match_history()
+    {
+        _h.World.RankedPlaylistIds.Add(HaloWorld.QuickPlay.AssetId);   // not one the app knows by name
+        var s = await _h.SignedInAsync();
+        var ranked = await s.GetRankedAsync();
+        Assert.Equal(["Quick Play", "Ranked Arena"], ranked.Select(r => r.Name).Order());
+    }
+
+    [Fact]
+    public async Task A_ranked_playlist_keeps_a_plain_name_when_history_fails()
+    {
+        _h.World.RankedPlaylistIds.Add(HaloWorld.QuickPlay.AssetId);
+        _h.Halo.Fail("/matches?");
+        var s = await _h.SignedInAsync();
+        var ranked = await s.GetRankedAsync();
+        Assert.Equal(HaloSession.UnnamedPlaylist, ranked.Single(r => r.PlaylistId == HaloWorld.QuickPlay.AssetId).Name);
+    }
+
+    [Fact]
+    public async Task Refreshing_a_filtered_record_asks_the_api_again()
+    {
+        var s = await _h.SignedInAsync();
+        var pvp = new StatsFilter(StatsScope.PvP);
+        await s.GetServiceRecordAsync(pvp);
+        await s.GetServiceRecordAsync(pvp);
+        Assert.Equal(1, Requests("gameVariantCategory=42"));
+        await s.GetServiceRecordAsync(pvp, refresh: true);
+        Assert.Equal(2, Requests("gameVariantCategory=42"));
+    }
+
     // ---- Matches ------------------------------------------------------------------------
 
     [Fact]
@@ -365,6 +396,36 @@ public sealed class HaloSessionTests : IDisposable
             await Assert.ThrowsAsync<HttpRequestException>(() => s.GetTimelineAsync(id));
             return Requests("/spectate") >= 2;
         });
+    }
+
+    [Fact]
+    public async Task A_film_is_downloaded_once_then_read_from_disk()
+    {
+        var s = await _h.SignedInAsync();
+        var id = HaloWorld.FilmMatchId;
+        var progress = new List<(int Done, int Total)>();
+        var t = await s.GetTimelineAsync(id, (done, total) => { lock (progress) progress.Add((done, total)); });
+
+        Assert.Equal([NobleSix.Gamertag, Fred.Gamertag, Kelly.Gamertag, Linda.Gamertag], t.Players.Select(p => p.Gamertag));
+        Assert.Equal(NobleSix.Xuid, t.Players[0].Xuid);
+        Assert.Equal([(1, 2), (2, 2)], progress.Order());
+        Assert.True(s.IsFilmCached(id));
+        Assert.Equal((1, 2), (Requests("/spectate"), Requests("blobs-")));
+
+        // Another session (or a restart) reads the film from disk instead of the network.
+        var again = await _h.SignedInAsync().ContinueWith(x => x.Result.GetTimelineAsync(id)).Unwrap();
+        Assert.Equal(t.Feed.Count, again.Feed.Count);
+        Assert.Equal((1, 2), (Requests("/spectate"), Requests("blobs-")));
+    }
+
+    [Fact]
+    public async Task An_unfinished_film_is_not_downloaded()
+    {
+        var s = await _h.SignedInAsync();
+        await Assert.ThrowsAsync<UnfinishedFilmException>(() => s.GetTimelineAsync(HaloWorld.UnfinishedFilmMatchId));
+        Assert.Equal(1, Requests("/spectate"));
+        Assert.Equal(0, Requests("blobs-"));   // no summary, so no point fetching the rest
+        Assert.False(s.IsFilmCached(HaloWorld.UnfinishedFilmMatchId));
     }
 
     [Fact]
