@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Ancilla.Core;
+using Ancilla.Data;
 using Ancilla.Theater;
 
 namespace Ancilla.Web.Services;
@@ -11,13 +12,13 @@ public sealed record DiagnosticsSnapshot(
     string Version, string Os, string Runtime,
     IReadOnlyList<EndpointHealth> Endpoints,
     int SharedEntries, int Images, long ImageBytes,
-    int Snapshots, long SnapshotBytes,
+    int Snapshots, int ArchivedMatches, long ArchiveBytes,
     int Films, long FilmBytes,
     long LogBytes, string LogFolder,
     int Queued, int InFlight);
 
 public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cache, AssetCache assets,
-    SnapshotStore snapshots, FilmCache films)
+    ArchiveStore archive, FilmCache films)
 {
     public const string BugTemplateUrl = "https://github.com/stuartmccoll/ancilla/issues/new?template=bug.yml";
 
@@ -28,14 +29,19 @@ public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cac
     public async Task<DiagnosticsSnapshot> TakeAsync(HaloSession session)
     {
         var (images, imageBytes) = assets.Size();
-        int snapshotCount = 0;
-        long snapshotBytes = 0;
+        int snapshotCount = 0, archived = 0;
+        long archiveBytes = 0;
         try
         {
-            snapshotCount = (await snapshots.LoadAsync()).Count;
-            if (File.Exists(snapshots.FilePath)) snapshotBytes = new FileInfo(snapshots.FilePath).Length;
+            if (session.IsSignedIn)
+            {
+                snapshotCount = (await session.Snapshots.LoadAsync()).Count;
+                var summary = archive.Summary(session.Xuid);
+                archived = summary.Matches;
+                archiveBytes = summary.SizeBytes;
+            }
         }
-        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException) { }
+        catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException or UnauthorizedAccessException) { }
 
         int filmCount = 0;
         long filmBytes = 0;
@@ -48,7 +54,7 @@ public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cac
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
 
         return new(AppVersion, RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription,
-            diagnostics.Endpoints(), cache.Count, images, imageBytes, snapshotCount, snapshotBytes,
+            diagnostics.Endpoints(), cache.Count, images, imageBytes, snapshotCount, archived, archiveBytes,
             filmCount, filmBytes, diagnostics.Log?.SizeBytes() ?? 0, diagnostics.Log?.DisplayFolder ?? "(logging is off)",
             session.QueueLength, session.InFlight);
     }
@@ -69,7 +75,7 @@ public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cac
         sb.AppendLine("Caches:");
         sb.AppendLine($"  Shared data: {d.SharedEntries} entries");
         sb.AppendLine($"  Images: {d.Images} ({Size(d.ImageBytes)})");
-        sb.AppendLine($"  Progress snapshots: {d.Snapshots} ({Size(d.SnapshotBytes)})");
+        sb.AppendLine($"  Match archive: {d.ArchivedMatches:N0} matches, {d.Snapshots} progress snapshots ({Size(d.ArchiveBytes)})");
         sb.AppendLine($"  Films: {d.Films} ({Size(d.FilmBytes)})");
         sb.AppendLine($"  Log files: {Size(d.LogBytes)}");
         sb.AppendLine();

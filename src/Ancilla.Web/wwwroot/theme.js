@@ -7,3 +7,15 @@ window.haloTheme = {
         document.cookie = `theme=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`;
     },
 };
+
+// Saves text the server built (an export) as a file, without the data ever leaving the page.
+window.ancillaDownload = (name, mime, text) => {
+    const url = URL.createObjectURL(new Blob([text], { type: mime + ";charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+};

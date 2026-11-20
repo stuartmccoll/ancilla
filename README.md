@@ -77,11 +77,12 @@ dotnet test                                    # every test project, browser tes
 dotnet test tests/Ancilla.Web.Tests            # or one project at a time
 ```
 
-Nothing needs a Spartan token or a network connection to Halo. The tests come in four layers:
+Nothing needs a Spartan token or a network connection to Halo. The tests come in five layers:
 
 | Project | What it covers | Tools |
 |---|---|---|
 | `tests/Ancilla.Core.Tests` | The API client (URLs, headers, ID checks, error messages), progress and service record maths, caching, snapshots | xUnit |
+| `tests/Ancilla.Data.Tests` | The SQLite archive: schema migrations (an empty database and every earlier schema), storage per player, the one-off snapshot import, CSV and JSON export | xUnit |
 | `tests/Ancilla.Theater.Tests` | Theater film decoding, on films built bit by bit | xUnit |
 | `tests/Ancilla.Web.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), and every page and shared component rendered without a browser | xUnit, bUnit |
 | `tests/Ancilla.Web.E2E` | The real app in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
@@ -98,7 +99,7 @@ tests in their own Ubuntu job.
 
 ## Pages
 
-Home · Progress · Stats › Service record, Medals · Matches › History, Trends, Insights, Players · About · Diagnostics (from the user menu and the footer)
+Home · Progress · Stats › Service record, Medals · Matches › History, Trends, Insights, Players · About · Settings, Diagnostics (from the user menu and the footer)
 
 - **Home** (where you land): profile header plus an overview card per section: career and
   active-pass progress, headline stats and top medals, your last 10 results with a K/D sparkline
@@ -125,17 +126,20 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   distance) and the kill feed with each kill's medals, weapon pickups and, in CTF, flag actions (taken,
   picked up, captured, dropped, returned, carrier stopped). Filter the map by player
   or team, and the feed by player.
-- **Trends**: your last 25/50/100 PvP games charted: K/D per match with a 10-game rolling K/D,
+- **Trends**: your last 25/50/100 PvP games (or everything in the archive) charted: K/D per match with a 10-game rolling K/D,
   kills above/below what the matchmaker expected, and CSR across ranked games.
-- **Insights**: over your last 50/100/200 PvP games:
+- **Insights**: over your last 50/100/200 PvP games, or everything in the archive:
   - win rate and K/D by map, mode or playlist (dot plot; hollow dots mean fewer than 3 games)
   - actual vs expected kills per game (scatter around the y = x line)
   - win rate by team MMR gap, showing how much lobby balance decided your results
-- **Players**: everyone who's been in at least two of your last 50/100/200 games, with your record
+- **Players**: everyone who's been in at least two of your last 50/100/200 games (or all stored ones), with your record
   with them as teammates and against them as opponents. Select a player (here or on any scoreboard)
   for a head-to-head: per-game averages side by side and the list of shared matches.
 - **About**: what the app is, where the data comes from, what happens to your token and data,
   how each derived number is worked out, and the disclaimer.
+- **Settings**: the match archive (what's stored, where, how big), **Load older matches** to
+  backfill your whole history, **Export as CSV / JSON** (one row per match, with no other players'
+  names or IDs), and the Theater film cache with its size limit and **Clear films**.
 - **Diagnostics**: app version, operating system, how each Halo service has been answering (calls,
   errors, last status and time), cache sizes (shared data, images, snapshots, films, logs) and how many
   requests are running or waiting. **Copy diagnostics** puts a redacted text summary on the clipboard
@@ -171,15 +175,27 @@ To add a theme (e.g. Xbox 360):
   `films` in the same `Ancilla` folder as snapshots, shared with `Ancilla.Theater.Cli`. Set the
   `Films` setting to a folder to store them elsewhere. A film holds every player's gamertag and XUID,
   so keep the folder out of anything you share.
-- Each time progress loads, a snapshot (matches played, total career XP, and the active pass with
-  its XP) is saved to
-  `snapshots.json` in an `Ancilla` folder under the local application data folder. On macOS
-  that's `~/Library/Application Support/Ancilla`, and on Windows `%LOCALAPPDATA%\Ancilla`.
-  To store it elsewhere, set the `Snapshots` setting to a file path:
+- **The match archive** (`Ancilla.Data`) is a SQLite database, `archive.db`, in an `Ancilla`
+  folder under the local application data folder (on macOS `~/Library/Application Support/Ancilla`,
+  on Windows `%LOCALAPPDATA%\Ancilla`). It keeps, per player (by XUID): match history entries,
+  skill results and progress snapshots, plus scoreboards and versioned map, mode and playlist names,
+  which are the same for everyone. Trends, Insights and Players can read all of it
+  (**Everything stored**), and after a restart what you've loaded shows without asking Halo again.
+  While the app is open, new matches are looked for in the background; **Settings > Load older
+  matches** pages back through your whole history. Requests share the app's 8-at-a-time limit and
+  back off when the service answers 429 (too many requests). The schema is a numbered list of
+  migrations (`ArchiveSchema`), so updates add to the database and never drop data; a database from a
+  newer version is refused rather than changed. To store it elsewhere, set the `Archive` setting to a file path:
 
   ```powershell
-  dotnet run --project src/Ancilla.Web -- --Snapshots="$HOME\Documents\Ancilla\snapshots.json"
+  dotnet run --project src/Ancilla.Web -- --Archive="$HOME\Documents\Ancilla\archive.db"
   ```
+- Progress snapshots (matches played, total career XP, and the active pass with its XP) are saved
+  in the archive each time progress loads. Earlier versions kept them in `snapshots.json` in the
+  same folder: that file is copied into the archive once, for the first player to sign in, and left
+  where it is. The `Snapshots` setting still points at it.
+- The film cache is trimmed to 2 GB, oldest films first, whenever a film is downloaded. Set
+  `FilmCacheLimitMb` to change the limit. Settings can clear it.
 
 ### Logs
 

@@ -19,7 +19,7 @@ else if (_c is null)
 }
 else if (_c.Games == 0)
 {
-    <p class="muted">You haven't shared a game with this player in your last @Range matches.</p>
+    <p class="muted">You haven't shared a game with this player in @RangeText.</p>
 }
 else
 {
@@ -35,7 +35,7 @@ else
             <span class="key-row"><span class="key them"></span>@(_them?.Gamertag ?? "Player")</span>
         </div>
     </div>
-    <p class="muted center">@c.Games shared @(c.Games == 1 ? "game" : "games") in your last @Range matches · last played @Fmt.Ago(c.LastPlayed)</p>
+    <p class="muted center">@c.Games shared @(c.Games == 1 ? "game" : "games") in @RangeText · last played @Fmt.Ago(c.LastPlayed)</p>
 
     <section class="tiles">
         <div class="tile"><span class="label">As teammates</span>
@@ -102,7 +102,8 @@ else
     [Parameter] public string Xuid { get; set; } = "";
     [SupplyParameterFromQuery(Name = "range")] public int? RangeQuery { get; set; }
 
-    private int Range => RangeQuery is > 0 and <= 200 ? RangeQuery.Value : 100;
+    private int Range => RangeQuery is (> 0 and <= 200) or HaloSession.AllStored ? RangeQuery.Value : 100;
+    private string RangeText => Range == HaloSession.AllStored ? "your stored matches" : $"your last {Range} matches";
 
     private Companion? _c;
     private UserProfile? _them;

@@ -15,7 +15,7 @@ public sealed class AccessibilityTests(AppFixture app)
     public static readonly string[] Pages =
     [
         "", "progress", "stats", "stats/medals", "matches", "matches/trends", "matches/insights", "matches/players",
-        $"matches/{HaloWorld.Ids.Match(0)}", $"matches/{HaloWorld.Ids.Match(1)}/timeline", $"matches/players/{Spartans.Carter.Xuid}", "about", "diagnostics",
+        $"matches/{HaloWorld.Ids.Match(0)}", $"matches/{HaloWorld.Ids.Match(1)}/timeline", $"matches/players/{Spartans.Carter.Xuid}", "about", "settings", "diagnostics",
     ];
 
     public static TheoryData<string, string> Cases()

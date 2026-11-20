@@ -1,7 +1,7 @@
 namespace Ancilla.Core;
 
 /// <summary>Pulls everything needed and turns it into a <see cref="ProgressReport"/>.</summary>
-public sealed class ProgressService(HaloWaypointClient client, SnapshotStore snapshots)
+public sealed class ProgressService(HaloWaypointClient client, ISnapshotStore snapshots)
 {
     /// <param name="window">Which stretch of history to average XP per match over.</param>
     /// <param name="xpPerMatchOverride">Use this XP/match instead of measuring it.</param>

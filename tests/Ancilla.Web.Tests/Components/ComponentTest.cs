@@ -18,6 +18,7 @@ public abstract class ComponentTest : BunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton(H.Snapshots);
         Services.AddSingleton(H.Films);
+        Services.AddSingleton(H.Archive);
         Services.AddSingleton(H.Cache);
         Services.AddSingleton(H.Assets);
         Services.AddSingleton(H.Log);

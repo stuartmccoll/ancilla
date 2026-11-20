@@ -20,7 +20,7 @@ public sealed class HomePageTests : ComponentTest
         Assert.Equal("B312", cut.Find("h1 .stag").TextContent);
         Assert.Equal(["Progress", "Stats", "Matches", "Players"], cut.FindAll("h2").Select(h => h.TextContent).Take(4));
         cut.WaitForAssertion(() => Assert.NotNull(Session.Report), Wait);
-        Assert.Single(await H.Snapshots.LoadAsync());   // opening the home page records a snapshot
+        Assert.Single(await Session.Snapshots.LoadAsync());   // opening the home page records a snapshot, in the archive
     }
 }
 
@@ -360,6 +360,60 @@ public sealed class PlayerPagesTests : ComponentTest
     }
 }
 
+public sealed class SettingsPageTests : ComponentTest
+{
+    [Fact]
+    public async Task Shows_what_the_archive_holds_and_where()
+    {
+        await SignInAsync();
+        await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
+        var cut = Render<Settings>();
+        Assert.Equal("Settings", cut.Find("h1").TextContent);
+        Assert.Equal(H.Archive.DisplayPath, cut.Find("section[aria-labelledby=archive-h] code.path").TextContent);
+        Assert.Contains($"{HaloWorld.MatchmadeCount}", cut.Find("section[aria-labelledby=archive-h] dl").TextContent);
+    }
+
+    [Fact]
+    public async Task Loading_older_matches_reports_what_was_added()
+    {
+        await SignInAsync();
+        await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
+        var cut = Render<Settings>();
+        Click(cut, "button", "Load older matches");
+        cut.WaitForAssertion(() => Assert.Contains($"{H.World.Games.Count} are stored", cut.Find("p[role=status]").TextContent), Wait);
+        Assert.Equal(H.World.Games.Count, Session.ArchiveSummary().WithScoreboard);
+    }
+
+    [Fact]
+    public async Task Exports_hand_the_file_to_the_browser()
+    {
+        await SignInAsync();
+        await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
+        var cut = Render<Settings>();
+        Click(cut, "button", "Export as CSV");
+        var call = JSInterop.Invocations["ancillaDownload"].Single();
+        Assert.Equal("ancilla-matches.csv", call.Arguments[0]);
+        Assert.StartsWith("MatchId,", (string)call.Arguments[2]!);
+        Click(cut, "button", "Export as JSON");
+        Assert.Equal(2, JSInterop.Invocations["ancillaDownload"].Count);
+    }
+
+    [Fact]
+    public async Task Clearing_films_empties_the_cache()
+    {
+        await SignInAsync();
+        var id = H.World.Games[0].Id;
+        Directory.CreateDirectory(H.Films.MatchDir(id));
+        File.WriteAllBytes(Path.Combine(H.Films.MatchDir(id), "chunk000-type1.zlib"), new byte[2048]);
+        var cut = Render<Settings>();
+        Assert.False(cut.Find("section[aria-labelledby=films-h] button").HasAttribute("disabled"));
+        Click(cut, "section[aria-labelledby=films-h] button", "Clear films");
+        Assert.Empty(H.Films.CachedMatches());
+        Assert.Contains("Deleted 1 film.", cut.Find("p[role=status]").TextContent);
+        Assert.True(cut.Find("section[aria-labelledby=films-h] button").HasAttribute("disabled"));
+    }
+}
+
 public sealed class StaticPageTests : ComponentTest
 {
     [Fact]
@@ -369,9 +423,9 @@ public sealed class StaticPageTests : ComponentTest
         var cut = Render<About>();
         Assert.Contains("Disclaimer", cut.FindAll("h2").Select(h => h.TextContent));
         Assert.Contains("unofficial", cut.Markup);
-        Assert.Equal(H.Snapshots.DisplayPath, cut.Find("code.path").TextContent);
+        Assert.Contains(H.Archive.DisplayPath, cut.FindAll("code.path").Select(c => c.TextContent));
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (H.Snapshots.FilePath.StartsWith(home)) Assert.DoesNotContain(home, cut.Markup);
+        if (H.Archive.FilePath.StartsWith(home)) Assert.DoesNotContain(home, cut.Markup);
     }
 
     [Fact]

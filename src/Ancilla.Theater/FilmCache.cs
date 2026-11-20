@@ -37,6 +37,41 @@ public sealed class FilmCache(string root)
             .Select(x => x.id)
             .FirstOrDefault();
 
+    /// <summary>Bytes on disk across every cached film (and the shared medal file).</summary>
+    public long TotalBytes() =>
+        Directory.Exists(root) ? new DirectoryInfo(root).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) : 0;
+
+    /// <summary>Deletes every cached film. Returns how many were removed.</summary>
+    public int Clear()
+    {
+        var ids = CachedMatches().ToList();
+        foreach (var id in ids) Directory.Delete(MatchDir(id), recursive: true);
+        return ids.Count;
+    }
+
+    /// <summary>
+    /// Deletes the least recently fetched films until the cache is within <paramref name="maxBytes"/>,
+    /// never touching <paramref name="keep"/> (the film just downloaded). Returns how many were removed.
+    /// </summary>
+    public int Trim(long maxBytes, string? keep = null)
+    {
+        var films = CachedMatches()
+            .Select(id => (id, bytes: new DirectoryInfo(MatchDir(id)).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length),
+                when: Directory.GetLastWriteTimeUtc(MatchDir(id))))
+            .ToList();
+        var total = films.Sum(f => f.bytes);
+        var removed = 0;
+        foreach (var f in films.OrderBy(f => f.when))
+        {
+            if (total <= maxBytes) break;
+            if (string.Equals(f.id, keep, StringComparison.OrdinalIgnoreCase)) continue;
+            Directory.Delete(MatchDir(f.id), recursive: true);
+            total -= f.bytes;
+            removed++;
+        }
+        return removed;
+    }
+
     public void SaveManifest(string matchId, string rawJson) => Write(matchId, "manifest.json", rawJson);
 
     /// <summary>Medal metadata (names and difficulties): the same for everyone, so one copy for all films.</summary>

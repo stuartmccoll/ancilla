@@ -63,7 +63,7 @@ public sealed class CoreStats
     public int ObjectivesCompleted { get; init; }
     public List<MedalCount> Medals { get; init; } = [];
 
-    public double KillDeathRatio => Deaths == 0 ? Kills : (double)Kills / Deaths;
+    [JsonIgnore] public double KillDeathRatio => Deaths == 0 ? Kills : (double)Kills / Deaths;
 }
 
 /// <summary>NameId is a 32-bit hash that can exceed int.MaxValue.</summary>
@@ -109,7 +109,16 @@ public sealed record MatchInfo(
     bool TeamsEnabled = false);
 
 /// <summary>GET halostats.svc.halowaypoint.com/hi/matches/{matchId}/stats</summary>
-public sealed record MatchStats(string MatchId, MatchInfo MatchInfo, List<MatchTeam> Teams, List<MatchPlayer> Players);
+public sealed record MatchStats(string MatchId, MatchInfo MatchInfo, List<MatchTeam> Teams, List<MatchPlayer> Players)
+{
+    /// <summary>
+    /// Firefight and other games against AI only: <paramref name="xuid"/>'s stats have a PvE group and
+    /// no PvP one. Kills there aren't comparable to PvP.
+    /// </summary>
+    public bool IsPve(string xuid) =>
+        Players.FirstOrDefault(p => p.Xuid == xuid)?.Stats?.ModeStats is { } m
+        && m.ContainsKey("PveStats") && !m.ContainsKey("PvpStats");
+}
 
 public sealed record MatchTeam(int TeamId, MatchOutcome Outcome, int Rank, StatsBlock Stats);
 
@@ -122,12 +131,12 @@ public sealed record MatchPlayer(
     ParticipationInfo? ParticipationInfo,
     List<PlayerTeamStats> PlayerTeamStats)
 {
-    public bool IsHuman => PlayerType == 1;
+    [JsonIgnore] public bool IsHuman => PlayerType == 1;
 
     /// <summary>"xuid(123)" → "123"; null for bots ("bid(...)").</summary>
-    public string? Xuid => PlayerId.StartsWith("xuid(", StringComparison.Ordinal) ? PlayerId[5..^1] : null;
+    [JsonIgnore] public string? Xuid => PlayerId.StartsWith("xuid(", StringComparison.Ordinal) ? PlayerId[5..^1] : null;
 
-    public StatsBlock? Stats =>
+    [JsonIgnore] public StatsBlock? Stats =>
         (PlayerTeamStats.FirstOrDefault(t => t.TeamId == LastTeamId) ?? PlayerTeamStats.FirstOrDefault())?.Stats;
 }
 
@@ -168,10 +177,10 @@ public sealed record Csr(
     int NextSubTier,
     int InitialMeasurementMatches)
 {
-    public bool IsRanked => Value >= 0 && !string.IsNullOrEmpty(Tier);
+    [JsonIgnore] public bool IsRanked => Value >= 0 && !string.IsNullOrEmpty(Tier);
 
     /// <summary>SubTier is zero-based (Platinum 1 = SubTier 0). Onyx has no sub-tiers.</summary>
-    public string Display => !IsRanked ? "Unranked"
+    [JsonIgnore] public string Display => !IsRanked ? "Unranked"
         : Tier == "Onyx" ? $"Onyx {Value}"
         : $"{Tier} {SubTier + 1}";
 }
@@ -181,8 +190,8 @@ public sealed record Csr(
 /// <summary>GET discovery-infiniteugc.svc.halowaypoint.com/hi/{maps|ugcGameVariants|playlists}/{id}/versions/{ver}</summary>
 public sealed record UgcAsset(string AssetId, string VersionId, string? PublicName, string? Description, UgcFiles? Files)
 {
-    public string? ThumbnailUrl => FileUrl("images/thumbnail.jpg");
-    public string? HeroUrl => FileUrl("images/hero.jpg") ?? ThumbnailUrl;
+    [JsonIgnore] public string? ThumbnailUrl => FileUrl("images/thumbnail.jpg");
+    [JsonIgnore] public string? HeroUrl => FileUrl("images/hero.jpg") ?? ThumbnailUrl;
 
     /// <summary>The Forge navmesh, when the map has one (343-built maps don't).</summary>
     public const string NavMeshFile = "navmesh.blob";

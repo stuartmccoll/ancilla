@@ -1,5 +1,6 @@
 using System.Net;
 using Ancilla.Core;
+using Ancilla.Data;
 using Ancilla.Testing;
 using Ancilla.Theater;
 using Microsoft.AspNetCore.Hosting;
@@ -46,6 +47,8 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton(sp => new HaloDiagnostics(sp.GetRequiredService<Redactor>(), sp.GetRequiredService<DiagnosticLog>()));
             services.AddSingleton(new SnapshotStore(Path.Combine(_root, "snapshots.json")));
             services.AddSingleton(new FilmCache(Path.Combine(_root, "films")));
+            services.RemoveAll<ArchiveStore>();
+            services.AddSingleton(new ArchiveStore(Path.Combine(_root, "archive.db")));
         });
     }
 

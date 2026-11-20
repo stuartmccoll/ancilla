@@ -69,7 +69,7 @@ else
             <dl class="defs">
                 <dt>Shared data (in memory)</dt><dd>@_d.SharedEntries entries</dd>
                 <dt>Images (in memory)</dt><dd>@_d.Images, @DiagnosticsReport.Size(_d.ImageBytes)</dd>
-                <dt>Progress snapshots</dt><dd>@_d.Snapshots, @DiagnosticsReport.Size(_d.SnapshotBytes)</dd>
+                <dt>Match archive</dt><dd>@_d.ArchivedMatches.ToString("N0") matches, @_d.Snapshots progress snapshots, @DiagnosticsReport.Size(_d.ArchiveBytes)</dd>
                 <dt>Theater films</dt><dd>@_d.Films, @DiagnosticsReport.Size(_d.FilmBytes)</dd>
                 <dt>Log files</dt><dd>@DiagnosticsReport.Size(_d.LogBytes) in <code class="path">@_d.LogFolder</code></dd>
             </dl>
