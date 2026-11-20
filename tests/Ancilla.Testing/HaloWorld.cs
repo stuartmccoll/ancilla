@@ -81,12 +81,15 @@ public sealed class HaloWorld
     public const int MatchmadeCount = 24;
     public const int CustomCount = 2;
 
-    public HaloWorld(DateTimeOffset? now = null)
+    /// <param name="matchmade">How many matchmade games to make. More than 200 tests going past the first pages of history.</param>
+    public HaloWorld(DateTimeOffset? now = null, int matchmade = MatchmadeCount)
     {
         Now = now ?? DateTimeOffset.UtcNow;
-        for (var i = 0; i < MatchmadeCount; i++) Games.Add(Matchmade(i));
-        for (var i = 0; i < CustomCount; i++) Games.Add(Custom(MatchmadeCount + i));
-        foreach (var (id, finished) in new[] { (FilmMatchId, true), (UnfinishedFilmMatchId, false) })
+        for (var i = 0; i < matchmade; i++) Games.Add(Matchmade(i));
+        for (var i = 0; i < CustomCount; i++) Games.Add(Custom(matchmade + i, i));
+        // Films belong to the two custom games, which come straight after the matchmade ones. In the
+        // default world these are FilmMatchId and UnfinishedFilmMatchId.
+        foreach (var (id, finished) in new[] { (Ids.Match(matchmade), true), (Ids.Match(matchmade + 1), false) })
             Films[id] = MakeFilm(GameById(id), finished);
     }
 
@@ -128,9 +131,9 @@ public sealed class HaloWorld
             MatchHistoryType.Matchmaking, t.Category, t.Playlist == RankedArena, t.Pve);
     }
 
-    private Game Custom(int i)
+    private Game Custom(int i, int n)
     {
-        var start = Now.AddDays(-2).AddHours(-(i - MatchmadeCount));
+        var start = Now.AddDays(-2).AddHours(-n);
         var info = new MatchInfo(start, start.AddMinutes(8), Ids.Flight, "PT8M", 6, Bazaar.Ref(2), Slayer.Ref(6), null, 1, true);
         var t = new Template(Slayer, 6, Bazaar, QuickPlay, true, false, null);
         var players = new (Spartan, int)[] { (NobleSix, 0), (Fred, 0), (Kelly, 1), (Linda, 1) }

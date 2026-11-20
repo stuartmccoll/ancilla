@@ -6,7 +6,7 @@ namespace Ancilla.Core;
 /// Stores progress snapshots in a JSON file. The API has no per-match XP figure, so the
 /// change in career XP between runs, divided by matches played, gives the real rate.
 /// </summary>
-public sealed class SnapshotStore(string path)
+public sealed class SnapshotStore(string path) : ISnapshotStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
@@ -67,9 +67,7 @@ public sealed class SnapshotStore(string path)
     public async Task<IReadOnlyList<ProgressSnapshot>> AppendAsync(ProgressSnapshot snapshot, CancellationToken ct = default)
     {
         var all = (await LoadAsync(ct)).ToList();
-        var last = all.LastOrDefault();
-        if (last is null || last.MatchesCompleted != snapshot.MatchesCompleted || last.CareerXpEarned != snapshot.CareerXpEarned
-            || last.ActivePass != snapshot.ActivePass || last.ActivePassXpEarned != snapshot.ActivePassXpEarned)
+        if (ISnapshotStore.IsNew(all.LastOrDefault(), snapshot))
         {
             all.Add(snapshot);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

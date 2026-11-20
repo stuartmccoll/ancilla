@@ -1,4 +1,5 @@
 using Ancilla.Core;
+using Ancilla.Data;
 using Ancilla.Testing;
 using Ancilla.Theater;
 using Ancilla.Web.Services;
@@ -18,6 +19,7 @@ public sealed class Harness : IDisposable
         Root = Path.Combine(Path.GetTempPath(), "ancilla-tests-" + Guid.NewGuid().ToString("N"));
         Snapshots = new SnapshotStore(Path.Combine(Root, "snapshots.json"));
         Films = new FilmCache(Path.Combine(Root, "films"));
+        Archive = new ArchiveStore(Path.Combine(Root, "archive.db"));
         Config = new ConfigurationBuilder()
             .AddInMemoryCollection(envToken is null ? [] : [new("HALO_SPARTAN_TOKEN", envToken)])
             .Build();
@@ -29,17 +31,18 @@ public sealed class Harness : IDisposable
     public AssetCache Assets { get; } = new();
     public SnapshotStore Snapshots { get; }
     public FilmCache Films { get; }
+    public ArchiveStore Archive { get; }
     public IConfiguration Config { get; }
     public Redactor Redactor { get; } = new();
     public DiagnosticLog Log => _log ??= new DiagnosticLog(Path.Combine(Root, "logs"), Redactor);
     private DiagnosticLog? _log;
     public HaloDiagnostics Diagnostics => _diagnostics ??= new HaloDiagnostics(Redactor, Log);
     private HaloDiagnostics? _diagnostics;
-    public DiagnosticsReport Report => new(Diagnostics, Cache, Assets, Snapshots, Films);
+    public DiagnosticsReport Report => new(Diagnostics, Cache, Assets, Archive, Films);
 
     public HaloWorld World => Halo.World;
 
-    public HaloSession NewSession() => new(Halo.Factory, Cache, Assets, Films, Config, Diagnostics);
+    public HaloSession NewSession() => new(Halo.Factory, Cache, Assets, Films, Config, Diagnostics, Archive, Snapshots) { Retry = new RetryPolicy(4, TimeSpan.FromMilliseconds(1)) };
 
     public async Task<HaloSession> SignedInAsync()
     {
@@ -50,6 +53,7 @@ public sealed class Harness : IDisposable
 
     public void Dispose()
     {
+        Archive.Dispose();   // lets go of the database file so the folder can be deleted
         // A late background request may still be writing its log line, so try again.
         for (var attempt = 0; attempt < 5 && Directory.Exists(Root); attempt++)
         {

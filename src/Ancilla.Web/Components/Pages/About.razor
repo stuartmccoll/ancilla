@@ -1,5 +1,5 @@
 @page "/about"
-@inject SnapshotStore Snapshots
+@inject ArchiveStore Archive
 @inject Ancilla.Theater.FilmCache Films
 @inject DiagnosticLog Log
 
@@ -73,15 +73,23 @@
                     Tokens expire after a few hours anyway.
                 </li>
                 <li>
-                    <strong>Progress snapshots</strong> (your career XP, matches played and your active pass's XP, with a
-                    timestamp) are saved each time your progress loads, to power the XP-per-match rates and the Hero forecast. They're stored on this
-                    machine at <code class="path">@Snapshots.DisplayPath</code>.
+                    <strong>Your match archive</strong> keeps what you load, so it survives restarts and isn't limited to
+                    the API's recent history. It's a SQLite database on this machine at
+                    <code class="path">@Archive.DisplayPath</code>, and holds: each match you've played (when, outcome, rank,
+                    map, mode and playlist), its full scoreboard, which includes the IDs, scores and medals of everyone in
+                    it, your skill result for it, map, mode and playlist names, and your
+                    <strong>progress snapshots</strong> (career XP, matches played and your active pass's XP, with a
+                    timestamp), which power the XP-per-match rates and the Hero forecast. Everything is filed under your
+                    player ID, so a different account's data stays separate. New matches are added in the background while
+                    the app is open, and <a href="settings">Settings</a> can load older ones, export your matches as CSV or
+                    JSON, and says how big it is. Delete the file to remove it. If you used an earlier version, its
+                    snapshots file is copied in once and left where it was.
                 </li>
                 <li>
                     <strong>Theater films</strong> are downloaded only when you open a match's timeline and choose to load
                     it (usually 9–30 MB each), and kept on this machine at <code class="path">@Films.DisplayRoot</code> so
-                    they needn't be downloaded again. A film holds the gamertags of everyone in the match. Delete the
-                    folder to remove them.
+                    they needn't be downloaded again. A film holds the gamertags of everyone in the match. The cache is
+                    trimmed to a size limit, and <a href="settings">Settings</a> can clear it.
                 </li>
                 <li>
                     <strong>Log files</strong> record what the app did, to help with bug reports: each call to Halo's
@@ -97,7 +105,8 @@
                 </li>
                 <li>
                     <strong>Caching:</strong> finished matches, maps, modes, medal data and images are kept in memory while
-                    the app runs, so pages load faster the second time. Restarting the app clears them.
+                    the app runs, so pages load faster the second time. Restarting the app clears the memory copy, but matches,
+                    maps, modes and playlists are also in your archive, so they load from there without asking Halo again.
                 </li>
                 <li>
                     <strong>Things your browser loads directly:</strong> map thumbnails (from Halo's content servers),
@@ -125,7 +134,7 @@
                 <dd>
                     The services don't report XP per game, so it's measured: the career XP gained between two snapshots,
                     divided by the matches played in between. On the Progress page you choose what to average over, such as
-                    the last 50 matches or the last 30 days. Snapshots are only saved when that page loads, so the window
+                    the last 50 matches or the last 30 days. Snapshots are only saved when your progress loads, so the window
                     starts at the nearest snapshot, and needs at least 5 matches since it. Without enough history, your
                     lifetime average is used, which is only a rough guide.
                 </dd>

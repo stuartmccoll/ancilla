@@ -1,6 +1,5 @@
 @page "/progress"
 @inject HaloSession Session
-@inject SnapshotStore Snapshots
 
 <PageTitle>Progress · Ancilla</PageTitle>
 
@@ -310,7 +309,7 @@ else if (_loading)
         else
         {
             _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
-            _snapshots = (await Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
+            _snapshots = (await Session.Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
         }
     }
 
@@ -363,10 +362,10 @@ else if (_loading)
         StateHasChanged();
         try
         {
-            Session.Report = await new ProgressService(Session.Client, Snapshots)
+            Session.Report = await new ProgressService(Session.Client, Session.Snapshots)
                 .BuildReportAsync(Session.XpAverage, ManualXp);
             _rankIcon = await Session.GetCmsImageUrlAsync(Session.Report.Career.RankIcon);
-            _snapshots = (await Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
+            _snapshots = (await Session.Snapshots.LoadAsync()).OrderBy(s => s.TakenAt).ToList();
         }
         catch (Exception ex)
         {

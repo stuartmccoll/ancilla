@@ -21,6 +21,7 @@ public sealed class SmokeTests(AppFixture app)
         { $"matches/{HaloWorld.Ids.Match(1)}/timeline", "Match timeline" },
         { $"matches/players/{Spartans.Carter.Xuid}", "" },
         { "about", "About" },
+        { "settings", "Settings" },
         { "diagnostics", "Diagnostics" },
         // Old flat URLs still work.
         { "medals", "Medals" },

@@ -1,4 +1,5 @@
 using Ancilla.Core;
+using Ancilla.Data;
 using Ancilla.Theater;
 using Ancilla.Web.Components;
 using Ancilla.Web.Services;
@@ -14,7 +15,10 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpClient();
 builder.Services.ConfigureHttpClientDefaults(http =>
     http.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
+// The old progress snapshots file. Its snapshots are imported into the archive once, then it is left alone.
 builder.Services.AddSingleton(new SnapshotStore(builder.Configuration["Snapshots"] ?? SnapshotStore.DefaultPath));
+// Every match, skill result and snapshot you load, in SQLite on this machine (see About > What's stored).
+builder.Services.AddSingleton(new ArchiveStore(builder.Configuration["Archive"] ?? ArchiveStore.DefaultPath));
 // Theater films (9–30 MB each, every player's gamertag and XUID) are cached on disk outside the
 // repo, in the same folder Ancilla.Theater.Cli uses, and downloaded only when a timeline is asked for.
 builder.Services.AddSingleton(new FilmCache(builder.Configuration["Films"] ?? FilmCache.DefaultRoot));

@@ -23,6 +23,7 @@ a restart is coming.
 Tests (see the README's Tests section for the full table):
 
 - `tests/Ancilla.Core.Tests` (xUnit): the API client, progress and service record maths, caches, snapshots.
+- `tests/Ancilla.Data.Tests` (xUnit): the SQLite archive, its migrations, snapshot import and export.
 - `tests/Ancilla.Theater.Tests` (xUnit): film decoding. Its films are synthetic, built bit by bit in
   `tests/Ancilla.Testing/Synthetic.cs`.
 - `tests/Ancilla.Web.Tests` (xUnit, bUnit): web services, `HaloSession`, and pages and components rendered
@@ -50,6 +51,10 @@ real API still returns what the fake does. Say so rather than claiming a page wo
 - `src/Ancilla.Core`: no NuGet dependencies, no ASP.NET. Holds the API client
   (`HaloWaypointClient`), JSON models (`Models.cs`, `StatsModels.cs`), progress maths
   (`ProgressService`), `HaloCache`, `SnapshotStore` and the Forge map navmesh reader (`NavMesh`).
+- `src/Ancilla.Data`: the local SQLite archive (`ArchiveStore`) of matches, skill results, UGC names and
+  progress snapshots, keyed by XUID, with numbered schema migrations in `ArchiveSchema`. It's the only
+  project that uses `Microsoft.Data.Sqlite`. Add a schema change as a new migration at the end; never
+  edit a released one. `HaloSession` reads through it: memory cache, then archive, then the API.
 - `src/Ancilla.Web`: the Blazor app.
   - `Services/HaloSession.cs`: per-circuit (scoped) state. It holds the signed-in client and the
     player's data, and is the only thing pages should call for Halo data.

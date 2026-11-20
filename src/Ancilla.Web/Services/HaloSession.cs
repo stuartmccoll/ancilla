@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Ancilla.Core;
+using Ancilla.Data;
 using Ancilla.Theater;
 
 namespace Ancilla.Web.Services;
@@ -19,9 +20,7 @@ public sealed record RankedPlaylist(string PlaylistId, string Name, PlaylistCsr 
 public sealed record RecentMatch(MatchHistoryEntry Entry, MatchStats Stats)
 {
     /// <summary>Firefight and other games against AI only (kills there aren't comparable to PvP).</summary>
-    public bool IsPve(string xuid) =>
-        Stats.Players.FirstOrDefault(p => p.Xuid == xuid)?.Stats?.ModeStats is { } m
-        && m.ContainsKey("PveStats") && !m.ContainsKey("PvpStats");
+    public bool IsPve(string xuid) => Stats.IsPve(xuid);
 }
 
 /// <summary>A row in the match list, filled in progressively as its details arrive.</summary>
@@ -52,7 +51,8 @@ public sealed class MatchListState
 /// (finished matches, maps, medals) goes through the shared <see cref="HaloCache"/>.
 /// The token lives only inside the client object, in server memory.
 /// </summary>
-public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config, HaloDiagnostics diagnostics)
+public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config, HaloDiagnostics diagnostics,
+    ArchiveStore archive, SnapshotStore legacySnapshots)
 {
     private readonly ConcurrentDictionary<string, Task<MatchTimeline>> _timelines = new();
     // The ranked-playlist list isn't discoverable by name without a version ID, so seed the common one.
@@ -67,8 +67,10 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     private readonly SemaphoreSlim _throttle = new(MaxParallel);
     private int _waiting;
     private readonly SemaphoreSlim _historyLock = new(1);
-    private readonly Dictionary<MatchHistoryType, List<MatchHistoryEntry>> _history = [];
-    private readonly HashSet<MatchHistoryType> _historyComplete = [];
+    // History lists come from the archive. _fresh: lists already checked for new matches this session.
+    // _refresh: lists the user asked to re-check (see ForgetHistory).
+    private readonly HashSet<MatchHistoryType> _fresh = [];
+    private readonly HashSet<MatchHistoryType> _refresh = [];
     private HaloWaypointClient? _client;
     private Task<ServiceRecord>? _serviceRecord;
     // Filtered service records, keyed by (category, isRanked) for raw API calls.
@@ -93,6 +95,15 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     /// <summary>A manual XP-per-match figure, which overrides <see cref="XpAverage"/> when set.</summary>
     public double? XpOverride { get; set; }
     public MatchListState Matches { get; private set; } = new();
+
+    /// <summary>Pass as the count to <see cref="GetRecentMatchesAsync"/> for everything in the archive, with no API paging.</summary>
+    public const int AllStored = int.MaxValue;
+    /// <summary>How 429 answers are backed off. Tests turn the waits down.</summary>
+    public RetryPolicy Retry { get; set; } = RetryPolicy.Default;
+    /// <summary>The background check for new matches that most recently started, for tests to wait on.</summary>
+    public Task? BackgroundSync { get; private set; }
+    /// <summary>The signed-in player's progress snapshots, kept in the archive.</summary>
+    public ISnapshotStore Snapshots => archive.SnapshotsFor(Xuid);
 
     /// <summary>Raised on sign-in/out.</summary>
     public event Action? Changed;
@@ -135,6 +146,11 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         diagnostics.Redactor.Register(me.Gamertag);
         diagnostics.Redactor.Register(me.Xuid);
         diagnostics.Info("Signed in");
+        try { await archive.ImportSnapshotsAsync(legacySnapshots, me.Xuid); }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            diagnostics.Info("Couldn't import the old snapshots file");   // it stays where it was; the next sign-in tries again
+        }
         try { ServiceTag = (await client.GetAppearanceAsync(me.Xuid)).Appearance?.ServiceTag; }
         catch (HttpRequestException) { /* cosmetic only */ }
         Changed?.Invoke();
@@ -153,8 +169,8 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         ServiceTag = null;
         FromEnvironment = false;
         Report = null;
-        _history.Clear();
-        _historyComplete.Clear();
+        _fresh.Clear();
+        _refresh.Clear();
         _serviceRecord = null;
         _filteredRecords.Clear();
         _ranked = null;
@@ -275,13 +291,16 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     }
 
     /// <summary>
-    /// The most recent <paramref name="count"/> matches with their scoreboards, newest first.
-    /// History pages are kept for the session (call <see cref="ForgetHistory"/> to pick up new
-    /// games); scoreboards come from the shared cache. <paramref name="progress"/> gets (done, total).
+    /// The most recent <paramref name="count"/> matches with their scoreboards, newest first. They come
+    /// from the local archive, and only what it's missing is fetched: after a restart, matches already
+    /// stored need no API calls (new ones are looked for in the background; call
+    /// <see cref="ForgetHistory"/> to wait for that instead). <see cref="AllStored"/> returns everything
+    /// stored, using the API only to fill an empty archive. <paramref name="progress"/> gets (done, total).
     /// </summary>
     public async Task<IReadOnlyList<RecentMatch>> GetRecentMatchesAsync(MatchHistoryType type, int count, Action<int, int>? progress = null)
     {
-        var entries = await GetHistoryAsync(type, count);
+        var storedOnly = count == AllStored;
+        var entries = await GetHistoryAsync(type, count, storedOnly);
         var done = 0;
         var results = await Task.WhenAll(entries.Select(async e =>
         {
@@ -309,31 +328,167 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         return pairs.Where(p => p.skill is not null).ToDictionary(p => p.id, p => p.skill!);
     }
 
+    /// <summary>Makes the next load check the API for new matches and wait for the answer, rather than doing it in the background.</summary>
     public void ForgetHistory()
     {
-        _history.Clear();
-        _historyComplete.Clear();
+        _fresh.Clear();
+        _refresh.UnionWith(Enum.GetValues<MatchHistoryType>());
     }
 
-    private async Task<List<MatchHistoryEntry>> GetHistoryAsync(MatchHistoryType type, int count)
+    private const int PageSize = 25;
+
+    /// <summary>
+    /// The newest <paramref name="count"/> history entries from the archive. Anything the archive lacks is
+    /// paged in from the API first: new matches (found by paging from the top until a known one turns up),
+    /// then older ones, which is also how <see cref="BackfillAsync"/> reaches past the first 200.
+    /// <paramref name="storedOnly"/> never pages older matches, so it can't walk the whole history.
+    /// </summary>
+    private async Task<List<MatchHistoryEntry>> GetHistoryAsync(MatchHistoryType type, int count, bool storedOnly = false,
+        Action<int>? progress = null, CancellationToken ct = default)
     {
-        await _historyLock.WaitAsync();   // two pages loading at once mustn't interleave pages
+        var xuid = Xuid;
+        var client = Client;
+        await _historyLock.WaitAsync(ct);   // two pages loading at once mustn't interleave pages
         try
         {
-            if (!_history.TryGetValue(type, out var list)) _history[type] = list = [];
-            while (list.Count < count && !_historyComplete.Contains(type))
+            var stored = archive.CountHistory(xuid, type);
+            if (!_fresh.Contains(type))
             {
-                var page = await Client.GetMatchHistoryAsync(Xuid, list.Count, 25, type);
-                list.AddRange(page.Results);
-                if (page.ResultCount < 25) _historyComplete.Add(type);
+                var mustWait = _refresh.Contains(type) || stored == 0 || (!storedOnly && stored < count && !archive.IsComplete(xuid, type));
+                _fresh.Add(type);
+                if (mustWait)
+                {
+                    _refresh.Remove(type);
+                    await SyncNewAsync(client, xuid, type, storedOnly ? PageSize : count, ct);
+                }
+                else
+                {
+                    BackgroundSync = Task.Run(() => SyncInBackgroundAsync(client, xuid, type), CancellationToken.None);
+                }
             }
-            return list.Take(count).ToList();
+            while (!storedOnly && !archive.IsComplete(xuid, type) && (stored = archive.CountHistory(xuid, type)) < count)
+            {
+                ct.ThrowIfCancellationRequested();
+                var page = await Retry.RunAsync(() => client.GetMatchHistoryAsync(xuid, stored, PageSize, type, ct), ct);
+                archive.PutHistory(xuid, type, page.Results);
+                if (page.ResultCount < PageSize) archive.SetComplete(xuid, type, true);
+                progress?.Invoke(archive.CountHistory(xuid, type));
+                if (page.ResultCount == 0) break;
+            }
+            return archive.GetHistory(xuid, type, count).ToList();
         }
         finally
         {
             _historyLock.Release();
         }
     }
+
+    /// <summary>
+    /// Pages from the newest match until one the archive already has turns up, or the end of history. An
+    /// empty archive stops once <paramref name="limit"/> matches are in, so a first load isn't the whole history.
+    /// </summary>
+    private async Task SyncNewAsync(HaloWaypointClient client, string xuid, MatchHistoryType type, int limit, CancellationToken ct)
+    {
+        var wasEmpty = archive.CountHistory(xuid, type) == 0;
+        var fetched = 0;
+        for (var start = 0; ; start += PageSize)
+        {
+            var page = await Retry.RunAsync(() => client.GetMatchHistoryAsync(xuid, start, PageSize, type, ct), ct);
+            var known = page.Results.Any(e => archive.HasHistory(xuid, type, e.MatchId));
+            archive.PutHistory(xuid, type, page.Results);
+            fetched += page.Results.Count;
+            if (page.ResultCount < PageSize) { archive.SetComplete(xuid, type, true); return; }
+            if (known || (wasEmpty && fetched >= limit)) return;
+        }
+    }
+
+    private async Task SyncInBackgroundAsync(HaloWaypointClient client, string xuid, MatchHistoryType type)
+    {
+        try
+        {
+            await _historyLock.WaitAsync();
+            try { await SyncNewAsync(client, xuid, type, PageSize, CancellationToken.None); }
+            finally { _historyLock.Release(); }
+
+            // Scoreboards for what turned up, so the next load has them. The newest few are enough: older
+            // gaps are what Backfill is for.
+            var missing = archive.GetHistory(xuid, type, 50).Where(e => !archive.HasMatch(e.MatchId)).ToList();
+            await Task.WhenAll(missing.Select(async e =>
+            {
+                await EnterThrottleAsync();
+                try { await GetMatchAsync(e.MatchId); }
+                catch (Exception) { /* fetched when it's asked for */ }
+                finally { _throttle.Release(); }
+            }));
+        }
+        catch (Exception) { /* a background check that fails (offline, signed out) just tries again next session */ }
+        finally { MatchesChanged?.Invoke(); }
+    }
+
+    /// <summary>What <see cref="BackfillAsync"/> found.</summary>
+    public sealed record BackfillResult(int Matches, int Added, int ScoreboardsFetched);
+
+    /// <summary>
+    /// Pages the whole match history into the archive, then fetches the scoreboard (and, for matchmade
+    /// games, the skill result) of every stored match that lacks one. Safe to run again: it only
+    /// fetches what's missing. <paramref name="progress"/> describes what it's doing now.
+    /// </summary>
+    public async Task<BackfillResult> BackfillAsync(Action<string>? progress = null, CancellationToken ct = default)
+    {
+        var xuid = Xuid;
+        var before = archive.CountHistory(xuid, MatchHistoryType.All);
+        foreach (var type in new[] { MatchHistoryType.Matchmaking, MatchHistoryType.All })
+            await GetHistoryAsync(type, AllStored, storedOnly: false,
+                n => progress?.Invoke($"Found {n:N0} {(type == MatchHistoryType.All ? "matches" : "matchmade matches")}…"), ct);
+
+        var missing = archive.GetHistory(xuid, MatchHistoryType.All).Where(e => !archive.HasMatch(e.MatchId)).ToList();
+        var done = 0;
+        var fetched = 0;
+        await Task.WhenAll(missing.Select(async e =>
+        {
+            await EnterThrottleAsync();
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                await GetMatchAsync(e.MatchId);
+                Interlocked.Increment(ref fetched);
+            }
+            catch (HttpRequestException) { /* gone from the service; skip it */ }
+            finally
+            {
+                _throttle.Release();
+                progress?.Invoke($"Loaded {Interlocked.Increment(ref done):N0} of {missing.Count:N0} scoreboards…");
+            }
+        }));
+
+        var ranked = archive.GetHistory(xuid, MatchHistoryType.Matchmaking).Select(e => e.MatchId)
+            .Where(id => !archive.TryGetSkill(xuid, id, out _)).ToList();
+        done = 0;
+        await Task.WhenAll(ranked.Select(async id =>
+        {
+            await EnterThrottleAsync();
+            try { ct.ThrowIfCancellationRequested(); await GetSkillAsync(id); }
+            finally
+            {
+                _throttle.Release();
+                progress?.Invoke($"Loaded {Interlocked.Increment(ref done):N0} of {ranked.Count:N0} skill results…");
+            }
+        }));
+
+        var after = archive.CountHistory(xuid, MatchHistoryType.All);
+        return new BackfillResult(after, after - before, fetched);
+    }
+
+    // ---- The archive ----------------------------------------------------------------------
+
+    /// <summary>What's stored for the signed-in player.</summary>
+    public ArchiveSummary ArchiveSummary() => archive.Summary(Xuid);
+
+    /// <summary>Where the archive file is, with the home folder shown as ~.</summary>
+    public string ArchiveFile => archive.DisplayPath;
+
+    /// <summary>The player's stored matches as flat rows, for export.</summary>
+    public IReadOnlyList<ArchiveRow> ExportRows() => archive.Rows(Xuid);
 
     public void SetMatchType(MatchHistoryType type)
     {
@@ -415,6 +570,19 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     /// <summary>Where films are cached, with the home folder shown as ~.</summary>
     public string FilmFolder => films.DisplayRoot;
 
+    /// <summary>The most the film cache may hold before the oldest films are deleted (setting <c>FilmCacheLimitMb</c>, 2 GB by default).</summary>
+    public long FilmLimitBytes => (long.TryParse(config["FilmCacheLimitMb"], out var mb) && mb > 0 ? mb : 2048) << 20;
+
+    /// <summary>Bytes the cached films take up.</summary>
+    public long FilmBytes() => films.TotalBytes();
+
+    /// <summary>Deletes every cached film (they download again when a timeline is opened). Returns how many.</summary>
+    public int ClearFilms()
+    {
+        _timelines.Clear();
+        return films.Clear();
+    }
+
     /// <summary>
     /// The match's timeline from its Theater film, downloading the film first if it isn't cached.
     /// The manifest needs the token (it goes through the client); chunks are public blobs and are
@@ -451,6 +619,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
                 }
                 progress?.Invoke(Interlocked.Increment(ref done), chunks.Count);
             }));
+            films.Trim(FilmLimitBytes, matchId);
         }
         var navMesh = await GetNavMeshAsync(board.MatchInfo.MapVariant);
         // Decoding reads every chunk (a few seconds for a long match), so keep it off the circuit's thread.
@@ -459,16 +628,41 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     // ---- Shared, immutable data (cached for everyone) ---------------------------------
 
-    public Task<MatchStats> GetMatchAsync(string matchId) =>
-        cache.GetOrAddAsync($"match:{matchId}", () => Client.GetMatchStatsAsync(matchId));
+    /// <summary>A scoreboard: from memory, else the archive, else the API (and then kept in both).</summary>
+    public Task<MatchStats> GetMatchAsync(string matchId)
+    {
+        var client = Client;
+        return cache.GetOrAddAsync($"match:{matchId}", async () =>
+        {
+            if (archive.GetMatch(matchId) is { } stored) return stored;
+            var match = await Retry.RunAsync(() => client.GetMatchStatsAsync(matchId));
+            archive.PutMatch(match);
+            return match;
+        });
+    }
 
     public async Task<MatchSkill?> GetSkillAsync(string matchId)
     {
         var xuid = Xuid;
         try
         {
+            var client = Client;
             return await cache.GetOrAddAsync($"skill:{matchId}:{xuid}", async () =>
-                (await Client.GetMatchSkillAsync(matchId, [xuid])).Value.FirstOrDefault(v => v.ResultCode == 0)?.Result);
+            {
+                if (archive.TryGetSkill(xuid, matchId, out var stored)) return stored;   // null: known to have none
+                MatchSkill? skill;
+                try
+                {
+                    skill = (await Retry.RunAsync(() => client.GetMatchSkillAsync(matchId, [xuid]))).Value
+                        .FirstOrDefault(v => v.ResultCode == 0)?.Result;
+                }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { skill = null; }   // no skill data for this match
+                // Matches without a result (Firefight, custom games) are remembered so they aren't asked about
+                // again, unless the match is recent: it may just not have one yet.
+                if (skill is not null || archive.GetMatch(matchId) is { } m && m.MatchInfo.EndTime < DateTimeOffset.UtcNow.AddHours(-2))
+                    archive.PutSkill(xuid, matchId, skill);
+                return skill;
+            });
         }
         catch (HttpRequestException) { return null; }   // e.g. custom games have no skill data
     }
@@ -510,7 +704,16 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     private async Task<UgcAsset?> GetUgcAsync(string kind, AssetRef? a, Func<AssetRef, CancellationToken, Task<UgcAsset>> fetch)
     {
         if (a is null || !HaloIds.IsGuid(a.AssetId) || !HaloIds.IsGuid(a.VersionId) || a.AssetId == Guid.Empty.ToString()) return null;
-        try { return await cache.GetOrAddAsync($"ugc:{kind}:{a.AssetId}:{a.VersionId}", () => fetch(a, CancellationToken.None)); }
+        try
+        {
+            return await cache.GetOrAddAsync($"ugc:{kind}:{a.AssetId}:{a.VersionId}", async () =>
+            {
+                if (archive.GetUgc(kind, a) is { } stored) return stored;
+                var asset = await Retry.RunAsync(() => fetch(a, CancellationToken.None));
+                archive.PutUgc(kind, asset);
+                return asset;
+            });
+        }
         catch (HttpRequestException) { return null; }   // deleted or private UGC
     }
 
