@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ancilla sign-in spike</title>
+    <base href="/" />
+    <style>
+        :root { color-scheme: light dark; --muted: #6b7280; --ok: #15803d; --bad: #b91c1c; --line: #d1d5db; }
+        @media (prefers-color-scheme: dark) { :root { --muted: #9ca3af; --ok: #4ade80; --bad: #f87171; --line: #374151; } }
+        body { font: 15px/1.45 system-ui, sans-serif; margin: 0; padding: 20px 24px; max-width: 920px; }
+        h1 { font-size: 1.4rem; margin: 0 0 4px; }
+        h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+        p.note { color: var(--muted); margin: 0 0 8px; }
+        section { border-top: 1px solid var(--line); }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { text-align: left; padding: 3px 10px 3px 0; vertical-align: top; }
+        th { font-weight: 600; white-space: nowrap; width: 15em; }
+        button { font: inherit; padding: 5px 12px; margin: 0 8px 8px 0; }
+        .ok { color: var(--ok); } .bad { color: var(--bad); }
+        ol, ul { margin: 0; padding-left: 1.4em; }
+        code, .mono { font-family: ui-monospace, monospace; font-size: 0.9em; }
+        textarea { width: 100%; font: 0.85em ui-monospace, monospace; }
+    </style>
+</head>
+<body>
+    <div id="app">Loading…</div>
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+</body>
+</html>

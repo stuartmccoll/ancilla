@@ -1,0 +1,184 @@
+@implements IDisposable
+@inject SpikeService Spike
+
+<h1>Ancilla sign-in spike</h1>
+<p class="note">
+    Issue #16. This page shows facts about the Spartan token, never the token itself. Don't paste
+    cookie values, the token or your gamertag into the issue.
+</p>
+
+<section>
+    <h2>1. Sign in</h2>
+    <label>
+        <input type="checkbox" @bind="State.UseBrowserUserAgent" disabled="@State.SignInOpen" />
+        Use a desktop browser's user agent (try this if Microsoft says the browser isn't supported)
+    </label>
+    <div style="margin-top:8px">
+        @if (State.SignInOpen)
+        {
+            <button @onclick="Spike.CloseSignInAsync">Close sign-in</button>
+        }
+        else
+        {
+            <button @onclick="Spike.OpenSignInAsync">Open sign-in</button>
+        }
+        <button @onclick='() => Spike.ReadCookiesAsync("on request")'>Read cookies again</button>
+    </div>
+    @if (State.UserAgentSeen is { } ua)
+    {
+        <p class="note">User agent the page saw: <span class="mono">@ua</span></p>
+    }
+    @if (State.HostsVisited.Count > 0)
+    {
+        <p class="note">Requests (→) and pages loaded: host and path, never the query; titles for non-Waypoint pages only.</p>
+        <ol class="mono">
+            @foreach (var h in State.HostsVisited) { <li>@h</li> }
+        </ol>
+    }
+</section>
+
+<section>
+    <h2>2. Token</h2>
+    @if (State.Token is { } t)
+    {
+        <table>
+            <tr><th>Token found</th><td class="ok">Yes (@t.Source, @t.ReadAt.ToLocalTime().ToString("HH:mm:ss"); this token first seen @t.FirstSeen.ToLocalTime().ToString("HH:mm:ss"))</td></tr>
+            <tr><th>Cookie expires</th><td>@ExpiresText(t)</td></tr>
+            <tr><th>HttpOnly / Secure</th><td>@YesNo(t.HttpOnly) / @YesNo(t.Secure)</td></tr>
+            <tr><th>Cookie domain</th><td class="mono">@t.Domain</td></tr>
+            <tr><th>Format</th><td>@FormatText(t.Format)</td></tr>
+            <tr><th>Fingerprint</th><td class="mono">@t.Format.Fingerprint <span class="note">(first 8 hex of a SHA-256, to tell tokens apart)</span></td></tr>
+        </table>
+    }
+    else
+    {
+        <p><span class="bad">Token found: no.</span> Sign in first, or read the cookies again.</p>
+    }
+
+    @if (State.Cookies.Count > 0)
+    {
+        <p class="note" style="margin-top:12px">All halowaypoint.com cookies (names only):</p>
+        <table class="mono">
+            @foreach (var c in State.Cookies)
+            {
+                <tr>
+                    <td>@c.Name</td><td>@c.Domain</td>
+                    <td>@(c.Expires is { } e ? $"{Minutes(e)} min" : "session")</td>
+                    <td>@(c.HttpOnly ? "HttpOnly" : "")</td>
+                </tr>
+            }
+        </table>
+    }
+</section>
+
+<section>
+    <h2>3. Does the token work?</h2>
+    <button @onclick="Spike.TestApiAsync" disabled="@(State.Token is null)">Try profile, clearance and service record</button>
+    @if (State.ApiSteps.Count > 0)
+    {
+        <ul>
+            @foreach (var s in State.ApiSteps)
+            {
+                <li><span class="@(s.Ok ? "ok" : "bad")">@s.Detail</span> &mdash; @s.Name</li>
+            }
+        </ul>
+    }
+</section>
+
+<section>
+    <h2>4. Hidden refresh</h2>
+    <p class="note">Loads halowaypoint.com in a web view you can't see, then reads the cookie again.</p>
+    <button @onclick="() => Spike.HiddenRefreshAsync(false)" disabled="@State.Busy">Hidden reload</button>
+    <button @onclick="() => Spike.HiddenRefreshAsync(true)" disabled="@State.Busy">Delete token cookie, then hidden reload</button>
+    <p style="margin:4px 0 8px">
+        Sign-in entry: <span class="mono">@(State.SignInEntry ?? "not learnt yet")</span>
+        <span class="note">(learnt from a visible sign-in: the last Waypoint path before Microsoft)</span>
+    </p>
+    <button @onclick='() => Spike.HiddenRefreshAsync(false, "on request", viaSignIn: true)'
+            disabled="@(State.Busy || State.SignInEntry is null)">Hidden sign-in (replay the entry, follow redirects)</button>
+    <button @onclick='() => Spike.HiddenRefreshAsync(true, "on request", viaSignIn: true)'
+            disabled="@(State.Busy || State.SignInEntry is null)">Delete token cookie, then hidden sign-in</button>
+    <br />
+    <h2>4a. Token lifetime</h2>
+    <p class="note">
+        The cookie has no expiry and the token is encrypted, so the spike keeps using it (the profile
+        call, every 5 minutes) until it's refused. Leave the spike open for a few hours.
+    </p>
+    <label><input type="checkbox" @bind="State.WatchLifetime" /> Check the token every 5 minutes</label><br />
+    <label><input type="checkbox" @bind="State.AutoRefresh" /> When it's refused, get a new one with a hidden sign-in</label><br />
+    <button @onclick="Spike.ProbeAsync" disabled="@(State.Token is null)">Check now</button>
+    @if (State.ProbeStatus is { } probe) { <p>@probe</p> }
+</section>
+
+<section>
+    <h2>5. Profile</h2>
+    <p>Stored in: <span class="mono">@Spike.ProfileDescription</span></p>
+    <p class="note">To test "stay signed in": sign in, quit the spike, reopen it and read the cookies.</p>
+    <button @onclick="Spike.DeleteProfileAsync">Sign out (delete sign-in profile)</button>
+</section>
+
+<section>
+    <h2>6. Compare with a pasted token</h2>
+    <p class="note">
+        Optional. Paste a token copied from your browser's developer tools to compare its format. It's
+        inspected once and not kept.
+    </p>
+    <textarea rows="3" @bind="_pasted" autocomplete="off" spellcheck="false"></textarea>
+    <button @onclick="InspectPasted">Compare format</button>
+    @if (State.Pasted is { } p)
+    {
+        <p>Pasted: @FormatText(p), fingerprint <span class="mono">@p.Fingerprint</span>@(State.Token is { } tok && tok.Format.Fingerprint == p.Fingerprint ? " (the same token as the cookie)" : "")</p>
+    }
+</section>
+
+<section>
+    <h2>Log</h2>
+    <ul class="mono">
+        @foreach (var l in State.Log) { <li>@l.At.ToString("HH:mm:ss") @l.Text</li> }
+    </ul>
+</section>
+
+@code {
+    private string _pasted = "";
+    private SpikeState State => Spike.State;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnChanged;
+        await Spike.StartAsync();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void InspectPasted()
+    {
+        Spike.InspectPasted(_pasted);
+        _pasted = "";
+    }
+
+    private static string YesNo(bool b) => b ? "yes" : "no";
+
+    private static long Minutes(DateTimeOffset e) => (long)Math.Round((e - DateTimeOffset.Now).TotalMinutes);
+
+    private static string ExpiresText(TokenReading t) => t.CookieExpires is { } e
+        ? $"{e.ToLocalTime():ddd HH:mm}, in {Minutes(e)} minutes (lifetime from this read: {Math.Round((e - t.ReadAt).TotalMinutes)} min)"
+        : "session cookie, no expiry";
+
+    private static string FormatText(TokenFormat f)
+    {
+        var parts = new List<string>
+        {
+            f.Kind,
+            $"{f.Segments} segments",
+            $"{f.Length} characters",
+            f.HadV4Prefix ? "v4= prefix" : "no v4= prefix",
+            f.WasUrlEncoded ? "URL-encoded" : "not URL-encoded",
+        };
+        if (f.Header is { Length: > 0 } h) parts.Add($"header {h}");
+        if (f.ExpiresClaim is { } exp) parts.Add($"exp claim {exp.ToLocalTime():HH:mm}");
+        if (f.IssuedAt is { } iat) parts.Add($"iat claim {iat.ToLocalTime():HH:mm}");
+        return string.Join(", ", parts);
+    }
+
+    public void Dispose() => State.Changed -= OnChanged;
+}
