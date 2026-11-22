@@ -1,37 +1,19 @@
 using Ancilla.Core;
-using Ancilla.Data;
-using Ancilla.Theater;
+using Ancilla.UI.Services;
 using Ancilla.Web.Components;
-using Ancilla.Web.Services;
 
+// The web dev host for Ancilla.UI. It's for development (hot reload) and the browser tests; the app
+// people run is the desktop shell, src/Ancilla.App. It listens on localhost only (see launchSettings.json).
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Halo API calls run on the server, so the Spartan token never reaches the browser
-// and there are no CORS issues with halowaypoint.com. Automatic redirects are off: a
-// redirected request would carry the token's header to whatever host it was sent to.
-builder.Services.AddHttpClient();
-builder.Services.ConfigureHttpClientDefaults(http =>
-    http.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
-// The old progress snapshots file. Its snapshots are imported into the archive once, then it is left alone.
-builder.Services.AddSingleton(new SnapshotStore(builder.Configuration["Snapshots"] ?? SnapshotStore.DefaultPath));
-// Every match, skill result and snapshot you load, in SQLite on this machine (see About > What's stored).
-builder.Services.AddSingleton(new ArchiveStore(builder.Configuration["Archive"] ?? ArchiveStore.DefaultPath));
-// Theater films (9–30 MB each, every player's gamertag and XUID) are cached on disk outside the
-// repo, in the same folder Ancilla.Theater.Cli uses, and downloaded only when a timeline is asked for.
-builder.Services.AddSingleton(new FilmCache(builder.Configuration["Films"] ?? FilmCache.DefaultRoot));
-// Local log files with tokens, XUIDs, gamertags and paths redacted. See About > Your token and privacy.
-var redactor = new Redactor();
-var log = new DiagnosticLog(builder.Configuration["Logs"] ?? DiagnosticLog.DefaultFolder, redactor);
-builder.Services.AddSingleton(redactor);
-builder.Services.AddSingleton(log);
-builder.Services.AddSingleton(new HaloDiagnostics(redactor, log));
-builder.Services.AddSingleton<DiagnosticsReport>();
-builder.Services.AddSingleton<HaloCache>();
-builder.Services.AddSingleton<AssetCache>();
+builder.Services.AddAncilla(builder.Configuration);
+// One session per circuit, so each browser tab signs in on its own.
 builder.Services.AddScoped<HaloSession>();
+builder.Services.AddSingleton<IThemePreference, CookieThemePreference>();
+builder.Services.AddScoped<IFileExport, BrowserFileExport>();
 
 var app = builder.Build();
 
@@ -56,7 +38,8 @@ app.MapGet("/assets/{**key}", (string key, AssetCache assets, HttpContext ctx) =
     return Results.File(a.Bytes, a.ContentType);
 });
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(Ancilla.UI.Components.Routes).Assembly);
 
 app.Services.GetRequiredService<HaloDiagnostics>().Info($"Ancilla {DiagnosticsReport.AppVersion} started");
 app.Run();

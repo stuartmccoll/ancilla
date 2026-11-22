@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Ancilla AI symbol favicon">
+    <title>Ancilla AI symbol</title><rect width="512" height="512" rx="105" fill="#F4F8FB"/><g transform="translate(19.120000 -254.300000) scale(0.84)"><g xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="ancilla-symbol">
+  <!-- Four narrow alignment marks and two diamond markers -->
+  <g fill="#4EAEEF">
+    <rect x="279.2" y="353.5" width="5.5" height="41.6" rx="0.8"/>
+    <path d="M282 402 L296.3 416.8 L282 431.5 L267.7 416.8 Z"/>
+    <rect x="279.2" y="437.5" width="5.5" height="13.8"/>
+    <rect x="279.2" y="823.4" width="5.5" height="38" rx="0.8"/>
+    <path d="M282 786.3 L296.3 801.1 L282 815.5 L267.7 801.1 Z"/>
+  </g>
+  <!-- Upper segmented signal halo: single-purpose smooth Bézier shapes -->
+  <g fill="#4EAEEF">
+    <path d="M253.2 417.7 C197.7 426.4 151.0 463.6 119.2 515.1 L134 506 C165.5 465.1 207.2 437.8 253.2 429 Z"/>
+    <path d="M310.8 417.7 C366.3 426.4 413 463.6 444.8 515.1 L430 506 C398.5 465.1 356.8 437.8 310.8 429 Z"/>
+    <!-- Lower segmented halo -->
+    <path d="M154.9 748 H168.2 C190.7 769.7 220.3 785.0 253.2 788.4 V798.8 C213.2 795.1 178.3 777.6 154.9 748 Z"/>
+    <path d="M409.1 748 H395.8 C373.3 769.7 343.7 785.0 310.8 788.4 V798.8 C350.8 795.1 385.7 777.6 409.1 748 Z"/>
+  </g>
+
+  <!-- Symmetric external Forerunner-style armor flanges -->
+  <g id="outer-flanges">
+    <g id="left-flange">
+      <path fill="#AFBAC6" d="M142 528 L100.2 552.6 C88.6 578.9 80.4 609.0 80.4 638.8 L108.2 656.6 C105.3 616.5 118.0 565.1 142 528 Z"/>
+      <path fill="#303D47" d="M80.4 638.8 C90.0 675.5 115.2 707.8 145.4 731.7 L131.9 674.1 L108.2 656.6 Z"/>
+    </g>
+    <use xlink:href="#left-flange" transform="translate(564 0) scale(-1 1)"/>
+  </g>
+
+  <!-- Dark backing upper halo: symmetric hand-shaped curves -->
+  <path fill="#303D47" d="M147.0 593.0 C160.8 532.1 199.5 493.9 249 487.8 C270.1 484.7 294.4 485.0 315.0 488.5 C364.8 497.2 401.6 536.6 415.0 593.0 L404.2 598.0 C388.7 543.2 345.0 510.5 282.0 510.5 C219.0 510.5 175.3 543.2 159.8 598.0 Z"/>
+
+  <!-- Inner, silver-colored armor arc, positioned behind darker arms -->
+  <path fill="#AFBAC6" d="M155.5 598.4 C171.9 547.6 213.1 515.2 282 515.2 C350.9 515.2 392.1 547.6 408.5 598.4 L371.9 611.0 C362.3 567.0 328.0 541.1 282.0 541.1 C236.0 541.1 201.7 567.0 192.1 611.0 Z"/>
+
+  <!-- Lower sweep and pointed side fins, clean mirrored curves -->
+  <g id="inner-sweeps">
+    <g id="left-inner-sweep">
+      <path fill="#303D47" d="M129.4 601.4 L192.7 621.9 C190.1 663.6 212.2 700.6 250.4 719.1 C219.6 713.3 182.7 688.5 156.6 655.0 L132.1 633.7 Z"/>
+    </g>
+    <use xlink:href="#left-inner-sweep" transform="translate(564 0) scale(-1 1)"/>
+  </g>
+
+  <!-- Circular eye: four mathematically smooth quadrant wedges, negative-space cross -->
+  <g fill="#303D47" id="eye-quadrants">
+    <path d="M276 555.2 C235.5 557.3 201.4 590.5 199.5 633.2 H276 Z"/>
+    <path d="M288 555.2 C328.5 557.3 362.6 590.5 364.5 633.2 H288 Z"/>
+    <path d="M199.5 641.2 C201.5 680.8 235.5 716.0 276 718.5 V641.2 Z"/>
+    <path d="M364.5 641.2 C362.5 680.8 328.5 716.0 288 718.5 V641.2 Z"/>
+  </g>
+  <!-- Silver bottom tab covers the bottom of the outer shell -->
+  <path fill="#AFBAC6" d="M247 713 C256 719 268 724 282 724 C296 724 308 719 317 713 L307 751.6 Q305.7 758.0 298.0 759.1 Q282 761.5 263.5 759.1 Q255 757.6 253.4 750 Z"/>
+
+  <!-- Top silver cap with a narrow dark undercut -->
+  <path fill="#303D47" d="M246.0 512 H318 V538.3 Q316 547.2 306.4 547.2 H256.6 Q246 547.2 246 538.3 Z"/>
+  <path fill="#AFBAC6" d="M252 476.4 Q282 471.6 311.4 476.4 Q316.9 477.3 316.9 486.1 V531.6 Q316.9 541.8 307.1 542.8 Q282 537.4 256.7 542.8 Q246.5 541.8 246.5 531.6 V486.1 Q246.5 477.3 252 476.4 Z"/>
+
+  <!-- Blue intelligence core, above the white-space cross -->
+  <circle cx="282" cy="637.2" r="42.3" fill="#4EAEEF"/>
+</g></g></svg>
