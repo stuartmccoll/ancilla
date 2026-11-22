@@ -13,8 +13,11 @@ public static class MauiProgram
 
         // Only the token is read from the environment, as the web host does; the folder settings keep
         // their defaults. It signs in whoever runs the app, which on a desktop is just you.
-        builder.Configuration.AddInMemoryCollection(
-            [new("HALO_SPARTAN_TOKEN", Environment.GetEnvironmentVariable("HALO_SPARTAN_TOKEN"))]);
+        // A concrete Dictionary: CsWinRT rejects a collection expression for an IEnumerable target.
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["HALO_SPARTAN_TOKEN"] = Environment.GetEnvironmentVariable("HALO_SPARTAN_TOKEN"),
+        });
 
         builder.Services.AddMauiBlazorWebView();
 #if DEBUG
