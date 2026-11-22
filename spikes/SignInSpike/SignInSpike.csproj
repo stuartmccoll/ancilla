@@ -3,7 +3,8 @@
   <!-- Throwaway spike for issue #16. Not part of Ancilla.sln, so CI never builds it. -->
   <PropertyGroup>
     <TargetFrameworks>net10.0-maccatalyst</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!-- Windows only: restore evaluates every target, and a Mac Catalyst one would need its workload here. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <UseMaui>true</UseMaui>
     <SingleProject>true</SingleProject>

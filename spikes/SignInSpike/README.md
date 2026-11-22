@@ -12,8 +12,8 @@ macOS (needs Xcode and `sudo dotnet workload install maui-maccatalyst`):
 
     dotnet build -t:Run -f net10.0-maccatalyst
 
-Windows (needs `dotnet workload install maui-windows`, from an administrator prompt; the Windows
-code hasn't been compiled yet, so expect fixes):
+Windows (needs the .NET 10 SDK and `dotnet workload install maui-windows`, from an administrator
+prompt; on Windows the project targets Windows only, so restore doesn't ask for the Mac Catalyst workload):
 
     dotnet build -t:Run -f net10.0-windows10.0.19041.0
 
@@ -27,7 +27,7 @@ code hasn't been compiled yet, so expect fixes):
 | 4. Hidden refresh | Section 4. A visible sign-in teaches the spike the entry path (`/sign-in`). "Hidden sign-in" replays it in a hidden web view with `prompt` rewritten to `none`, so Microsoft signs in silently. A plain reload of Waypoint doesn't issue a token. |
 | 5. Profile in a folder we choose | Section 5. Quit and reopen, then "Hidden sign-in", to test "stay signed in" (the token is a session cookie, so it doesn't survive a restart). "Sign out", then "Hidden sign-in", should end with `error=login_required`. |
 
-The macOS results are in issue #16. On Windows, repeat 1 to 5 and compare.
+The results for both platforms are in issue #16.
 
 Profiles: macOS uses a `WKWebsiteDataStore` with its own identifier (stored under the app
 container's `Library/WebKit`). Windows uses `%LOCALAPPDATA%\AncillaSignInSpike\WebView2`.

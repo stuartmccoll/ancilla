@@ -70,7 +70,13 @@ public sealed class WebProfile : IWebProfile
                 var leftWaypoint = false;
                 core.NavigationStarting += (s, e) =>
                 {
-                    if (SignInViewHandler.Request(e) is { } r) onStep($"request {r.Host}{r.Path}");
+                    if (SignInViewHandler.Request(e) is { } r)
+                    {
+                        onStep($"request {r.Host}{r.Path}");
+                        // WebView2 completes a redirect chain as one navigation, so the trip to
+                        // Microsoft only shows up here, never in NavigationCompleted.
+                        if (!NavigationReport.IsWaypoint(r.Host)) leftWaypoint = true;
+                    }
                     if (followSignIn && Uri.TryCreate(e.Uri, UriKind.Absolute, out var u) &&
                         SilentAuth.WithPromptNone(u) is { } replacement)
                     {
