@@ -48,7 +48,7 @@ so build and run it on its own:
 
 ```powershell
 $env:HALO_SPARTAN_TOKEN = 'v4=...'                                 # optional
-dotnet build src/Ancilla.App -t:Run                                # Windows
+dotnet run --project src/Ancilla.App                               # Windows
 ```
 
 ```bash

@@ -15,12 +15,13 @@ dotnet test --filter "FullyQualifiedName!~Ancilla.Web.E2E"     # everything but 
 .github/scripts/privacy-check.sh                               # no tokens, XUIDs, film data or machine paths
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
 dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
-dotnet build src/Ancilla.App -t:Run                            # the desktop app (Windows; needs the MAUI workload)
+dotnet run --project src/Ancilla.App                            # the desktop app (Windows; needs the MAUI workload)
 ```
 
 `Ancilla.App` isn't in `Ancilla.sln`: it needs the MAUI workload and has no Linux target, so
 `dotnet build` from the root skips it. Build it on its own after changing it, or anything it
-registers. On Windows it builds the WinUI target; on macOS, add `-f net10.0-maccatalyst`.
+registers. On Windows it builds the WinUI target; on macOS, run it with
+`dotnet build src/Ancilla.App -t:Run -f net10.0-maccatalyst`.
 
 With `dotnet watch`, some edits (new types, changed record parameters, `Program.cs`) can't be
 hot reloaded and force a restart. A restart drops every session, so the user signs in again unless
