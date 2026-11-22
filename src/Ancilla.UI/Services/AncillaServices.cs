@@ -24,7 +24,9 @@ public static class AncillaServices
         // The old progress snapshots file. Its snapshots are imported into the archive once, then it is left alone.
         services.AddSingleton(new SnapshotStore(config["Snapshots"] ?? SnapshotStore.DefaultPath));
         // Every match, skill result and snapshot you load, in SQLite on this machine (see About > What's stored).
-        services.AddSingleton(new ArchiveStore(config["Archive"] ?? ArchiveStore.DefaultPath));
+        // Made by the container (not passed in ready-made) so the container disposes it on shutdown, which
+        // clears its connection pool and lets go of the file. It also isn't opened if a test replaces it.
+        services.AddSingleton(_ => new ArchiveStore(config["Archive"] ?? ArchiveStore.DefaultPath));
         // Theater films (9–30 MB each, every player's gamertag and XUID) are cached on disk outside the
         // repo, in the same folder Ancilla.Theater.Cli uses, and downloaded only when a timeline is asked for.
         services.AddSingleton(new FilmCache(config["Films"] ?? FilmCache.DefaultRoot));
