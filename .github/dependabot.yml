@@ -1,6 +1,8 @@
-# Keeps NuGet packages (today only the test projects': xUnit, bUnit, Playwright, axe and friends) and the
-# GitHub Actions used by CI up to date. Minor and patch updates for each ecosystem arrive as one
-# grouped PR a week; major updates get their own PR, since they can need code changes.
+# Keeps NuGet packages (Ancilla.UI's Blazor and Microsoft.Extensions packages, Ancilla.Data's SQLite, and the
+# test projects': xUnit, bUnit, Playwright, axe and friends) and the GitHub Actions used by CI up to date.
+# The desktop app's MAUI packages follow the installed workload ($(MauiVersion)), so they update with it.
+# Minor and patch updates for each ecosystem arrive as one grouped PR a week; major updates get their
+# own PR, since they can need code changes.
 version: 2
 updates:
   - package-ecosystem: nuget

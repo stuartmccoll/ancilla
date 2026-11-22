@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Ancilla.UI/app.css"]" />
     <link rel="stylesheet" href="@Assets["Ancilla.Web.styles.css"]" />
     <ImportMap />
     <HeadOutlet @rendermode="Mode" />
@@ -23,14 +23,15 @@
 <body>
     <Routes @rendermode="Mode" />
     <ReconnectModal />
-    <script src="@Assets["theme.js"]"></script>
+    <script src="@Assets["_content/Ancilla.UI/theme.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 
 </html>
 
 @code {
-    // The page shell is rendered on the server, so the theme comes from the cookie theme.js sets.
+    // The page shell is rendered on the server, so the theme comes from the cookie theme.js sets
+    // (the web host's IThemePreference).
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 
     private string Theme => Themes.Normalize(HttpContext?.Request.Cookies[Themes.CookieName]);

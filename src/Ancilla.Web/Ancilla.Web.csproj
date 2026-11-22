@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <!--
+    The web dev host: Ancilla.UI served with interactive server rendering on localhost, for
+    development with hot reload and for the browser tests. The desktop app is src/Ancilla.App.
+  -->
   <ItemGroup>
-    <ProjectReference Include="..\Ancilla.Core\Ancilla.Core.csproj" />
-    <ProjectReference Include="..\Ancilla.Theater\Ancilla.Theater.csproj" />
-    <ProjectReference Include="..\Ancilla.Data\Ancilla.Data.csproj" />
+    <ProjectReference Include="..\Ancilla.UI\Ancilla.UI.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

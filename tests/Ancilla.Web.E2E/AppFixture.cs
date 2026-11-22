@@ -48,7 +48,9 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton(new SnapshotStore(Path.Combine(_root, "snapshots.json")));
             services.AddSingleton(new FilmCache(Path.Combine(_root, "films")));
             services.RemoveAll<ArchiveStore>();
-            services.AddSingleton(new ArchiveStore(Path.Combine(_root, "archive.db")));
+            // A factory, so the host disposes it when it stops and SQLite closes archive.db before the
+            // folder is deleted (Windows can't delete a file that's still open).
+            services.AddSingleton(_ => new ArchiveStore(Path.Combine(_root, "archive.db")));
         });
     }
 

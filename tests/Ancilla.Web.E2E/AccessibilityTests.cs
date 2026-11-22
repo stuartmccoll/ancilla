@@ -1,7 +1,7 @@
 using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Ancilla.Testing;
-using Ancilla.Web.Services;
+using Ancilla.UI.Services;
 using static Microsoft.Playwright.Assertions;
 
 namespace Ancilla.Web.E2E;

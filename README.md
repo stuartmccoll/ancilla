@@ -9,14 +9,18 @@
 > monitors that look after the Halo rings, such as 343 Guilty Spark, to vast minds like Mendicant
 > Bias. Humans would just say "AI".
 
-An unofficial Halo Infinite stats viewer, built with Blazor. It shows how many more matchmade games
-you need to finish your battle passes and reach Hero, plus your service record, medals, match
-history, trends, insights and the players you meet. It uses the services behind halowaypoint.com.
+An unofficial Halo Infinite stats viewer, built with Blazor: a desktop app for Windows and macOS. It
+shows how many more matchmade games you need to finish your battle passes and reach Hero, plus your
+service record, medals, match history, trends, insights and the players you meet. It uses the
+services behind halowaypoint.com.
 
 ```
 src/Ancilla.Core     API client, models, calculations, caching, snapshot store (no NuGet deps)
-src/Ancilla.Web      Blazor Web App (interactive server rendering)
-src/Ancilla.Theater  Theater film decoding and match analysis, used by the web app (see src/Ancilla.Theater/README.md)
+src/Ancilla.Data     the local SQLite match archive
+src/Ancilla.UI       every page, component and service (Razor class library, shared by both hosts)
+src/Ancilla.App      the desktop app: .NET MAUI Blazor Hybrid, Windows (WinUI) and macOS (Mac Catalyst)
+src/Ancilla.Web      web dev host for Ancilla.UI (interactive server rendering), for hot reload and browser tests
+src/Ancilla.Theater  Theater film decoding and match analysis, used by the app (see src/Ancilla.Theater/README.md)
 src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline)
 tests/               unit, component and browser tests on synthetic data (dotnet test; see Tests)
 ```
@@ -24,27 +28,47 @@ tests/               unit, component and browser tests on synthetic data (dotnet
 ## Run
 
 Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download). The projects target `net10.0`.
-Change `<TargetFramework>` in both `.csproj` files if you're on an older SDK.
 
 1. Sign in at https://www.halowaypoint.com.
 2. In your browser's DevTools, go to Application > Cookies and copy the value of `343-spartan-token`.
-3. Start the app and open http://localhost:5260:
-
-   ```powershell
-   dotnet run --project src/Ancilla.Web --launch-profile http
-   ```
-
+3. Start the app (see below).
 4. Paste the token into the sign-in page.
 
-To skip step 4, set `HALO_SPARTAN_TOKEN` before starting and the app signs in straight away:
+To skip step 4, set `HALO_SPARTAN_TOKEN` before starting and the app signs in straight away.
+
+Halo calls run in the app's .NET process, never in the page's scripts, so there's no CORS and the
+token never reaches page JavaScript or web storage. It's held in memory until you sign out or close
+the app. Tokens expire after a few hours.
+
+### The desktop app
+
+The desktop app needs the .NET MAUI workload (`dotnet workload install maui`), and on macOS, Xcode.
+It isn't in `Ancilla.sln`, because the workload isn't on every machine (and there's no Linux version),
+so build and run it on its own:
 
 ```powershell
-$env:HALO_SPARTAN_TOKEN = 'v4=...'
+$env:HALO_SPARTAN_TOKEN = 'v4=...'                                 # optional
+dotnet run --project src/Ancilla.App                               # Windows
+```
+
+```bash
+export HALO_SPARTAN_TOKEN='v4=...'                                 # optional
+dotnet build src/Ancilla.App -t:Run -f net10.0-maccatalyst         # macOS
+```
+
+On macOS the variable only reaches the app when it's started from a terminal like this.
+
+### The web dev host
+
+`src/Ancilla.Web` serves the same pages to a browser at http://localhost:5260. It's there for
+development, because it supports hot reload, and for the browser tests:
+
+```powershell
+$env:HALO_SPARTAN_TOKEN = 'v4=...'                                 # optional
 dotnet run --project src/Ancilla.Web --launch-profile http
 ```
 
-API calls run on the server, so there's no CORS and the token is never sent to the browser. The token
-is held in memory for that browser session only. Tokens expire after a few hours.
+In the web host, the token is held in server memory for that browser tab only.
 
 ### Hot reload while developing
 
@@ -64,9 +88,10 @@ automatically.
 
 ### Keep it local
 
-Ancilla is built to run on your own machine and listens on `localhost` only. Don't expose it to a
+The web dev host is built to run on your own machine and listens on `localhost` only. Don't expose it to a
 network (`--urls http://0.0.0.0:...`, a tunnel, a hosting service) without adding proper sign-in.
-With `HALO_SPARTAN_TOKEN` set, **everyone** who opens the app is signed in as you.
+With `HALO_SPARTAN_TOKEN` set, **everyone** who opens it is signed in as you. The desktop app has
+no server to expose.
 
 Never commit a token. `.gitignore` already leaves out `.env` files and `appsettings.*.local.json`.
 
@@ -74,7 +99,7 @@ Never commit a token. `.gitignore` already leaves out `.env` files and `appsetti
 
 ```powershell
 dotnet test                                    # every test project, browser tests included
-dotnet test tests/Ancilla.Web.Tests            # or one project at a time
+dotnet test tests/Ancilla.UI.Tests             # or one project at a time
 ```
 
 Coverage (CI writes the same summary to each build-and-test job's page):
@@ -95,8 +120,8 @@ Nothing needs a Spartan token or a network connection to Halo. The tests come in
 | `tests/Ancilla.Core.Tests` | The API client (URLs, headers, ID checks, error messages), progress and service record maths, caching, snapshots | xUnit |
 | `tests/Ancilla.Data.Tests` | The SQLite archive: schema migrations (an empty database and every earlier schema), storage per player, the one-off snapshot import, CSV and JSON export | xUnit |
 | `tests/Ancilla.Theater.Tests` | Theater film decoding, on films built bit by bit | xUnit |
-| `tests/Ancilla.Web.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), and every page and shared component rendered without a browser | xUnit, bUnit |
-| `tests/Ancilla.Web.E2E` | The real app in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
+| `tests/Ancilla.UI.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), the desktop shell's asset provider, theme preference and export, and every page and shared component rendered without a browser | xUnit, bUnit |
+| `tests/Ancilla.Web.E2E` | The web dev host in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
 
 `tests/Ancilla.Testing` holds a fake of the Halo Waypoint services (`FakeHalo`) that answers the
 same URLs as the real ones, from a made-up world (`HaloWorld`): Noble Six and the rest of Noble Team,
@@ -165,18 +190,19 @@ unofficial fan project, not affiliated with Microsoft, Xbox or Halo Studios.
 ## Themes
 
 Pick a theme from the menu under your gamertag: **Basic** (follows the system light/dark setting),
-**Halo** or **XBOX** (original Xbox). The choice is saved in a cookie, so the server renders the page
+**Halo** or **XBOX** (original Xbox). The desktop app keeps the choice in its settings. The web dev
+host keeps it in a cookie, so the server renders the page
 in that theme from the first paint. Halo and XBOX headings use the Rajdhani and Exo 2 web fonts from
 Google Fonts. Without a connection they fall back to the system font.
 
 To add a theme (e.g. Xbox 360):
 
-1. Add a `:root[data-theme="x360"] { ... }` block to `wwwroot/app.css`. Set every colour variable,
+1. Add a `:root[data-theme="x360"] { ... }` block to `src/Ancilla.UI/wwwroot/app.css`. Set every colour variable,
    plus shape and type (`--radius-*`, `--font-display`, `--page-bg`), and any extra touches below it.
 2. Keep the chart colours (`--viz-1`, `--viz-2`, `--viz-neg`) as the validated blue / orange / red.
    Only re-step them if they drop below 3:1 contrast on the new surface. Body text, muted text and
    links need 4.5:1, and so does the text on buttons and win/loss badges.
-3. Add it to `Services/Themes.cs` (ID, name, description, three preview swatches).
+3. Add it to `src/Ancilla.UI/Services/Themes.cs` (ID, name, description, three preview swatches).
 
 ## Data, caching and snapshots
 
@@ -198,7 +224,8 @@ To add a theme (e.g. Xbox 360):
   matches** pages back through your whole history. Requests share the app's 8-at-a-time limit and
   back off when the service answers 429 (too many requests). The schema is a numbered list of
   migrations (`ArchiveSchema`), so updates add to the database and never drop data; a database from a
-  newer version is refused rather than changed. To store it elsewhere, set the `Archive` setting to a file path:
+  newer version is refused rather than changed. To store it elsewhere, set the `Archive` setting to a file path
+  (web dev host only for now; the desktop app uses the default):
 
   ```powershell
   dotnet run --project src/Ancilla.Web -- --Archive="$HOME\Documents\Ancilla\archive.db"
