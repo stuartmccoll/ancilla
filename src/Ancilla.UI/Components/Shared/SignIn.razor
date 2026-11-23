@@ -1,23 +1,43 @@
 @inject HaloSession Session
+@inject IWaypointSignIn Waypoint
 
 @* Pages set their own titles, but signed out they aren't rendered, so this is the only one. *@
 <PageTitle>Sign in · Ancilla</PageTitle>
 
 <section class="card signin">
     <h1>Sign in</h1>
-    <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
-        <label for="token">Spartan token</label>
-        <input id="token" type="password" autocomplete="off" spellcheck="false"
-               placeholder="Paste the 343-spartan-token cookie value" @bind="_token" @bind:event="oninput" />
-        <p class="hint">
-            Sign in at halowaypoint.com, then DevTools &rsaquo; Application &rsaquo; Cookies &rsaquo;
-            <code>343-spartan-token</code>. Tokens last a few hours and are only held in the app's memory
-            until you sign out or close it. Or set <code>HALO_SPARTAN_TOKEN</code> before starting the app.
+    @if (Session.Expired)
+    {
+        <p class="expired" role="status">Your sign-in has run out. Sign in again to carry on where you left off.</p>
+    }
+
+    @if (Waypoint.IsAvailable)
+    {
+        <p>
+            Sign in to Halo Waypoint with your Microsoft account. Its own sign-in page opens in a window, so your
+            password goes only to Microsoft.
         </p>
-        <button type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_token))">
-            @(_busy ? "Checking…" : "Sign in")
+        <label class="stay">
+            <input type="checkbox" checked="@_stay" @onchange="OnStayChanged" disabled="@_busy" />
+            Stay signed in on this computer
+        </label>
+        <p class="hint">
+            Keeps Microsoft's sign-in for next time, so Ancilla can sign you in when it starts. Signing out removes it.
+        </p>
+        <button class="primary" @onclick="SignInWithMicrosoftAsync" disabled="@_busy">
+            @(_waiting ? "Waiting for you to sign in…" : "Sign in with Microsoft")
         </button>
-    </form>
+
+        <details class="paste">
+            <summary>Paste a token instead</summary>
+            @PasteForm
+        </details>
+    }
+    else
+    {
+        @PasteForm
+    }
+
     @if ((_error ?? InitialError) is { } err)
     {
         <p class="error" role="alert">@err</p>
@@ -30,6 +50,62 @@
     private string? _token;
     private string? _error;
     private bool _busy;
+    private bool _waiting;
+    private bool _stay;
+
+    protected override void OnInitialized() => _stay = Waypoint.StaySignedIn;
+
+    private RenderFragment PasteForm => __builder =>
+    {
+        <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            <ol class="steps">
+                <li>Sign in at <strong>halowaypoint.com</strong> in your web browser.</li>
+                <li>
+                    Open its developer tools (<kbd>F12</kbd>, or <kbd>⌥</kbd><kbd>⌘</kbd><kbd>I</kbd> on a Mac) and find
+                    the cookies: <strong>Application &rsaquo; Cookies</strong> in Chrome and Edge,
+                    <strong>Storage &rsaquo; Cookies</strong> in Firefox and Safari.
+                </li>
+                <li>Pick <strong>www.halowaypoint.com</strong> and copy the value of <code>343-spartan-token</code>.</li>
+                <li>Paste it here.</li>
+            </ol>
+            <label for="token">Spartan token</label>
+            <input id="token" type="password" autocomplete="off" spellcheck="false"
+                   placeholder="Paste the 343-spartan-token cookie value" @bind="_token" @bind:event="oninput" />
+            <p class="hint">
+                A pasted token lasts a few hours and is held only in the app's memory. When it runs out, paste a new
+                one. Or set <code>@EnvironmentToken.Variable</code> before starting the app.
+            </p>
+            <button type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_token))">
+                @(_busy && !_waiting ? "Checking…" : "Sign in")
+            </button>
+        </form>
+    };
+
+    private void OnStayChanged(ChangeEventArgs e)
+    {
+        _stay = e.Value is true;
+        Waypoint.StaySignedIn = _stay;
+    }
+
+    private async Task SignInWithMicrosoftAsync()
+    {
+        if (_busy) return;
+        _busy = _waiting = true;
+        _error = null;
+        try
+        {
+            if (!await Session.SignInAsync(new WaypointToken(Waypoint, interactive: true)))
+                _error = "Sign-in didn't finish, so there's no token yet. Try again, or paste a token instead.";
+        }
+        catch (Exception ex)
+        {
+            _error = Explain(ex);
+        }
+        finally
+        {
+            _busy = _waiting = false;
+        }
+    }
 
     private async Task SubmitAsync()
     {
@@ -39,6 +115,7 @@
         try
         {
             await Session.SignInAsync(_token);
+            _token = null;
         }
         catch (Exception ex)
         {

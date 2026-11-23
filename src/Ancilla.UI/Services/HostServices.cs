@@ -41,3 +41,45 @@ public sealed class BrowserFileExport(IJSRuntime js) : IFileExport
         return null;
     }
 }
+
+/// <summary>
+/// Signing in on halowaypoint.com itself, in a browser embedded in the app, so Ancilla never sees
+/// the password. Only the desktop app can embed one; the web host's says it isn't available.
+/// Each method returns the <c>343-spartan-token</c> cookie's value, or null.
+/// </summary>
+public interface IWaypointSignIn
+{
+    bool IsAvailable { get; }
+
+    /// <summary>
+    /// Keep Microsoft's sign-in on this computer between runs. Off, the embedded browser keeps
+    /// nothing on disk. Turning it off removes a kept sign-in.
+    /// </summary>
+    bool StaySignedIn { get; set; }
+
+    /// <summary>Shows halowaypoint.com's sign-in page. Null if it was closed before signing in.</summary>
+    Task<string?> SignInAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Signs in again in a browser nobody sees, using Microsoft's session from an earlier sign-in.
+    /// Null when there's no session (signed out, it ran out, or Microsoft wants you to sign in).
+    /// </summary>
+    Task<string?> SilentSignInAsync(CancellationToken ct = default);
+
+    /// <summary>Removes everything the embedded browser kept, Microsoft's sign-in included.</summary>
+    Task SignOutAsync();
+}
+
+/// <summary>The web host's: a browser tab can't read halowaypoint.com's cookies, so you paste the token.</summary>
+public sealed class NoWaypointSignIn : IWaypointSignIn
+{
+    public bool IsAvailable => false;
+
+    public bool StaySignedIn { get => false; set { } }
+
+    public Task<string?> SignInAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
+
+    public Task<string?> SilentSignInAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
+
+    public Task SignOutAsync() => Task.CompletedTask;
+}

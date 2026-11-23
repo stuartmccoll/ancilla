@@ -2,6 +2,7 @@
 @inject ArchiveStore Archive
 @inject Ancilla.Theater.FilmCache Films
 @inject DiagnosticLog Log
+@inject IWaypointSignIn Waypoint
 
 <PageTitle>About · Ancilla</PageTitle>
 
@@ -68,10 +69,26 @@
             <h2>Your token and privacy</h2>
             <ul>
                 <li>
-                    <strong>Your Spartan token</strong> is held in the app's memory while you're signed in. It's never
-                    written to disk, never handed to the page's scripts, and goes nowhere except Halo's own services.
-                    Tokens expire after a few hours anyway.
+                    <strong>Your Spartan token</strong> is held in the app's memory while you're signed in. Ancilla never
+                    writes it to disk, never hands it to the page's scripts, and sends it nowhere except Halo's own
+                    services. Tokens run out after a few hours. In the desktop app, Ancilla then gets a new one by signing
+                    in again in a hidden window; if it can't, it asks you to sign in. A pasted token can't be renewed.
                 </li>
+                @if (Waypoint.IsAvailable)
+                {
+                    <li>
+                        <strong>Signing in with Microsoft</strong> opens Halo Waypoint's own sign-in page in a window, so
+                        your password goes only to Microsoft. That window has a browser profile of its own, apart from the
+                        app's. Halo Waypoint keeps the token in it as a cookie until the app quits, and Ancilla reads it
+                        from there. With <strong>Stay signed in</strong> off, the window's cookies stay in memory and
+                        anything else it wrote is removed when you sign out or next start the app. With it on, Microsoft's
+                        sign-in is kept on this computer so the app can sign you in when it starts: on macOS in a WebKit
+                        store inside the app's sandbox container, and on Windows in a WebView2 profile in your local app
+                        data folder (<code class="path">%LOCALAPPDATA%\Ancilla\SignIn</code>), where WebView2 encrypts cookies with a
+                        key Windows keeps for your account. Ancilla doesn't add encryption of its own. Signing out removes
+                        it (on macOS, WebKit wipes it at once and its folder goes the next time the app starts).
+                    </li>
+                }
                 <li>
                     <strong>Your match archive</strong> keeps what you load, so it survives restarts and isn't limited to
                     the API's recent history. It's a SQLite database on this machine at

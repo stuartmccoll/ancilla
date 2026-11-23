@@ -29,16 +29,46 @@ tests/               unit, component and browser tests on synthetic data (dotnet
 
 Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download). The projects target `net10.0`.
 
-1. Sign in at https://www.halowaypoint.com.
-2. In your browser's DevTools, go to Application > Cookies and copy the value of `343-spartan-token`.
-3. Start the app (see below).
-4. Paste the token into the sign-in page.
+### Signing in
 
-To skip step 4, set `HALO_SPARTAN_TOKEN` before starting and the app signs in straight away.
+In the desktop app, choose **Sign in with Microsoft**. Halo Waypoint's own sign-in page opens in a
+window over the app, so your password only ever goes to Microsoft. When it's done, Ancilla reads the
+`343-spartan-token` cookie Halo Waypoint sets in that window and closes it. Tokens last a few hours.
+When one runs out, Ancilla signs in again in a hidden window using Microsoft's session, so a long
+session keeps working. If Microsoft's session has gone too, the sign-in page comes back, and signing
+in as the same player carries on where you left off.
+
+**Stay signed in** (off by default) keeps Microsoft's sign-in on this computer, so the app signs you
+in when it starts. Off, the sign-in window's cookies are kept in memory only, and anything else it
+wrote is removed at sign-out or the next start. Sign out removes a kept sign-in too:
+
+| | Where it's kept with Stay signed in | How it's protected |
+|---|---|---|
+| macOS | A WebKit data store of its own in the app's sandbox container (`~/Library/Containers/app.ancilla.desktop/Data/Library/WebKit/`) | Your macOS account, and macOS asks you before another app reads an app's container. WebKit doesn't encrypt it; FileVault encrypts the disk |
+| Windows | A WebView2 profile in `%LOCALAPPDATA%\Ancilla\SignIn` | Your Windows account: WebView2 encrypts its cookies with a key Windows keeps for your account (DPAPI) |
+
+Ancilla doesn't add encryption of its own: the browser engines read and write these stores
+themselves, so there's nothing between them for Ancilla to encrypt.
+
+On macOS WebKit won't delete a store while it's open, so sign-out wipes its contents straight away
+and removes its folder the next time the app starts.
+
+You can also paste a token, which is what the web dev host offers, or set `HALO_SPARTAN_TOKEN`:
+
+1. Sign in at https://www.halowaypoint.com in your browser.
+2. Open the developer tools and find the cookies (Application > Cookies in Chrome and Edge, Storage >
+   Cookies in Firefox and Safari).
+3. Pick `www.halowaypoint.com` and copy the value of `343-spartan-token`.
+4. Paste it into the sign-in page, or set `HALO_SPARTAN_TOKEN` before starting the app and it signs
+   in straight away.
+
+A pasted token can't be renewed, so when it runs out, paste a new one.
 
 Halo calls run in the app's .NET process, never in the page's scripts, so there's no CORS and the
-token never reaches page JavaScript or web storage. It's held in memory until you sign out or close
-the app. Tokens expire after a few hours.
+token never reaches page JavaScript or web storage. Ancilla holds it in memory until you sign out or
+close the app. Token sources sit behind `ISpartanTokenSource` (pasted, environment variable,
+embedded sign-in), so a direct Microsoft sign-in could be added if Microsoft ever approves an app
+registration for Xbox Live.
 
 ### The desktop app
 
@@ -313,9 +343,10 @@ own `XpRequiredForRank`; reaching Hero takes 9,319,351 XP in total.
 
 ## Ideas for next steps
 
-- Proper sign-in rather than pasting the cookie: Microsoft account OAuth, then an Xbox Live user
-  token, then an XSTS token for the Halo relying party, then a Spartan token from
-  `settings.svc.halowaypoint.com/spartan-token`. This needs an Azure AD app registration.
+- A direct Microsoft sign-in, as one more `ISpartanTokenSource`: Microsoft account OAuth, then an
+  Xbox Live user token, then an XSTS token for the Halo relying party, then a Spartan token from
+  `settings.svc.halowaypoint.com/spartan-token`. This needs an app registration Microsoft doesn't
+  currently grant for Xbox Live.
 - More themes: Xbox 360, Xbox One, Xbox Series X|S.
 
 ## Disclaimer

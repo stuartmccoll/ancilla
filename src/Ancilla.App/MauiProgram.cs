@@ -1,3 +1,5 @@
+using Ancilla.App.Platforms;
+using Ancilla.App.SignIn;
 using Ancilla.Core;
 using Ancilla.UI.Services;
 using Microsoft.Extensions.Configuration;
@@ -9,7 +11,9 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();
-        builder.UseMauiApp<App>();
+        builder
+            .UseMauiApp<App>()
+            .ConfigureMauiHandlers(h => h.AddHandler<SignInView, SignInViewHandler>());
 
         // Only the token is read from the environment, as the web host does; the folder settings keep
         // their defaults. It signs in whoever runs the app, which on a desktop is just you.
@@ -29,6 +33,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<HaloSession>();
         builder.Services.AddSingleton<IThemePreference, SettingsThemePreference>();
         builder.Services.AddSingleton<IFileExport, DownloadsFileExport>();
+        // halowaypoint.com's own sign-in, in an embedded browser with a cookie store of its own.
+        builder.Services.AddSingleton<IWebProfile, WebProfile>();
+        builder.Services.AddSingleton<IWaypointSignIn, WaypointSignIn>();
         builder.Services.AddSingleton<MainPage>();
 
         var app = builder.Build();
