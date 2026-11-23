@@ -62,7 +62,7 @@
                         </div>
                         <a class="menu-item" href="settings">Settings</a>
                         <a class="menu-item" href="diagnostics">Diagnostics</a>
-                        <button class="menu-item" @onclick="SignOut">Sign out</button>
+                        <button class="menu-item" @onclick="SignOutAsync">Sign out</button>
                     </div>
                 }
             </div>
@@ -87,7 +87,7 @@
     {
         <p class="muted">Signing in…</p>
     }
-    else if (!Session.IsSignedIn)
+    else if (!Session.IsSignedIn || Session.Expired)
     {
         <SignIn InitialError="@_envError" />
     }
@@ -160,8 +160,8 @@
         UpdateLocation();
         if (!Session.IsSignedIn)
         {
-            try { await Session.TrySignInFromEnvironmentAsync(); }
-            catch (Exception ex) { _envError = $"HALO_SPARTAN_TOKEN didn't work: {SignIn.Explain(ex)}"; }
+            try { await Session.TrySignInAutomaticallyAsync(); }
+            catch (Exception ex) { _envError = $"{EnvironmentToken.Variable} didn't work: {SignIn.Explain(ex)}"; }
         }
         _starting = false;
     }
@@ -213,10 +213,11 @@
         if (e.Key == "Escape") _menuOpen = false;
     }
 
-    private void SignOut()
+    private async Task SignOutAsync()
     {
         _menuOpen = false;
-        Session.SignOut();
+        _envError = null;
+        await Session.SignOutAsync();
     }
 
     private void OnChanged() => InvokeAsync(StateHasChanged);

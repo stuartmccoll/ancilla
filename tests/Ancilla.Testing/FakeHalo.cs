@@ -11,7 +11,7 @@ namespace Ancilla.Testing;
 /// <summary>
 /// A fake of the Halo Waypoint services, answering the same URLs <see cref="HaloWaypointClient"/>
 /// calls with data from a <see cref="HaloWorld"/>. JSON uses the services' PascalCase names.
-/// Requests without <see cref="Spartans.Token"/> get a 401, as they would for real. Nothing leaves
+/// Requests without <see cref="AcceptedToken"/> get a 401, as they would for real. Nothing leaves
 /// the process.
 /// </summary>
 public sealed partial class FakeHalo
@@ -24,6 +24,9 @@ public sealed partial class FakeHalo
     public FakeHalo(HaloWorld? world = null) => World = world ?? new HaloWorld();
 
     public HaloWorld World { get; }
+
+    /// <summary>The one token the fake accepts. Change it to make the current one run out.</summary>
+    public string AcceptedToken { get; set; } = Spartans.Token;
 
     private int _inFlight, _maxInFlight;
 
@@ -100,7 +103,7 @@ public sealed partial class FakeHalo
                 ? Bytes(chunk)
                 : Status(HttpStatusCode.NotFound);
 
-        if (!headers.TryGetValue("x-343-authorization-spartan", out var token) || token != Spartans.Token)
+        if (!headers.TryGetValue("x-343-authorization-spartan", out var token) || token != AcceptedToken)
         {
             var res = Status(HttpStatusCode.Unauthorized);
             res.Headers.Add("x-343-exception", Uri.EscapeDataString("Spartan token is not valid.\nsecond line"));

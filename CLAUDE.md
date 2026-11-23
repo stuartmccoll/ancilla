@@ -73,13 +73,19 @@ real API still returns what the fake does. Say so rather than claiming a page wo
   - `Services/AssetCache.cs`: token-gated CMS images, held in memory and served at `assets/{key}`
     (an endpoint on the web host, `AssetFileProvider` in the desktop app).
   - `Services/AncillaServices.cs`: `AddAncilla`, the registrations both hosts share.
-    `Services/HostServices.cs`: what differs per host, `IThemePreference` and `IFileExport`.
+    `Services/HostServices.cs`: what differs per host, `IThemePreference`, `IFileExport` and
+    `IWaypointSignIn` (embedded sign-in; the web host's isn't available).
+  - `Services/TokenSources.cs`: `ISpartanTokenSource` (pasted, environment variable, embedded
+    sign-in). `HaloWaypointClient` asks the session for a new token on a 401; when the source can't
+    get one, the session is `Expired` and the sign-in page shows, keeping the player's data.
   - `Services/Themes.cs` and `wwwroot/app.css`: the theme catalogue and its CSS variables.
   - `Components/Pages`: one page per route. `Components/Shared`: charts and widgets.
     Each component has a `.razor.css` scoped stylesheet.
 - `src/Ancilla.App`: the desktop app, a .NET MAUI Blazor Hybrid head (WinUI and Mac Catalyst). It
   shows `Ancilla.UI`'s `Routes` in a `BlazorWebView` (`MainPage.cs`), whose file provider also serves
-  `assets/`. It keeps the theme in MAUI `Preferences` and saves exports to Downloads.
+  `assets/`. It keeps the theme in MAUI `Preferences` and saves exports to Downloads. `SignIn/` and
+  `Platforms/*/WebProfile.cs` are its `IWaypointSignIn`: halowaypoint.com's sign-in in a native web
+  view with its own cookie store, and hidden silent sign-ins (`prompt=none`) for new tokens.
 - `src/Ancilla.Web`: the web dev host. `App.razor` (the page shell, which reads the theme cookie),
   `Program.cs` (the `/assets` endpoint) and the reconnect modal. Nothing else belongs here.
 - `branding/`: source logo and the full favicon suite. The icons the hosts use are copied into
@@ -99,7 +105,8 @@ real API still returns what the fake does. Say so rather than claiming a page wo
 - All Halo calls happen in the app's .NET process, never in page JS or web storage. The Spartan
   token lives only inside `HaloWaypointClient`, in that process's memory. Never log it, render it,
   pass it to JS interop, put it in a URL, cookie, web storage, preferences or file, or include it in
-  exception messages.
+  exception messages. On the desktop app, the sign-in web view's cookie store also holds the token,
+  as halowaypoint.com's own session cookie; Ancilla only reads it from there.
 - On the web host, render mode is `InteractiveServer` with `prerender: false`, set once in
   `App.razor`, so the scoped `HaloSession` survives navigation and API calls aren't made twice. The
   desktop app has one `HaloSession` for the whole app. Don't write pages that depend on which host

@@ -53,7 +53,7 @@ public sealed class MatchListState
 /// The token lives only inside the client object, in server memory.
 /// </summary>
 public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config, HaloDiagnostics diagnostics,
-    ArchiveStore archive, SnapshotStore legacySnapshots)
+    ArchiveStore archive, SnapshotStore legacySnapshots, IWaypointSignIn waypoint)
 {
     private readonly ConcurrentDictionary<string, Task<MatchTimeline>> _timelines = new();
     // The ranked-playlist list isn't discoverable by name without a version ID, so seed the common one.
@@ -73,6 +73,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     private readonly HashSet<MatchHistoryType> _fresh = [];
     private readonly HashSet<MatchHistoryType> _refresh = [];
     private HaloWaypointClient? _client;
+    private ISpartanTokenSource? _source;
     private Task<ServiceRecord>? _serviceRecord;
     // Filtered service records, keyed by (category, isRanked) for raw API calls.
     private readonly ConcurrentDictionary<(int?, bool?), Task<ServiceRecord>> _filteredRecords = new();
@@ -81,8 +82,15 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     public UserProfile? Me { get; private set; }
     public string? ServiceTag { get; private set; }
-    public bool FromEnvironment { get; private set; }
+    /// <summary>How the token was got. Null when signed out.</summary>
+    public SignInMethod? Method { get; private set; }
+    public bool FromEnvironment => Method == SignInMethod.Environment;
     public bool IsSignedIn => Me is not null;
+    /// <summary>
+    /// The token ran out and no new one could be got without you. The player's data is kept, and
+    /// signing in again as the same player carries on where it left off.
+    /// </summary>
+    public bool Expired { get; private set; }
 
     public ProgressReport? Report { get; set; }
     /// <summary>When the service record was last fetched.</summary>
@@ -128,25 +136,57 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
 
     // ---- Sign-in -------------------------------------------------------------------
 
-    public async Task<bool> TrySignInFromEnvironmentAsync()
+    /// <summary>
+    /// Signs in without asking: <c>HALO_SPARTAN_TOKEN</c> first, then, in the desktop app with
+    /// "Stay signed in", a hidden halowaypoint.com sign-in. False when neither has a token.
+    /// </summary>
+    /// <exception cref="HttpRequestException">The environment variable's token was refused.</exception>
+    public async Task<bool> TrySignInAutomaticallyAsync()
     {
-        var token = config["HALO_SPARTAN_TOKEN"];
-        if (string.IsNullOrWhiteSpace(token)) return false;
-        await SignInAsync(token);
-        FromEnvironment = true;
-        return true;
+        if (await SignInAsync(new EnvironmentToken(config))) return true;
+        if (!waypoint.IsAvailable || !waypoint.StaySignedIn) return false;
+        try { return await SignInAsync(new WaypointToken(waypoint, interactive: false)); }
+        catch (HttpRequestException)
+        {
+            diagnostics.Info("Signing in with the kept sign-in failed");
+            return false;   // the sign-in page is shown, as if there were nothing kept
+        }
     }
 
-    public async Task SignInAsync(string token)
+    /// <summary>Signs in with a pasted token.</summary>
+    public Task SignInAsync(string token) => SignInAsync(new PastedToken(token));
+
+    /// <summary>
+    /// Signs in with the source's token. False, and nothing changes, when the source has none.
+    /// After a session ran out (<see cref="Expired"/>), the same player keeps their data.
+    /// </summary>
+    /// <exception cref="HttpRequestException">Halo Waypoint refused the token.</exception>
+    public async Task<bool> SignInAsync(ISpartanTokenSource source)
     {
-        var client = new HaloWaypointClient(httpFactory.CreateClient(), token, diagnostics);
+        if (await source.GetTokenAsync() is not { } token) return false;
+        var client = new HaloWaypointClient(httpFactory.CreateClient(), token, diagnostics, RefreshTokenAsync);
         var me = await client.GetMeAsync();   // validates the token
+
+        if (Expired && _client is not null && Me?.Xuid == me.Xuid)
+        {
+            // Background work holds the old client, so give it the new token rather than replacing it.
+            _client.UseToken(token);
+            _source = source;
+            Method = source.Method;
+            Expired = false;
+            diagnostics.Info($"Signed in again ({source.Method})");
+            Changed?.Invoke();
+            return true;
+        }
+
         Reset();
         _client = client;
+        _source = source;
+        Method = source.Method;
         Me = me;
         diagnostics.Redactor.Register(me.Gamertag);
         diagnostics.Redactor.Register(me.Xuid);
-        diagnostics.Info("Signed in");
+        diagnostics.Info($"Signed in ({source.Method})");
         try { await archive.ImportSnapshotsAsync(legacySnapshots, me.Xuid); }
         catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
         {
@@ -155,20 +195,59 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         try { ServiceTag = (await client.GetAppearanceAsync(me.Xuid)).Appearance?.ServiceTag; }
         catch (HttpRequestException) { /* cosmetic only */ }
         Changed?.Invoke();
+        return true;
     }
 
-    public void SignOut()
+    /// <summary>
+    /// The client's refresh callback, after the API refused the token. Asks the current source for
+    /// a new one; when it has none, marks the session <see cref="Expired"/> so the sign-in page shows.
+    /// </summary>
+    private async Task<string?> RefreshTokenAsync(CancellationToken ct)
+    {
+        if (_source is not { } source) return null;
+        string? token = null;
+        try { token = await source.RefreshAsync(ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            diagnostics.Info($"Getting a new token failed ({ex.GetType().Name})");
+        }
+        if (token is not null)
+        {
+            diagnostics.Info("Got a new token");
+            return token;
+        }
+        if (_source == source && IsSignedIn && !Expired)
+        {
+            Expired = true;
+            diagnostics.Info("The sign-in ran out");
+            Changed?.Invoke();
+        }
+        return null;
+    }
+
+    /// <summary>Signs out, and in the desktop app removes everything its sign-in browser kept.</summary>
+    public async Task SignOutAsync()
     {
         Reset();
         Changed?.Invoke();
+        if (waypoint.IsAvailable)
+        {
+            try { await waypoint.SignOutAsync(); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                diagnostics.Info($"Clearing the sign-in browser failed ({ex.GetType().Name})");
+            }
+        }
     }
 
     private void Reset()
     {
         _client = null;
+        _source = null;
         Me = null;
         ServiceTag = null;
-        FromEnvironment = false;
+        Method = null;
+        Expired = false;
         Report = null;
         _fresh.Clear();
         _refresh.Clear();

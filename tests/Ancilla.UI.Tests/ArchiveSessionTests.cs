@@ -26,7 +26,7 @@ public sealed class ArchiveSessionTests : IDisposable
     /// <summary>What a restart leaves: the archive on disk, but nothing in memory and a new session.</summary>
     private static async Task<HaloSession> RestartedAsync(Harness h)
     {
-        var s = new HaloSession(h.Halo.Factory, new HaloCache(), h.Assets, h.Films, h.Config, h.Diagnostics, h.Archive, h.Snapshots)
+        var s = new HaloSession(h.Halo.Factory, new HaloCache(), h.Assets, h.Films, h.Config, h.Diagnostics, h.Archive, h.Snapshots, h.Waypoint)
         {
             Retry = new RetryPolicy(4, TimeSpan.FromMilliseconds(1)),
         };

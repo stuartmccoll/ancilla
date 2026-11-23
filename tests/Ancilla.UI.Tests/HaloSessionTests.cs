@@ -55,11 +55,11 @@ public sealed class HaloSessionTests : IDisposable
     [Fact]
     public async Task Environment_sign_in_needs_the_variable()
     {
-        Assert.False(await _h.NewSession().TrySignInFromEnvironmentAsync());
+        Assert.False(await _h.NewSession().TrySignInAutomaticallyAsync());
 
         using var env = new Harness(envToken: Token);
         var s = env.NewSession();
-        Assert.True(await s.TrySignInFromEnvironmentAsync());
+        Assert.True(await s.TrySignInAutomaticallyAsync());
         Assert.True(s.FromEnvironment);
         Assert.Equal(NobleSix.Gamertag, s.Me!.Gamertag);
     }
@@ -70,7 +70,7 @@ public sealed class HaloSessionTests : IDisposable
         var s = await _h.SignedInAsync();
         await s.GetServiceRecordAsync();
         s.Report = new ProgressReport("Noble Six", 1, new CareerStatus(0, 1, "", null, 0, 1, false), [], new XpPerMatchEstimate(1, ""), []);
-        s.SignOut();
+        await s.SignOutAsync();
         Assert.False(s.IsSignedIn);
         Assert.Null(s.Report);
         Assert.Null(s.ServiceTag);
@@ -433,7 +433,7 @@ public sealed class HaloSessionTests : IDisposable
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         using var h = new Harness();
-        var s = new HaloSession(h.Halo.Factory, h.Cache, h.Assets, new FilmCache(Path.Combine(home, ".ancilla-films")), h.Config, h.Diagnostics, h.Archive, h.Snapshots);
+        var s = new HaloSession(h.Halo.Factory, h.Cache, h.Assets, new FilmCache(Path.Combine(home, ".ancilla-films")), h.Config, h.Diagnostics, h.Archive, h.Snapshots, h.Waypoint);
         Assert.StartsWith("~", s.FilmFolder);
     }
 

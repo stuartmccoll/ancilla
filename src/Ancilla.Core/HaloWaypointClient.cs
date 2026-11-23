@@ -10,6 +10,10 @@ namespace Ancilla.Core;
 /// (the value of Waypoint's <c>343-spartan-token</c> cookie, including its "v4=" prefix).
 /// Economy calls additionally need a <c>343-clearance</c> header (the active flight ID),
 /// which this client resolves automatically.
+///
+/// Tokens run out after a few hours. Given a <c>refreshToken</c> callback, the client asks it for a
+/// new token the first time the API answers 401, and tries the request again once. Parallel calls
+/// that hit the same 401 share one refresh.
 /// </summary>
 public sealed class HaloWaypointClient
 {
@@ -27,19 +31,86 @@ public sealed class HaloWaypointClient
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
-    private readonly string _spartanToken;
     private readonly HaloDiagnostics? _diagnostics;
+    private readonly Func<CancellationToken, Task<string?>>? _refreshToken;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private readonly Lock _tokenLock = new();
     private string? _clearance;
 
-    public HaloWaypointClient(HttpClient http, string spartanToken, HaloDiagnostics? diagnostics = null)
+    // The token and which one it is. A generation that failed to refresh isn't tried again, so a
+    // burst of 401s after the sign-in has gone asks for a new token once, not once per request.
+    private (string Token, int Generation) _current;
+    private int _failedGeneration = -1;
+
+    /// <param name="refreshToken">
+    /// Gets a new token after the API refused the current one, or null when there isn't one. The
+    /// request that was refused then fails with its 401.
+    /// </param>
+    public HaloWaypointClient(HttpClient http, string spartanToken, HaloDiagnostics? diagnostics = null,
+        Func<CancellationToken, Task<string?>>? refreshToken = null)
     {
         _http = http;
         _diagnostics = diagnostics;
-        _spartanToken = NormaliseToken(spartanToken);
-        diagnostics?.Redactor.Register(_spartanToken);
-        diagnostics?.Redactor.Register(_spartanToken["v4=".Length..]);
+        _refreshToken = refreshToken;
+        _current = (Register(spartanToken), 0);
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("Ancilla/1.0");
+    }
+
+    /// <summary>Replaces the token, for signing in again as the same player after it ran out.</summary>
+    public void UseToken(string spartanToken)
+    {
+        var token = Register(spartanToken);
+        lock (_tokenLock) _current = (token, _current.Generation + 1);
+    }
+
+    private string Register(string spartanToken)
+    {
+        var token = NormaliseToken(spartanToken);
+        _diagnostics?.Redactor.Register(token);
+        _diagnostics?.Redactor.Register(token["v4=".Length..]);
+        return token;
+    }
+
+    private (string Token, int Generation) Current
+    {
+        get { lock (_tokenLock) return _current; }
+    }
+
+    /// <summary>
+    /// Called after a 401 sent with token <paramref name="generation"/>. True when there's a newer
+    /// token to try: one another call already fetched, or one fetched now.
+    /// </summary>
+    private async Task<bool> TryRefreshAsync(int generation, CancellationToken ct)
+    {
+        if (_refreshToken is null) return false;
+        await _refreshLock.WaitAsync(ct);
+        try
+        {
+            var current = Current;
+            if (current.Generation != generation) return true;
+            if (_failedGeneration == generation) return false;
+
+            string? fresh;
+            try { fresh = await _refreshToken(ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Never pass the exception on: a token source's errors aren't the request's.
+                _diagnostics?.Info($"Getting a new token failed ({ex.GetType().Name})");
+                fresh = null;
+            }
+            if (string.IsNullOrWhiteSpace(fresh))
+            {
+                _failedGeneration = generation;
+                return false;
+            }
+            UseToken(fresh);
+            return true;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
     }
 
     /// <summary>Accepts the cookie value raw or URL-encoded, with or without "v4=".</summary>
@@ -177,11 +248,24 @@ public sealed class HaloWaypointClient
     private async Task<HttpResponseMessage> SendAsync(string url, bool needsClearance, CancellationToken ct,
         string? xuid = null, string? accept = null)
     {
+        var clearance = needsClearance ? await GetClearanceAsync(xuid!, ct) : null;
+        var (token, generation) = Current;
+        var res = await SendOnceAsync(url, token, clearance, accept, ct);
+        if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized && await TryRefreshAsync(generation, ct))
+        {
+            res.Dispose();
+            res = await SendOnceAsync(url, Current.Token, clearance, accept, ct);
+        }
+        return Checked(res, url);
+    }
+
+    private async Task<HttpResponseMessage> SendOnceAsync(string url, string token, string? clearance, string? accept,
+        CancellationToken ct)
+    {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Add("x-343-authorization-spartan", _spartanToken);
+        req.Headers.Add("x-343-authorization-spartan", token);
         if (accept is not null) req.Headers.Accept.ParseAdd(accept);
-        if (needsClearance)
-            req.Headers.Add("343-clearance", await GetClearanceAsync(xuid!, ct));
+        if (clearance is not null) req.Headers.Add("343-clearance", clearance);
 
         var endpoint = HaloDiagnostics.EndpointName(url);
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -193,6 +277,11 @@ public sealed class HaloWaypointClient
             throw;
         }
         _diagnostics?.RecordCall(endpoint, (int)res.StatusCode, clock.Elapsed, res.IsSuccessStatusCode);
+        return res;
+    }
+
+    private static HttpResponseMessage Checked(HttpResponseMessage res, string url)
+    {
         if (!res.IsSuccessStatusCode)
         {
             using var _ = res;
@@ -200,7 +289,7 @@ public sealed class HaloWaypointClient
                 ? Uri.UnescapeDataString(ex.First()).Split('\n')[0]
                 : "";
             var hint = res.StatusCode == System.Net.HttpStatusCode.Unauthorized
-                ? " (Spartan token missing or expired - grab a fresh one from halowaypoint.com)"
+                ? " (Spartan token missing or expired - sign in again)"
                 : "";
             throw new HttpRequestException($"{(int)res.StatusCode} {res.ReasonPhrase} for {url}{hint} {detail}".Trim(),
                 null, res.StatusCode);
