@@ -27,7 +27,12 @@ public abstract class ComponentTest : BunitContext
         // The web host's: theme.js keeps the theme, and exports are browser downloads.
         Services.AddSingleton<IThemePreference>(Theme);
         Services.AddScoped<IFileExport, BrowserFileExport>();
+        Services.AddScoped<IClipboardWriter, BrowserClipboard>();
+        Services.AddSingleton<IFolderOpener, NoFolderOpener>();
         Services.AddSingleton<IWaypointSignIn>(_ => H.Waypoint);
+        Services.AddSingleton(H.Settings);
+        Services.AddSingleton(_ => H.Data);
+        Services.AddScoped<ThemeChoice>();
     }
 
     /// <summary>The theme preference pages see. Set <see cref="SavedTheme.Saved"/> to act as the desktop shell.</summary>
@@ -37,6 +42,7 @@ public abstract class ComponentTest : BunitContext
     {
         public string? Saved { get; set; }
         public void Save(string id) => Saved = id;
+        public void Forget() => Saved = null;
     }
 
     protected Harness H { get; }

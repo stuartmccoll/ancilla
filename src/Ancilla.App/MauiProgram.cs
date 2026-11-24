@@ -33,6 +33,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<HaloSession>();
         builder.Services.AddSingleton<IThemePreference, SettingsThemePreference>();
         builder.Services.AddSingleton<IFileExport, DownloadsFileExport>();
+        builder.Services.AddSingleton<IClipboardWriter, SystemClipboard>();
+        builder.Services.AddSingleton<IFolderOpener, SystemFolderOpener>();
         // halowaypoint.com's own sign-in, in an embedded browser with a cookie store of its own.
         builder.Services.AddSingleton<IWebProfile, WebProfile>();
         builder.Services.AddSingleton<IWaypointSignIn, WaypointSignIn>();
@@ -40,6 +42,8 @@ public static class MauiProgram
 
         var app = builder.Build();
         app.Services.GetRequiredService<HaloDiagnostics>().Info($"Ancilla {DiagnosticsReport.AppVersion} started");
+        // Exceptions that end the app, or that a background task threw unseen, go in the log too.
+        app.Services.GetRequiredService<DiagnosticLog>().CatchUnhandled();
         return app;
     }
 }

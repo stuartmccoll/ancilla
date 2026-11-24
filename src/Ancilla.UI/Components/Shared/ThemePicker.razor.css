@@ -1,0 +1,16 @@
+.themes { display: flex; flex-direction: column; }
+.themes.detailed { gap: .35rem; max-width: 36rem; }
+.theme-opt {
+    display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left;
+    background: none; color: var(--text); padding: .45rem .6rem; border-radius: var(--radius-sm); font-weight: 500;
+    font-family: var(--font-body); text-transform: none; letter-spacing: normal; box-shadow: none;
+}
+.detailed .theme-opt { border: 1px solid var(--border); padding: .6rem .75rem; }
+.theme-opt:hover, .theme-opt:focus-visible { background: var(--track); }
+.theme-opt.on { font-weight: 700; }
+.detailed .theme-opt.on { border-color: var(--accent); }
+.swatch { display: inline-flex; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px var(--border); flex: none; }
+.swatch span { width: 10px; height: 18px; }
+.theme-text { flex: 1; display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.theme-desc { font-weight: 400; font-size: .85rem; color: var(--muted); }
+.check { color: var(--accent); flex: none; }

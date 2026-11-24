@@ -3,6 +3,7 @@ using Ancilla.Core;
 using Ancilla.Data;
 using Ancilla.Testing;
 using Ancilla.Theater;
+using Ancilla.UI.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -18,8 +19,8 @@ namespace Ancilla.Web.E2E;
 /// <summary>
 /// The real app on a random loopback port. Its outgoing HTTP goes to a <see cref="FakeHalo"/>
 /// instead of halowaypoint.com, and <c>HALO_SPARTAN_TOKEN</c> is the fake's token, so every new
-/// page load signs in as Noble Six the way a developer's local setup does. Snapshots and films go
-/// to a temporary folder. One app and one browser are shared by every test.
+/// page load signs in as Noble Six the way a developer's local setup does. Snapshots, films, the
+/// archive, logs and settings go to a temporary folder. One app and one browser are shared by every test.
 /// </summary>
 public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -51,6 +52,13 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
             // A factory, so the host disposes it when it stops and SQLite closes archive.db before the
             // folder is deleted (Windows can't delete a file that's still open).
             services.AddSingleton(_ => new ArchiveStore(Path.Combine(_root, "archive.db")));
+            // Settings and the list of what's stored (which can delete it all) stay in the temporary folder too.
+            services.RemoveAll<LocalSettings>();
+            services.RemoveAll<LocalData>();
+            services.AddSingleton(new LocalSettings(Path.Combine(_root, "settings.json")));
+            services.AddSingleton(sp => new LocalData(sp.GetRequiredService<ArchiveStore>(), sp.GetRequiredService<SnapshotStore>(),
+                sp.GetRequiredService<FilmCache>(), sp.GetRequiredService<DiagnosticLog>(), sp.GetRequiredService<LocalSettings>(),
+                sp.GetRequiredService<IWaypointSignIn>(), _root));
         });
     }
 

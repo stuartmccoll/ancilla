@@ -20,6 +20,7 @@ public sealed partial class FakeHalo
 
     private readonly ConcurrentQueue<RecordedRequest> _requests = new();
     private readonly ConcurrentQueue<(Func<Uri, bool> Match, HttpStatusCode Status)> _failures = new();
+    private readonly ConcurrentQueue<(Func<Uri, bool> Match, string Json)> _bodies = new();
 
     public FakeHalo(HaloWorld? world = null) => World = world ?? new HaloWorld();
 
@@ -49,6 +50,16 @@ public sealed partial class FakeHalo
     /// <summary>Makes requests whose URL contains <paramref name="fragment"/> fail.</summary>
     public FakeHalo Fail(string fragment, HttpStatusCode status = HttpStatusCode.InternalServerError) =>
         Fail(u => u.ToString().Contains(fragment, StringComparison.OrdinalIgnoreCase), status);
+
+    /// <summary>
+    /// Answers every request whose URL matches with 200 and <paramref name="json"/> as it is, for
+    /// responses the models don't expect: nulls, missing envelopes, a shape that changed.
+    /// </summary>
+    public FakeHalo Respond(Func<Uri, bool> match, string json)
+    {
+        _bodies.Enqueue((match, json));
+        return this;
+    }
 
     /// <summary>A new handler on this fake. Handlers are cheap: the HTTP client factory may dispose them.</summary>
     public HttpMessageHandler CreateHandler() => new Handler(this);
@@ -109,6 +120,9 @@ public sealed partial class FakeHalo
             res.Headers.Add("x-343-exception", Uri.EscapeDataString("Spartan token is not valid.\nsecond line"));
             return res;
         }
+
+        foreach (var (match, json) in _bodies)
+            if (match(uri)) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
         var path = Uri.UnescapeDataString(uri.AbsolutePath);
         var q = ParseQuery(uri.Query);

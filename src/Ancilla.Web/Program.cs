@@ -14,6 +14,8 @@ builder.Services.AddAncilla(builder.Configuration);
 builder.Services.AddScoped<HaloSession>();
 builder.Services.AddSingleton<IThemePreference, CookieThemePreference>();
 builder.Services.AddScoped<IFileExport, BrowserFileExport>();
+builder.Services.AddScoped<IClipboardWriter, BrowserClipboard>();
+builder.Services.AddSingleton<IFolderOpener, NoFolderOpener>();
 builder.Services.AddSingleton<IWaypointSignIn, NoWaypointSignIn>();
 
 var app = builder.Build();

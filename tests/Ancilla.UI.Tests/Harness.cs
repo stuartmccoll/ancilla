@@ -20,6 +20,7 @@ public sealed class Harness : IDisposable
         Snapshots = new SnapshotStore(Path.Combine(Root, "snapshots.json"));
         Films = new FilmCache(Path.Combine(Root, "films"));
         Archive = new ArchiveStore(Path.Combine(Root, "archive.db"));
+        Settings = new LocalSettings(Path.Combine(Root, "settings.json"));
         Config = new ConfigurationBuilder()
             .AddInMemoryCollection(envToken is null ? [] : [new("HALO_SPARTAN_TOKEN", envToken)])
             .Build();
@@ -32,6 +33,7 @@ public sealed class Harness : IDisposable
     public SnapshotStore Snapshots { get; }
     public FilmCache Films { get; }
     public ArchiveStore Archive { get; }
+    public LocalSettings Settings { get; }
     public IConfiguration Config { get; }
     public Redactor Redactor { get; } = new();
     public DiagnosticLog Log => _log ??= new DiagnosticLog(Path.Combine(Root, "logs"), Redactor);
@@ -42,10 +44,13 @@ public sealed class Harness : IDisposable
 
     public HaloWorld World => Halo.World;
 
+    /// <summary>Everything stored, all under <see cref="Root"/>, which stands for Ancilla's own folder.</summary>
+    public LocalData Data => new(Archive, Snapshots, Films, Log, Settings, Waypoint, Root);
+
     /// <summary>The embedded sign-in sessions see. The web host's by default; set a <see cref="FakeWaypointSignIn"/> to act as the desktop app.</summary>
     public IWaypointSignIn Waypoint { get; set; } = new NoWaypointSignIn();
 
-    public HaloSession NewSession() => new(Halo.Factory, Cache, Assets, Films, Config, Diagnostics, Archive, Snapshots, Waypoint) { Retry = new RetryPolicy(4, TimeSpan.FromMilliseconds(1)) };
+    public HaloSession NewSession() => new(Halo.Factory, Cache, Assets, Films, Config, Diagnostics, Archive, Snapshots, Waypoint, Settings) { Retry = new RetryPolicy(4, TimeSpan.FromMilliseconds(1)) };
 
     public async Task<HaloSession> SignedInAsync()
     {

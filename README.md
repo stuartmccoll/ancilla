@@ -150,7 +150,7 @@ Nothing needs a Spartan token or a network connection to Halo. The tests come in
 | `tests/Ancilla.Core.Tests` | The API client (URLs, headers, ID checks, error messages), progress and service record maths, caching, snapshots | xUnit |
 | `tests/Ancilla.Data.Tests` | The SQLite archive: schema migrations (an empty database and every earlier schema), storage per player, the one-off snapshot import, CSV and JSON export | xUnit |
 | `tests/Ancilla.Theater.Tests` | Theater film decoding, on films built bit by bit | xUnit |
-| `tests/Ancilla.UI.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), the desktop shell's asset provider, theme preference and export, and every page and shared component rendered without a browser | xUnit, bUnit |
+| `tests/Ancilla.UI.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), the desktop shell's asset provider, theme preference and export, the settings file, listing, exporting and deleting everything stored (a test checks no files are left), and every page and shared component rendered without a browser | xUnit, bUnit |
 | `tests/Ancilla.Web.E2E` | The web dev host in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
 
 `tests/Ancilla.Testing` holds a fake of the Halo Waypoint services (`FakeHalo`) that answers the
@@ -205,13 +205,21 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   for a head-to-head: per-game averages side by side and the list of shared matches.
 - **About**: what the app is, where the data comes from, what happens to your token and data,
   how each derived number is worked out, and the disclaimer.
-- **Settings**: the match archive (what's stored, where, how big), **Load older matches** to
-  backfill your whole history, **Export as CSV / JSON** (one row per match, with no other players'
-  names or IDs), and the Theater film cache with its size limit and **Clear films**.
-- **Diagnostics**: app version, operating system, how each Halo service has been answering (calls,
-  errors, last status and time), cache sizes (shared data, images, snapshots, films, logs) and how many
-  requests are running or waiting. **Copy diagnostics** puts a redacted text summary on the clipboard
-  for a [bug report](.github/ISSUE_TEMPLATE/bug.yml).
+- **Settings**: everything Ancilla keeps on this device (archive, films, logs, settings, the old
+  snapshots file, sign-in and theme) with where it is and how big it is. **Export everything** saves
+  your matches, progress snapshots and settings as one JSON file; **Delete everything** (after a
+  confirmation) signs you out and deletes all of it, Ancilla's folder included. Then the match archive
+  (what's stored), **Load older matches** to backfill your whole history, **Export as CSV / JSON**
+  (one row per match, with no other players' names or IDs); the Theater film cache with its size limit
+  (pick 512 MB to 10 GB) and **Clear films**; sign-in (**Stay signed in** and **Sign out and forget
+  this sign-in** in the desktop app); and the theme, which the user menu can also change.
+- **Diagnostics**: app version, operating system, the 10 most recent errors from the log files (each
+  expands to its stack trace), how each Halo service has been answering (calls, errors, last status and
+  time), cache sizes (shared data, images, snapshots, films, logs) and how many requests are running or
+  waiting. **Copy diagnostics** puts a redacted text summary on the clipboard for a
+  [bug report](.github/ISSUE_TEMPLATE/bug.yml), with the latest two errors and their stack traces (cut
+  to 40 lines each). In the desktop app, **Open log folder** shows the logs in Finder or File Explorer
+  (`IFolderOpener`; the web host's isn't available, so it shows the path).
 
 Firefight (PvE) games are left out of Trends and Insights, because kills against AI would swamp the
 scale. Every chart has a "Show as table" view. Every page has a footer stating that this is an
@@ -219,7 +227,7 @@ unofficial fan project, not affiliated with Microsoft, Xbox or Halo Studios.
 
 ## Themes
 
-Pick a theme from the menu under your gamertag: **Basic** (follows the system light/dark setting),
+Pick a theme in Settings or from the menu under your gamertag: **Basic** (follows the system light/dark setting),
 **Halo** or **XBOX** (original Xbox). The desktop app keeps the choice in its settings. The web dev
 host keeps it in a cookie, so the server renders the page
 in that theme from the first paint. Halo and XBOX headings use the Rajdhani and Exo 2 web fonts from
@@ -264,16 +272,34 @@ To add a theme (e.g. Xbox 360):
   in the archive each time progress loads. Earlier versions kept them in `snapshots.json` in the
   same folder: that file is copied into the archive once, for the first player to sign in, and left
   where it is. The `Snapshots` setting still points at it.
-- The film cache is trimmed to 2 GB, oldest films first, whenever a film is downloaded. Set
-  `FilmCacheLimitMb` to change the limit. Settings can clear it.
+- The film cache is trimmed to 2 GB, oldest films first, whenever a film is downloaded. Pick another
+  limit in Settings, or set `FilmCacheLimitMb` to change the default. Settings can clear it.
+- Choices made in Settings (so far the film cache limit) are kept in `settings.json` in the same
+  folder, written only once something is changed. Set the `Settings` setting to keep it elsewhere.
+- **Settings > Delete everything** deletes the archive (and its SQLite side files), films, logs,
+  `settings.json`, the old `snapshots.json`, the saved theme and, in the desktop app, the kept sign-in
+  and its "Stay signed in" setting, then the `Ancilla` folder if nothing else is in it. Files you've
+  moved elsewhere with the settings above are deleted too, but their folders are left alone. On macOS
+  a kept sign-in's WebKit store is wiped at once and its folder removed at the next start-up.
 
 ### Logs
 
 The app writes a log to a `logs` folder next to the snapshots: one `ancilla-yyyyMMdd.log` a day, rolled
 at 2 MB and kept for a week. It records each call to Halo by service name, result and time taken (never
-the URL, which holds IDs), plus start-up and sign-in. Before any line is written, `Redactor` removes
-Spartan tokens, clearance IDs, XUIDs (decimal, hex and `xuid(...)`), gamertags, film download URLs and
-absolute paths. To store logs elsewhere, set the `Logs` setting to a folder.
+the URL, which holds IDs), plus start-up and sign-in. It also records errors with their stack traces, marked `ERROR` so the Diagnostics page can list them:
+an exception a page didn't catch (`LoggedErrorBoundary`, around each page in the layout and around the
+whole app in `Routes`, which then shows a "Something went wrong" message in the page), anything logged
+at Error or above through `ILogger` (`DiagnosticLoggerProvider`), and, in the desktop app, exceptions
+that end the process or that a background task threw unobserved. The boundary is needed because the
+desktop app's web view sends a page's unhandled exception only to the page's console, never to `ILogger`. A response from Halo that can't be read (not JSON, a shape the
+models don't expect, or a missing envelope) is logged by endpoint and fails like a failed request, so
+pages skip it. Before any line is written, `Redactor` removes Spartan tokens, clearance IDs, XUIDs
+(decimal, hex and `xuid(...)`), gamertags, film download URLs and absolute paths. To store logs
+elsewhere, set the `Logs` setting to a folder.
+
+The Mac app is sandboxed, so its logs are in
+`~/Library/Containers/app.ancilla.desktop/Data/Documents/Ancilla/logs`. The Diagnostics page shows
+the folder either way.
 
 To check the logs the browser tests produce, set `ANCILLA_E2E_LOGS` to a folder when running them, then run
 `.github/scripts/privacy-check.sh --log <folder>`. CI does this in the browser tests job.
@@ -335,7 +361,9 @@ best guesses: their stat groups don't pin them down). Repeating
 
 Match quirks: `Outcome` is 1 Tie, 2 Win, 3 Loss, 4 Left. In team modes a player's `Rank` is their
 team's placement, not their own. CSR `SubTier` is zero-based (1050 = Platinum 4). Medal `NameId`s
-can exceed `int.MaxValue`.
+can exceed `int.MaxValue`. Some older matches' skill results have numbers that aren't finite
+(infinity in a stat's `Expected`, for one); `MatchSkill.Finite` drops those stat performances and
+team MMRs as the client reads them, and the archive stores such numbers rather than failing on them.
 
 Progress semantics: `CurrentProgress.Rank` = ranks **completed**, and `PartialProgress` = XP into
 the next one. Operations have a flat `XpPerRank` (1,000). Career rank has 272 ranks, each with its

@@ -2,25 +2,86 @@
 @implements IDisposable
 @inject HaloSession Session
 @inject IFileExport Export
+@inject LocalData Data
+@inject IWaypointSignIn Waypoint
+@inject ThemeChoice Theme
 
 <PageTitle>Settings · Ancilla</PageTitle>
 
 <div class="page-head">
     <div>
         <h1>Settings</h1>
-        <p>The data Ancilla keeps on this machine: your match archive and downloaded films.</p>
+        <p>What Ancilla keeps on this device, and what it does with it.</p>
     </div>
 </div>
 
 <p class="muted" role="status">@_status</p>
 
 <div class="content">
+    <section class="card" aria-labelledby="stored-h">
+        <h2 id="stored-h">On this device</h2>
+        <p>
+            Ancilla keeps these files on this device and sends none of them anywhere. See
+            <a href="about#privacy">About</a> for what's in each one.
+        </p>
+        <div class="table-wrap">
+            <table class="stored">
+                <caption class="visually-hidden">Files Ancilla keeps, where they are and their size</caption>
+                <thead><tr><th scope="col">What</th><th scope="col">Where</th><th scope="col">Size</th></tr></thead>
+                <tbody>
+                    @foreach (var item in _items)
+                    {
+                        <tr>
+                            <th scope="row">@item.Name<span class="item-desc">@item.Description</span></th>
+                            <td><code class="path">@item.Location</code></td>
+                            <td>@(item.Bytes == 0 ? "Nothing yet" : DiagnosticsReport.Size(item.Bytes))</td>
+                        </tr>
+                    }
+                    <tr>
+                        <th scope="row">Sign-in<span class="item-desc">@SignInDescription</span></th>
+                        <td>@(KeepsSignIn ? "The sign-in window's own browser profile" : "Memory only")</td>
+                        <td>@(KeepsSignIn ? "Kept" : "Not kept")</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Theme<span class="item-desc">Your theme choice.</span></th>
+                        <td>@(Waypoint.IsAvailable ? "The app's settings" : "A browser cookie")</td>
+                        <td>@(Themes.All.First(t => t.Id == Theme.Current).Name)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="actions">
+            <button class="secondary" @onclick="ExportEverythingAsync" disabled="@_busy">Export everything</button>
+            <button class="secondary danger" @onclick="AskToDelete" disabled="@_busy"
+                    aria-expanded="@(_confirming ? "true" : "false")" aria-controls="delete-confirm">Delete everything…</button>
+        </div>
+        <p class="muted">
+            Exporting saves one JSON file with your matches (one row each, without other players' names or IDs),
+            your progress snapshots and your settings. Films and log files aren't included.
+        </p>
+        @if (_confirming)
+        {
+            <div id="delete-confirm" class="confirm" role="group" aria-labelledby="confirm-h">
+                <h3 id="confirm-h">Delete everything?</h3>
+                <p>
+                    This signs you out and deletes your match archive, progress snapshots, cached films, log files and
+                    settings from this device@(Waypoint.IsAvailable ? ", and the kept Microsoft sign-in" : ""), and
+                    forgets your theme. Your matches stay on Halo Waypoint, but anything older than its recent history
+                    can't be loaded again. Export first if you want a copy.
+                </p>
+                <div class="actions">
+                    <button class="secondary danger" @onclick="DeleteEverythingAsync" disabled="@_busy">Yes, delete everything</button>
+                    <button class="secondary" @ref="_cancel" @onclick="() => _confirming = false" disabled="@_busy">Cancel</button>
+                </div>
+            </div>
+        }
+    </section>
+
     <section class="card" aria-labelledby="archive-h">
         <h2 id="archive-h">Match archive</h2>
         <p>
             Every match you load is kept in a database on this machine, so Trends, Insights and Players can cover more
             than the API's recent history, and what you've already loaded shows straight away after a restart.
-            See <a href="about#privacy">About</a> for what's stored.
         </p>
         <dl class="defs">
             <dt>Matches stored</dt><dd>@_summary.Matches.ToString("N0")</dd>
@@ -32,10 +93,12 @@
             <dt>Location</dt><dd><code class="path">@Session.ArchiveFile</code></dd>
         </dl>
         <div class="actions">
-            <button @onclick="BackfillAsync" disabled="@_busy">@(_busy ? "Loading…" : "Load older matches")</button>
+            <button @onclick="BackfillAsync" disabled="@_busy">@(_backfilling ? "Loading…" : "Load older matches")</button>
             <button class="secondary" @onclick='() => ExportAsync("csv")' disabled="@_busy">Export as CSV</button>
             <button class="secondary" @onclick='() => ExportAsync("json")' disabled="@_busy">Export as JSON</button>
         </div>
+        @* Next to the button that started it, so progress shows without scrolling back to the top. *@
+        <p id="archive-status" class="archive-status" role="status">@_archiveStatus</p>
         <p class="muted">
             Loading older matches asks Halo's services for your whole history, 25 at a time, then for each match
             you don't have yet. It can take a while for a long history, and it picks up where it left off if you stop.
@@ -47,56 +110,152 @@
         <h2 id="films-h">Theater films</h2>
         <p>
             Films are downloaded when you load a match's timeline, and cached so they needn't be downloaded again.
-            When the cache goes over @DiagnosticsReport.Size(Session.FilmLimitBytes), the films fetched longest ago are deleted.
-            Set <code>FilmCacheLimitMb</code> to change that.
+            When the cache goes over its size limit, the films fetched longest ago are deleted.
         </p>
         <dl class="defs">
             <dt>Cached films</dt><dd>@DiagnosticsReport.Size(_filmBytes)</dd>
             <dt>Location</dt><dd><code class="path">@Session.FilmFolder</code></dd>
+            <dt><label for="film-limit">Size limit</label></dt>
+            <dd>
+                <select id="film-limit" value="@_filmLimitMb" @onchange="SetFilmLimit">
+                    @foreach (var mb in FilmLimitChoices)
+                    {
+                        <option value="@mb">@DiagnosticsReport.Size((long)mb << 20)@(mb == Session.DefaultFilmLimitMb ? " (default)" : "")</option>
+                    }
+                </select>
+            </dd>
         </dl>
         <div class="actions">
             <button class="secondary" @onclick="ClearFilms" disabled="@(_filmBytes == 0)">Clear films</button>
         </div>
     </section>
+
+    <section class="card" aria-labelledby="signin-h">
+        <h2 id="signin-h">Sign-in</h2>
+        <p>
+            @if (Session.FromEnvironment)
+            {
+                @:You're signed in with <code>@EnvironmentToken.Variable</code>, which is only in the app's memory.
+            }
+            else if (Session.Method == SignInMethod.Waypoint)
+            {
+                @:You signed in with Microsoft. Ancilla holds the token it got in memory, and never writes it to a file.
+            }
+            else
+            {
+                @:You pasted a token. Ancilla holds it in memory only, until you sign out or it runs out.
+            }
+        </p>
+        @if (Waypoint.IsAvailable)
+        {
+            <label class="stay">
+                <input type="checkbox" checked="@_stay" @onchange="OnStayChanged" />
+                Stay signed in on this computer
+            </label>
+            <p class="muted">
+                Keeps Microsoft's sign-in for next time, so Ancilla can sign you in when it starts. Turning it off
+                removes the kept sign-in.
+            </p>
+        }
+        <div class="actions">
+            <button class="secondary" @onclick="SignOutAsync" disabled="@_busy">
+                @(Waypoint.IsAvailable ? "Sign out and forget this sign-in" : "Sign out")
+            </button>
+        </div>
+        @if (Waypoint.IsAvailable)
+        {
+            <p class="muted">
+                Signing out removes everything the sign-in window kept, Microsoft's sign-in included. Your match
+                archive stays.
+            </p>
+        }
+    </section>
+
+    <section class="card" aria-labelledby="theme-h">
+        <h2 id="theme-h">Theme</h2>
+        <ThemePicker LabelledBy="theme-h" Detailed="true" />
+        <p class="muted">You can also change it from the menu under your gamertag.</p>
+    </section>
 </div>
 
 @code {
     private ArchiveSummary _summary = null!;
+    private IReadOnlyList<StoredItem> _items = [];
     private long _filmBytes;
+    private int _filmLimitMb;
+    private bool _stay;
     private string? _status;
+    private string? _archiveStatus;   // loading older matches and exporting them, shown in the Match archive card
+    private DateTime _summaryAt;
     private bool _busy;
+    private bool _backfilling;
+    private bool _confirming;
+    private bool _focusCancel;
+    private ElementReference _cancel;
     private CancellationTokenSource? _cts;
 
-    protected override void OnInitialized() => Reload();
+    private static readonly int[] FilmLimitPresets = [512, 1024, 2048, 5120, 10240];
+
+    private IEnumerable<int> FilmLimitChoices =>
+        FilmLimitPresets.Append(Session.DefaultFilmLimitMb).Append(_filmLimitMb).Distinct().Order();
+
+    private bool KeepsSignIn => Waypoint.IsAvailable && _stay;
+
+    private string SignInDescription => Waypoint.IsAvailable
+        ? "Microsoft's sign-in, when Stay signed in is on. The token itself is only ever in memory."
+        : "The token is only ever in memory; nothing is kept.";
+
+    protected override void OnInitialized()
+    {
+        _stay = Waypoint.StaySignedIn;
+        Theme.Changed += OnThemeChanged;
+        Reload();
+    }
 
     private void Reload()
     {
         _summary = Session.ArchiveSummary();
         _filmBytes = Session.FilmBytes();
+        _filmLimitMb = (int)(Session.FilmLimitBytes >> 20);
+        _items = Data.Items();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusCancel) return;
+        _focusCancel = false;
+        try { await _cancel.FocusAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException) { }
     }
 
     private async Task BackfillAsync()
     {
-        _busy = true;
+        _busy = _backfilling = true;
         _cts = new CancellationTokenSource();
-        _status = "Looking for older matches…";
+        _archiveStatus = "Looking for older matches…";
         try
         {
-            var result = await Session.BackfillAsync(msg =>
+            var result = await Session.BackfillAsync(msg => _ = InvokeAsync(() =>
             {
-                _status = msg;
-                _ = InvokeAsync(StateHasChanged);
-            }, _cts.Token);
-            _status = result.Added == 0
+                _archiveStatus = msg;
+                // The counts above climb as it goes, read at most once a second.
+                if (DateTime.UtcNow - _summaryAt > TimeSpan.FromSeconds(1) && Session.IsSignedIn)
+                {
+                    _summary = Session.ArchiveSummary();
+                    _summaryAt = DateTime.UtcNow;
+                }
+                StateHasChanged();
+            }), _cts.Token);
+            _archiveStatus = result.Added == 0
                 ? $"Nothing new to load. {result.Matches:N0} matches are stored."
                 : $"Added {result.Added:N0} matches. {result.Matches:N0} are stored.";
         }
-        catch (OperationCanceledException) { _status = "Stopped. What's loaded so far is kept."; }
-        catch (HttpRequestException ex) { _status = $"Couldn't finish: {ex.Message}"; }
+        catch (OperationCanceledException) { _archiveStatus = "Stopped. What's loaded so far is kept."; }
+        catch (HttpRequestException ex) { _archiveStatus = $"Couldn't finish: {ex.Message}"; }
         finally
         {
-            _busy = false;
-            Reload();
+            _busy = _backfilling = false;
+            if (Session.IsSignedIn) Reload();
         }
     }
 
@@ -105,13 +264,44 @@
         var rows = Session.ExportRows();
         var text = format == "csv" ? ArchiveExport.ToCsv(rows) : ArchiveExport.ToJson(rows);
         var mime = format == "csv" ? "text/csv" : "application/json";
+        _archiveStatus = await SaveAsync($"ancilla-matches.{format}", mime, text, $"Exported {rows.Count:N0} matches");
+    }
+
+    private async Task ExportEverythingAsync()
+    {
+        string text;
+        try { text = await Data.ExportAsync(Session, Theme.Current); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _status = "Couldn't read everything to export.";
+            return;
+        }
+        _status = await SaveAsync("ancilla-export.json", "application/json", text, "Exported everything");
+    }
+
+    /// <returns>What happened, for the status line of the card the export was started from.</returns>
+    private async Task<string> SaveAsync(string fileName, string mime, string text, string done)
+    {
         try
         {
-            var where = await Export.SaveAsync($"ancilla-matches.{format}", mime, text);
-            _status = where is null ? $"Exported {rows.Count:N0} matches." : $"Exported {rows.Count:N0} matches to {where}.";
+            var where = await Export.SaveAsync(fileName, mime, text);
+            return where is null ? $"{done}." : $"{done} to {where}.";
         }
-        catch (JSException) { _status = "Couldn't start the download."; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _status = "Couldn't save the file."; }
+        catch (JSException) { return "Couldn't start the download."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "Couldn't save the file."; }
+    }
+
+    private void SetFilmLimit(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var mb) || mb <= 0) return;
+        try
+        {
+            var removed = Session.SetFilmLimit(mb);
+            _status = $"Film cache limit set to {DiagnosticsReport.Size((long)mb << 20)}." +
+                      (removed > 0 ? $" Deleted {removed} {(removed == 1 ? "film" : "films")} to fit." : "");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _status = "Couldn't save the setting."; }
+        Reload();
     }
 
     private void ClearFilms()
@@ -121,5 +311,39 @@
         Reload();
     }
 
-    public void Dispose() => _cts?.Cancel();
+    private void OnStayChanged(ChangeEventArgs e)
+    {
+        _stay = e.Value is true;
+        Waypoint.StaySignedIn = _stay;
+        _status = _stay ? "Your next sign-in will be kept on this computer." : "The kept sign-in has been removed.";
+    }
+
+    private Task SignOutAsync()
+    {
+        _cts?.Cancel();
+        return Session.SignOutAsync();
+    }
+
+    private void AskToDelete()
+    {
+        _confirming = true;
+        _focusCancel = true;
+    }
+
+    private async Task DeleteEverythingAsync()
+    {
+        _busy = true;
+        _cts?.Cancel();
+        await Theme.ForgetAsync();
+        // Signing out replaces this page with the sign-in page, which says what happened.
+        await Data.EraseAsync(Session);
+    }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        Theme.Changed -= OnThemeChanged;
+    }
 }

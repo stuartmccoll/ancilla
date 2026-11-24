@@ -174,6 +174,18 @@ public sealed class ArchiveTests : IDisposable
     }
 
     [Fact]
+    public void A_skill_result_with_numbers_that_are_not_finite_is_stored_not_thrown_on()
+    {
+        var store = Open();
+        var id = World.Games[0].Id;
+        store.PutSkill(Me, id, new MatchSkill(double.NaN, null, new() { ["Kills"] = new(10, double.PositiveInfinity, 2) }, 1, null));
+
+        Assert.True(store.TryGetSkill(Me, id, out var skill));
+        Assert.True(double.IsNaN(skill!.TeamMmr));
+        Assert.True(double.IsPositiveInfinity(skill.StatPerformances!["Kills"].Expected));
+    }
+
+    [Fact]
     public void Skills_ugc_and_completeness_are_remembered()
     {
         var store = Open();
@@ -319,5 +331,25 @@ public sealed class ArchiveTests : IDisposable
         var doc = System.Text.Json.JsonDocument.Parse(ArchiveExport.ToJson(rows));
         Assert.Equal(rows.Count, doc.RootElement.GetArrayLength());
         Assert.Equal(rows[0].MatchId, doc.RootElement[0].GetProperty("matchId").GetString());
+    }
+
+    // ---- Erasing ------------------------------------------------------------------------
+
+    [Fact]
+    public void Erasing_deletes_the_file_and_its_side_files_until_it_is_used_again()
+    {
+        var store = Open();
+        store.PutMatch(World.Games[0].Stats);
+        store.PutHistory(Me, MatchHistoryType.Matchmaking, [World.Games[0].Entry]);
+        Assert.NotEmpty(store.Files);
+
+        store.Erase();
+        Assert.Empty(store.Files);
+        Assert.Empty(Directory.EnumerateFiles(_root));
+
+        // The next use makes a new, empty archive with the current schema.
+        Assert.Null(store.GetMatch(World.Games[0].Id));
+        Assert.Equal(ArchiveSchema.Latest, store.Summary(Me).SchemaVersion);
+        Assert.Equal(0, store.Summary(Me).Matches);
     }
 }

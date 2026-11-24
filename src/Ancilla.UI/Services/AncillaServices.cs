@@ -3,6 +3,7 @@ using Ancilla.Data;
 using Ancilla.Theater;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Ancilla.UI.Services;
 
@@ -10,8 +11,8 @@ public static class AncillaServices
 {
     /// <summary>
     /// The services both hosts share. Each host adds its own <see cref="HaloSession"/> (one per
-    /// circuit on the web host, one for the app in the desktop shell), <see cref="IThemePreference"/>
-    /// and <see cref="IFileExport"/>.
+    /// circuit on the web host, one for the app in the desktop shell), <see cref="IThemePreference"/>,
+    /// <see cref="IFileExport"/> and <see cref="IWaypointSignIn"/>.
     /// </summary>
     public static IServiceCollection AddAncilla(this IServiceCollection services, IConfiguration config)
     {
@@ -36,7 +37,17 @@ public static class AncillaServices
         services.AddSingleton(redactor);
         services.AddSingleton(log);
         services.AddSingleton(new HaloDiagnostics(redactor, log));
+        // Errors logged through ILogger (Blazor's unhandled exceptions among them) go to the same files.
+        services.AddSingleton<ILoggerProvider>(new DiagnosticLoggerProvider(log));
         services.AddSingleton<DiagnosticsReport>();
+        // Choices made on the Settings page (the film cache limit), next to the archive.
+        services.AddSingleton(new LocalSettings(config["Settings"] ?? LocalSettings.DefaultPath));
+        // Lists, exports and deletes all of the above. Only Ancilla's own folder is ever removed.
+        services.AddSingleton(sp => new LocalData(sp.GetRequiredService<ArchiveStore>(), sp.GetRequiredService<SnapshotStore>(),
+            sp.GetRequiredService<FilmCache>(), log, sp.GetRequiredService<LocalSettings>(), sp.GetRequiredService<IWaypointSignIn>(),
+            LocalData.DefaultFolder));
+        // The theme this circuit or window shows, so the menu's picker and Settings' agree.
+        services.AddScoped<ThemeChoice>();
         services.AddSingleton<HaloCache>();
         services.AddSingleton<AssetCache>();
         return services;

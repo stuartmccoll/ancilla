@@ -1,0 +1,43 @@
+@implements IDisposable
+@inject ThemeChoice Theme
+
+@* A radio group of the themes. Used in the user menu and on Settings; both show the same choice. *@
+<div class="themes @(Detailed ? "detailed" : "")" role="radiogroup" aria-labelledby="@LabelledBy">
+    @foreach (var t in Themes.All)
+    {
+        var on = t.Id == Theme.Current;
+        <button class="theme-opt @(on ? "on" : "")" role="radio" aria-checked="@(on ? "true" : "false")"
+                title="@(Detailed ? null : t.Description)" @onclick="() => Theme.SetAsync(t.Id)">
+            <span class="swatch" aria-hidden="true">
+                @foreach (var c in t.Swatches) { <span style="background:@c"></span> }
+            </span>
+            <span class="theme-text">
+                <span class="theme-name">@t.Name</span>
+                @if (Detailed)
+                {
+                    <span class="theme-desc">@t.Description</span>
+                }
+            </span>
+            @if (on)
+            {
+                <svg class="check" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5 5.5 10.5 11.5 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>The ID of the element that names the group.</summary>
+    [Parameter, EditorRequired] public string LabelledBy { get; set; } = "";
+
+    /// <summary>Shows each theme's description under its name, for the Settings page.</summary>
+    [Parameter] public bool Detailed { get; set; }
+
+    protected override void OnInitialized() => Theme.Changed += OnChanged;
+
+    protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Theme.LoadAsync() : Task.CompletedTask;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Theme.Changed -= OnChanged;
+}

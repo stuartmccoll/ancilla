@@ -6,6 +6,11 @@ window.haloTheme = {
         document.documentElement.dataset.theme = id;
         document.cookie = `theme=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`;
     },
+    // Back to the default, and the cookie deleted.
+    forget: () => {
+        document.documentElement.dataset.theme = "basic";
+        document.cookie = "theme=; path=/; max-age=0; samesite=lax";
+    },
 };
 
 // Saves text the server built (an export) as a file, without the data ever leaving the page.

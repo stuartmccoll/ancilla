@@ -13,3 +13,9 @@ thead th { color: var(--muted); font-weight: 600; border-top: 0; }
 th:first-child, td:first-child { text-align: left; }
 tbody th { font-weight: 500; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .defs { grid-template-columns: 1fr; gap: .2rem; } .defs dd { margin-bottom: .6rem; } }
+.errors { list-style: none; margin: .75rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+.errors summary { cursor: pointer; overflow-wrap: anywhere; line-height: 1.5; }
+.errors time { font-weight: 700; margin-right: .4rem; font-variant-numeric: tabular-nums; }
+.trace { margin: .5rem 0 0; padding: .6rem .75rem; max-height: 22rem; overflow: auto; font-size: .78rem; line-height: 1.45;
+         background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); white-space: pre; }
+.folder { margin-top: 1rem; }

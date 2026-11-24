@@ -28,7 +28,12 @@ public sealed class HaloWaypointClient
     // Any recent-looking build string works; the service only uses it to pick a flight.
     private const string FlightBuild = "222249.22.06.08.1730-0";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    // Numbers may come as "Infinity" or "NaN" too; MatchSkill.Finite drops those from skill results.
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString
+                         | System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
 
     private readonly HttpClient _http;
     private readonly HaloDiagnostics? _diagnostics;
@@ -180,20 +185,30 @@ public sealed class HaloWaypointClient
     public Task<MatchHistory> GetMatchHistoryAsync(string xuid, int start = 0, int count = 25,
         MatchHistoryType type = MatchHistoryType.All, CancellationToken ct = default) =>
         GetAsync<MatchHistory>($"{Stats}/hi/players/xuid({HaloIds.RequireXuid(xuid)})/matches?start={start}&count={Math.Clamp(count, 1, 25)}&type={type}",
-            needsClearance: false, ct);
+            needsClearance: false, ct, valid: h => h.Results is not null && h.Results.All(e => e?.MatchInfo is not null));
 
     /// <summary>Full scoreboard for one match: every player and team, with medals and mode stats.</summary>
     public Task<MatchStats> GetMatchStatsAsync(string matchId, CancellationToken ct = default) =>
-        GetAsync<MatchStats>($"{Stats}/hi/matches/{HaloIds.RequireGuid(matchId, nameof(matchId))}/stats", needsClearance: false, ct);
+        GetAsync<MatchStats>($"{Stats}/hi/matches/{HaloIds.RequireGuid(matchId, nameof(matchId))}/stats", needsClearance: false, ct,
+            valid: m => m.MatchId is not null && m.MatchInfo is not null && m.Teams is not null && m.Players is not null
+                        && m.Players.All(p => p?.PlayerTeamStats is not null) && m.Teams.All(t => t?.Stats is not null));
 
-    /// <summary>MMR, CSR change and expected-vs-actual kills/deaths for the given players in a match.</summary>
-    public Task<SkillResponse<MatchSkill>> GetMatchSkillAsync(string matchId, IEnumerable<string> xuids, CancellationToken ct = default) =>
-        GetAsync<SkillResponse<MatchSkill>>(
-            $"{Skill}/hi/matches/{HaloIds.RequireGuid(matchId, nameof(matchId))}/skill?{string.Join('&', xuids.Select(x => $"players=xuid({HaloIds.RequireXuid(x)})"))}", needsClearance: false, ct);
+    /// <summary>
+    /// MMR, CSR change and expected-vs-actual kills/deaths for the given players in a match. Stat
+    /// performances and team MMRs that aren't finite numbers (some older matches have them) are left out.
+    /// </summary>
+    public async Task<SkillResponse<MatchSkill>> GetMatchSkillAsync(string matchId, IEnumerable<string> xuids, CancellationToken ct = default)
+    {
+        var response = await GetAsync<SkillResponse<MatchSkill>>(
+            $"{Skill}/hi/matches/{HaloIds.RequireGuid(matchId, nameof(matchId))}/skill?{string.Join('&', xuids.Select(x => $"players=xuid({HaloIds.RequireXuid(x)})"))}", needsClearance: false, ct,
+            valid: r => r.Value is not null && r.Value.All(v => v is not null));
+        return response with { Value = [.. response.Value.Select(v => v.Result is null ? v : v with { Result = v.Result.Finite() })] };
+    }
 
     /// <summary>Current, season-best and all-time-best CSR. Fails (400/404) for unranked playlists.</summary>
     public Task<SkillResponse<PlaylistCsr>> GetPlaylistCsrAsync(string playlistId, string xuid, CancellationToken ct = default) =>
-        GetAsync<SkillResponse<PlaylistCsr>>($"{Skill}/hi/playlist/{HaloIds.RequireGuid(playlistId, nameof(playlistId))}/csrs?players=xuid({HaloIds.RequireXuid(xuid)})", needsClearance: false, ct);
+        GetAsync<SkillResponse<PlaylistCsr>>($"{Skill}/hi/playlist/{HaloIds.RequireGuid(playlistId, nameof(playlistId))}/csrs?players=xuid({HaloIds.RequireXuid(xuid)})", needsClearance: false, ct,
+            valid: r => r.Value is not null && r.Value.All(v => v is not null));
 
     public Task<UgcAsset> GetMapAsync(AssetRef a, CancellationToken ct = default) => GetUgcAsync("maps", a, ct);
     public Task<UgcAsset> GetGameVariantAsync(AssetRef a, CancellationToken ct = default) => GetUgcAsync("ugcGameVariants", a, ct);
@@ -238,11 +253,29 @@ public sealed class HaloWaypointClient
         return (await res.Content.ReadAsByteArrayAsync(ct), type);
     }
 
-    private async Task<T> GetAsync<T>(string url, bool needsClearance, CancellationToken ct, string? xuid = null)
+    /// <summary>
+    /// Sends the request and reads its JSON. A response that isn't JSON, doesn't fit
+    /// <typeparamref name="T"/> or fails <paramref name="valid"/> (an envelope or list the rest of the
+    /// app relies on came back null) throws <see cref="HttpRequestException"/>, like a failed request,
+    /// so callers that skip unavailable data skip it too. The message names the endpoint, never the URL.
+    /// </summary>
+    private async Task<T> GetAsync<T>(string url, bool needsClearance, CancellationToken ct, string? xuid = null,
+        Func<T, bool>? valid = null)
     {
         using var res = await SendAsync(url, needsClearance, ct, xuid, "application/json");
-        return await res.Content.ReadFromJsonAsync<T>(Json, ct)
-            ?? throw new InvalidOperationException($"Empty response from {url}");
+        T? body;
+        try { body = await res.Content.ReadFromJsonAsync<T>(Json, ct); }
+        catch (JsonException ex) { throw Unreadable(url, ex.Path ?? "$", ex); }
+        if (body is null) throw Unreadable(url, "empty response", null);
+        if (valid is not null && !valid(body)) throw Unreadable(url, "missing fields", null);
+        return body;
+    }
+
+    private HttpRequestException Unreadable(string url, string detail, Exception? inner)
+    {
+        var endpoint = HaloDiagnostics.EndpointName(url);
+        _diagnostics?.Info($"{endpoint} response couldn't be read ({detail}): {inner?.Message ?? detail}");
+        return new HttpRequestException($"Couldn't read the response from {endpoint}.", inner);
     }
 
     private async Task<HttpResponseMessage> SendAsync(string url, bool needsClearance, CancellationToken ct,

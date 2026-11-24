@@ -1,7 +1,9 @@
 @page "/diagnostics"
 @inject HaloSession Session
 @inject DiagnosticsReport Report
-@inject IJSRuntime JS
+@inject IClipboardWriter Clipboard
+@inject IFolderOpener Folders
+@inject DiagnosticLog Log
 
 <PageTitle>Diagnostics · Ancilla</PageTitle>
 
@@ -33,6 +35,35 @@ else
                 <dt>Runtime</dt><dd>@_d.Runtime</dd>
                 <dt>Requests</dt><dd>@_d.InFlight running, @_d.Queued waiting (at most 8 run at once)</dd>
             </dl>
+        </section>
+
+        <section class="card" aria-labelledby="errors-h">
+            <h2 id="errors-h">Recent errors</h2>
+            @if (_d.Errors.Count == 0)
+            {
+                <p class="muted">No errors in the log files. They cover the last week.</p>
+            }
+            else
+            {
+                <p>
+                    The newest @_d.Errors.Count.ToString() from the log files, newest first. <em>Copy diagnostics</em>
+                    includes the latest @DiagnosticsReport.ErrorsCopied.ToString(), with where in the app they happened.
+                </p>
+                <ul class="errors">
+                    @foreach (var e in _d.Errors)
+                    {
+                        <li>
+                            <details>
+                                <summary><time datetime="@e.At.ToString("o")">@e.At.ToLocalTime().ToString("d MMM, HH:mm:ss")</time> @e.Message</summary>
+                                @if (e.Detail.Count > 0)
+                                {
+                                    <pre class="trace" tabindex="0" aria-label="Error details">@string.Join("\n", e.Detail)</pre>
+                                }
+                            </details>
+                        </li>
+                    }
+                </ul>
+            }
         </section>
 
         <section class="card">
@@ -73,6 +104,12 @@ else
                 <dt>Theater films</dt><dd>@_d.Films, @DiagnosticsReport.Size(_d.FilmBytes)</dd>
                 <dt>Log files</dt><dd>@DiagnosticsReport.Size(_d.LogBytes) in <code class="path">@_d.LogFolder</code></dd>
             </dl>
+            @if (Folders.IsAvailable)
+            {
+                <div class="actions folder">
+                    <button class="secondary" @onclick="OpenLogsAsync">Open log folder</button>
+                </div>
+            }
         </section>
 
         <section class="card">
@@ -98,14 +135,20 @@ else
         _status = "Refreshed.";
     }
 
+    private async Task OpenLogsAsync() =>
+        _status = await Folders.OpenAsync(Log.Folder) ? "" : "Couldn't open the log folder.";
+
     private async Task CopyAsync()
     {
         _d = await Report.TakeAsync(Session);
         try
         {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Report.ToText(_d));
+            await Clipboard.SetTextAsync(Report.ToText(_d));
             _status = "Copied. Paste it into your bug report.";
         }
-        catch (JSException) { _status = "Couldn't copy to the clipboard."; }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or NotSupportedException)
+        {
+            _status = "Couldn't copy to the clipboard.";
+        }
     }
 }

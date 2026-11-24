@@ -13,6 +13,9 @@ public interface IThemePreference
     string? Saved { get; }
 
     void Save(string id);
+
+    /// <summary>Removes the saved theme, so the default shows next time.</summary>
+    void Forget();
 }
 
 /// <summary>The web host's preference: theme.js sets the cookie, and the page shell reads it.</summary>
@@ -21,6 +24,8 @@ public sealed class CookieThemePreference : IThemePreference
     public string? Saved => null;
 
     public void Save(string id) { }
+
+    public void Forget() { }
 }
 
 /// <summary>Saves text the app built (an export) as a file on this machine.</summary>
@@ -40,6 +45,37 @@ public sealed class BrowserFileExport(IJSRuntime js) : IFileExport
         await js.InvokeVoidAsync("ancillaDownload", fileName, mime, text);
         return null;
     }
+}
+
+/// <summary>Puts text on the system clipboard.</summary>
+public interface IClipboardWriter
+{
+    /// <exception cref="JSException">The browser wouldn't allow it.</exception>
+    Task SetTextAsync(string text);
+}
+
+/// <summary>The web host's: the browser's clipboard, which allows it on localhost straight after a click.</summary>
+public sealed class BrowserClipboard(IJSRuntime js) : IClipboardWriter
+{
+    public async Task SetTextAsync(string text) => await js.InvokeVoidAsync("navigator.clipboard.writeText", text);
+}
+
+/// <summary>Shows a folder in the system's file manager (Finder, File Explorer).</summary>
+public interface IFolderOpener
+{
+    /// <summary>False on the web host: a browser page can't open folders on the machine.</summary>
+    bool IsAvailable { get; }
+
+    /// <returns>Whether the file manager opened it.</returns>
+    Task<bool> OpenAsync(string folder);
+}
+
+/// <summary>The web host's: not available, so pages show the folder's path instead.</summary>
+public sealed class NoFolderOpener : IFolderOpener
+{
+    public bool IsAvailable => false;
+
+    public Task<bool> OpenAsync(string folder) => Task.FromResult(false);
 }
 
 /// <summary>
