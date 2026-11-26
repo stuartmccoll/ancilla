@@ -2,7 +2,8 @@
 
   <!--
     Browser tests: the real app on a local port, with its Halo calls answered by the fake backend,
-    driven by Playwright (Chromium) and checked with axe. The first run downloads Chromium.
+    driven by Playwright (Chromium) and checked with axe, and the project website (site/), built to a
+    temporary folder. The first run downloads Chromium.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -28,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Ancilla.Web/Ancilla.Web.csproj" />
     <ProjectReference Include="../Ancilla.Testing/Ancilla.Testing.csproj" />
+    <ProjectReference Include="../../site/Ancilla.Site.csproj" />
   </ItemGroup>
 
 </Project>

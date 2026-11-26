@@ -1,0 +1,87 @@
+<SiteLayout File="privacy.html" Title="Privacy"
+            Description="What Ancilla does with your data: it stays on your computer, and nothing is sent anywhere but Halo's own services.">
+    <div class="page-head">
+        <div>
+            <h1>Privacy</h1>
+            <p>What Ancilla does with your data, in plain words. The app's About page says the same.</p>
+        </div>
+    </div>
+
+    <div class="prose">
+        <section class="card" aria-labelledby="short">
+            <h2 id="short">The short version</h2>
+            <ul>
+                <li>Ancilla runs on your computer. There's no account to make and no server of ours.</li>
+                <li>It only talks to Halo's and Xbox's own services, signed in as you, and only sees what Halo Waypoint would show you.</li>
+                <li>What it loads is kept on your computer, and is never sent anywhere else.</li>
+                <li>There are no ads, no analytics and no tracking, in the app or on this website.</li>
+            </ul>
+        </section>
+
+        <section class="card" aria-labelledby="token">
+            <h2 id="token">Your Spartan token</h2>
+            <p>
+                The token Halo Waypoint gives you when you sign in is held in the app's memory while you're signed in. Ancilla
+                never writes it to a file, never hands it to the page's scripts, and sends it nowhere except Halo's own
+                services. Tokens run out after a few hours.
+            </p>
+            <p>
+                Signing in with Microsoft happens on Halo Waypoint's own sign-in page, in a window with a browser profile of
+                its own, so your password goes only to Microsoft. Halo Waypoint keeps the token there as a cookie, and Ancilla
+                reads it from there. With <strong>Stay signed in</strong> on, that profile is kept on your computer so you're
+                signed in when the app starts. <a href="getting-started.html#stay">Getting started</a> says where. Signing out removes it.
+            </p>
+        </section>
+
+        <section class="card" aria-labelledby="kept">
+            <h2 id="kept">What's kept on your computer</h2>
+            <ul>
+                <li>
+                    <strong>Your match archive:</strong> each match you've played, its full scoreboard (which includes the IDs,
+                    scores and medals of everyone in it), your skill result, map, mode and playlist names, and snapshots of your
+                    progress, which power the matches-to-go figures. It's filed under your player ID, so another account's data
+                    stays separate. You can export it from Settings, or delete the file.
+                </li>
+                <li>
+                    <strong>Theater films</strong>, only when you open a match's timeline and choose to load it. A film holds the
+                    gamertags of everyone in the match. The cache is trimmed to a size limit, and Settings can clear it.
+                </li>
+                <li>
+                    <strong>Log files</strong>, to help with bug reports. Tokens, player IDs, gamertags, download addresses and
+                    file paths are removed before anything is written. They're kept for a week.
+                </li>
+                <li><strong>Your theme choice</strong>, in the app's settings.</li>
+            </ul>
+            <p>The app's About page shows where each of these is kept.</p>
+        </section>
+
+        <section class="card" aria-labelledby="internet">
+            <h2 id="internet">What the app loads from the internet</h2>
+            <ul>
+                <li>Your stats, matches and Theater films, from the services behind halowaypoint.com.</li>
+                <li>Map thumbnails from Halo's content servers, and gamerpics from Xbox's image servers.</li>
+                <li>The fonts for the Halo and XBOX themes, from Google Fonts. The Basic theme doesn't need them.</li>
+            </ul>
+            <p>Nothing else. Ancilla doesn't collect usage data or crash reports, and if it ever does, it will ask first and be off unless you turn it on.</p>
+        </section>
+
+        <section class="card" aria-labelledby="site">
+            <h2 id="site">This website</h2>
+            <p>
+                This website has no cookies, no scripts, no analytics and no embedded content from anywhere else. It's hosted
+                by GitHub Pages, and GitHub may log visitors' IP addresses for security, as described in the
+                <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub General Privacy Statement</a>.
+                Download links go to GitHub Releases.
+            </p>
+        </section>
+
+        <section class="card" aria-labelledby="contact">
+            <h2 id="contact">Questions</h2>
+            <p>Ask on <a href="@SiteModel.Issues">GitHub Issues</a>. Please don't include your token, or other players' gamertags.</p>
+        </section>
+    </div>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired] public SiteModel Site { get; set; } = null!;
+}

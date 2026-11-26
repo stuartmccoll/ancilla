@@ -1,0 +1,50 @@
+<SiteLayout File="download.html" Title="Download"
+            Description="Download Ancilla for Windows, free.">
+    <div class="page-head">
+        <div>
+            <h1>Download</h1>
+            <p>Ancilla is free. There's nothing to buy and no account to make.</p>
+        </div>
+    </div>
+
+    @{ var asset = Site.Release?.Installer; }
+    <section class="card download" aria-labelledby="windows">
+        <h2 id="windows">Ancilla for Windows</h2>
+        <p class="muted">@Release.Requirements.</p>
+        @if (Site.Release is { } release && asset is not null)
+        {
+            <p>
+                The latest version is <strong>@release.Tag</strong>@if (release.Published is { } when)
+                {<text>, released @when.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</text>}.
+                <a href="@release.Url">What's new in @release.Tag</a>.
+            </p>
+            <p><a class="button" href="@asset.Url">Download for Windows</a></p>
+            <p class="hint">@asset.Name, @Size(asset.Size)</p>
+        }
+        else
+        {
+            <p class="soon">Version 1.0 is coming soon</p>
+            <p>There's no installer yet: the first version, 1.0, is on its way. Until then, you can build Ancilla from its source code.</p>
+        }
+    </section>
+
+    <div class="card prose">
+        <h2>Before you install</h2>
+        <p>
+            The first time you open Ancilla, Windows may warn you about it. <a href="getting-started.html">Getting started</a>
+            shows what you'll see, how to get past it, and how to sign in to the app with your Xbox account.
+        </p>
+        <p>
+            @(Site.Release is null ? "When it's out, every version and its release notes will be on " : "Every version, and its release notes, is on ")<a href="@SiteModel.Releases">GitHub Releases</a>. To build Ancilla
+            yourself, follow the <a href="@SiteModel.Readme">instructions in the README</a>. You'll need the .NET 10 SDK.
+        </p>
+    </div>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired] public SiteModel Site { get; set; } = null!;
+
+    private static string Size(long bytes) => bytes >= 1024 * 1024
+        ? $"{bytes / (1024d * 1024):0.#} MB"
+        : $"{Math.Max(1, bytes / 1024)} KB";
+}

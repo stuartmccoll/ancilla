@@ -16,6 +16,7 @@ dotnet test --filter "FullyQualifiedName!~Ancilla.Web.E2E"     # everything but 
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
 dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
 dotnet run --project src/Ancilla.App                            # the desktop app (Windows; needs the MAUI workload)
+dotnet run --project site -- --out _site                       # the project website, as static HTML
 HALO_SPARTAN_TOKEN=... dotnet run --project src/Ancilla.Theater.Cli -- drift   # live API shape vs models and fixtures (the user runs it)
 ```
 
@@ -41,7 +42,8 @@ Tests (see the README's Tests section for the full table):
   `IThemePreference` and `IFileExport`; set `Theme.Saved`, or register another `IFileExport`, to act as
   the desktop app.
 - `tests/Ancilla.Web.E2E` (Playwright, axe): the web dev host in Chromium on a loopback port, signed in via
-  `HALO_SPARTAN_TOKEN`, with axe run on every main page in every theme.
+  `HALO_SPARTAN_TOKEN`, with axe run on every main page in every theme. `SiteTests` checks the project
+  website the same way, and `SiteScreenshots` takes its screenshots when `ANCILLA_SITE_SCREENSHOTS` is set.
 - `tests/Ancilla.Testing`: `FakeHalo`, a fake of the Halo services serving a made-up `HaloWorld`
   (films included, for its two custom games). Pages and the browser tests talk to it instead of halowaypoint.com. Add new endpoints here when you add them
   to `HaloWaypointClient`, and new pages to the routes in `SmokeTests` and `AccessibilityTests`.
@@ -94,6 +96,11 @@ real API still returns what the fake does. Say so rather than claiming a page wo
   view with its own cookie store, and hidden silent sign-ins (`prompt=none`) for new tokens.
 - `src/Ancilla.Web`: the web dev host. `App.razor` (the page shell, which reads the theme cookie),
   `Program.cs` (the `/assets` endpoint) and the reconnect modal. Nothing else belongs here.
+- `site/`: the project website (GitHub Pages, published by `.github/workflows/site.yml`). Razor
+  components rendered to static HTML by `HtmlRenderer`, reusing `Ancilla.UI`'s `Logo` and `app.css`.
+  No scripts, cookies, analytics or third-party requests. Its copy is public: keep it plain, accurate
+  about what the app does, and in step with the About page (privacy) and the README (sign-in). Every page
+  carries the disclaimer through `SiteLayout`. Add a page to `SiteBuilder.Pages`.
 - `branding/`: source logo and the full favicon suite. The icons the hosts use are copied into
   `src/Ancilla.Web/wwwroot` and `src/Ancilla.App/Resources`, and the navbar logo is inlined in
   `src/Ancilla.UI/Components/Shared/Logo.razor` (charcoal parts use `currentColor` so it follows each theme).
@@ -151,4 +158,5 @@ real API still returns what the fake does. Say so rather than claiming a page wo
 - The web dev host is meant to run on localhost only. `HALO_SPARTAN_TOKEN` signs in every visitor, so
   never add anything that makes it listen on other interfaces by default. The desktop app doesn't
   listen at all; keep it that way.
-- Keep the unofficial-fan-project disclaimer on the About page, in the footer and in the README.
+- Keep the unofficial-fan-project disclaimer on the About page, in the footer, in the README and on
+  every page of the website.

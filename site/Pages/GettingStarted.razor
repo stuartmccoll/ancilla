@@ -1,0 +1,92 @@
+<SiteLayout File="getting-started.html" Title="Getting started"
+            Description="How to install Ancilla on Windows, get past the warning the first time you open it, and connect it to your Xbox account.">
+    <div class="page-head">
+        <div>
+            <h1>Getting started</h1>
+            <p>Installing Ancilla, opening it for the first time, and connecting it to your Xbox account.</p>
+        </div>
+    </div>
+
+    <div class="prose">
+        <section class="card" aria-labelledby="install">
+            <h2 id="install">1. Install Ancilla</h2>
+            <p class="muted">@Release.Requirements. Nothing else needs installing first.</p>
+            <ol>
+                <li>Download the installer from the <a href="download.html">download page</a> and open it.</li>
+                <li>
+                    If Windows shows <strong>Windows protected your PC</strong>, choose <strong>More info</strong>, check
+                    the app is called Ancilla, then choose <strong>Run anyway</strong>.
+                </li>
+                <li>Follow the installer. When it's done, open Ancilla from the Start menu.</li>
+            </ol>
+            <p>
+                Microsoft Defender SmartScreen shows that warning for apps it hasn't seen many people download yet, and for
+                apps that aren't signed with a certificate it recognises. It doesn't mean it found anything wrong. Ancilla's
+                source code is <a href="@SiteModel.Repo">public on GitHub</a>, and if you'd rather not get past the warning,
+                you can <a href="@SiteModel.Readme">build it yourself</a> instead.
+            </p>
+        </section>
+
+        <section class="card" aria-labelledby="connect">
+            <h2 id="connect">2. Connect your Xbox account</h2>
+            <p>Ancilla needs to sign in to Halo Waypoint as you, so it can show your stats.</p>
+            <ol>
+                <li>In Ancilla, choose <strong>Sign in with Microsoft</strong>.</li>
+                <li>
+                    Halo Waypoint's own sign-in page opens in a window over the app. Sign in with the Microsoft account you
+                    play Halo with. Your password only ever goes to Microsoft; Ancilla never sees it.
+                </li>
+                <li>When you're signed in, the window closes by itself and your stats start to load.</li>
+            </ol>
+            <p>
+                Halo Waypoint gives that window a <em>Spartan token</em>, which is what lets Ancilla ask Halo's services for
+                your stats. Tokens last a few hours. When one runs out, Ancilla signs in again in a hidden window, so you can
+                leave it open. If Microsoft has signed you out, Ancilla asks you to sign in again, and carries on where you
+                left off.
+            </p>
+        </section>
+
+        <section class="card" aria-labelledby="stay">
+            <h2 id="stay">Stay signed in</h2>
+            <p>
+                <strong>Stay signed in</strong> is off unless you turn it on. Off, you sign in each time you open Ancilla, and
+                the sign-in window's cookies are only kept in memory. On, Microsoft's sign-in is kept in a browser profile of
+                Ancilla's own in your local app data folder, so Ancilla signs you in when it starts. Windows encrypts its
+                cookies with a key it keeps for your account. <strong>Sign out</strong> removes it.
+            </p>
+        </section>
+
+        <section class="card" aria-labelledby="paste">
+            <h2 id="paste">If signing in doesn't work: paste a token</h2>
+            <p>If the sign-in window won't work for you, you can copy your Spartan token from a web browser and paste it into Ancilla.</p>
+            <ol>
+                <li>Sign in at <a href="https://www.halowaypoint.com">halowaypoint.com</a> in your web browser.</li>
+                <li>
+                    Open the browser's developer tools and find its cookies: <strong>Application &gt; Cookies</strong> in Chrome
+                    and Edge, <strong>Storage &gt; Cookies</strong> in Firefox.
+                </li>
+                <li>Choose <code>www.halowaypoint.com</code> and copy the value of the cookie called <code>343-spartan-token</code>.</li>
+                <li>Paste it into Ancilla's sign-in page.</li>
+            </ol>
+            <p>
+                A pasted token can't be renewed, so when it runs out after a few hours, Ancilla asks for a new one. Treat a
+                token like a password: anyone who has it can see your Halo account's data until it runs out. Don't share it,
+                and don't paste it anywhere but Ancilla.
+            </p>
+        </section>
+
+        <section class="card" aria-labelledby="remove">
+            <h2 id="remove">Removing Ancilla</h2>
+            <p>
+                Go to <strong>Settings &gt; Apps &gt; Installed apps</strong>, find Ancilla and choose <strong>Uninstall</strong>.
+                That leaves your match archive, film cache and log files where they are. Ancilla's About page says where
+                they're kept; delete those folders too if you want everything gone. The <a href="privacy.html">privacy
+                statement</a> lists what each one holds.
+            </p>
+        </section>
+    </div>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired] public SiteModel Site { get; set; } = null!;
+}
