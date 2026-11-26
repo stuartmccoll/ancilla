@@ -1,0 +1,35 @@
+<SiteLayout File="disclaimer.html" Title="Disclaimer"
+            Description="Ancilla is an unofficial fan project, not affiliated with or endorsed by Microsoft, Xbox or Halo Studios.">
+    <div class="page-head">
+        <div>
+            <h1>Disclaimer</h1>
+        </div>
+    </div>
+
+    <div class="prose">
+        <section class="card">
+            <p>
+                Ancilla is an unofficial fan project. It is not affiliated with, endorsed, sponsored or approved by Microsoft,
+                Xbox or Halo Studios. Halo, Xbox and related names and images are trademarks or property of Microsoft
+                Corporation. Game data and images are fetched from Halo's services for your personal use.
+            </p>
+            <p>
+                Ancilla is made under Microsoft's
+                <a href="https://www.xbox.com/en-US/developers/rules">Game Content Usage Rules</a>. It's free, and always will
+                be: it has no ads, nothing to buy and no paid features.
+            </p>
+            <p>
+                The services Ancilla uses aren't a public, documented API. They can change without notice, and when they do,
+                parts of Ancilla may stop working until it's updated.
+            </p>
+            <p>
+                Ancilla is provided as it is, without warranty of any kind. Its source code is on
+                <a href="@SiteModel.Repo">GitHub</a>.
+            </p>
+        </section>
+    </div>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired] public SiteModel Site { get; set; } = null!;
+}

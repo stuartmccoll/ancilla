@@ -1,0 +1,76 @@
+name: Website
+
+# Builds the project website (site/) and publishes it to GitHub Pages: on every release, so the download
+# links point at it; when the site changes on main; and by hand. Pages must be set to deploy from
+# GitHub Actions (Settings > Pages > Source). CI (ci.yml) checks the site with axe on every pull request.
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - src/Ancilla.UI/wwwroot/app.css
+      - src/Ancilla.UI/Components/Shared/Logo.razor
+      - .github/workflows/site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time, and never cancel one halfway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the website
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      # The browser tests build the site project too.
+      - name: Build
+        run: dotnet build tests/Ancilla.Web.E2E --configuration Release -warnaserror
+      - name: Install Chromium
+        run: pwsh tests/Ancilla.Web.E2E/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      # Screenshots of the web dev host signed in to the fake backend, so they only show made-up players.
+      - name: Take screenshots
+        run: >-
+          dotnet test tests/Ancilla.Web.E2E --no-build --configuration Release
+          --filter "FullyQualifiedName~Ancilla.Web.E2E.SiteScreenshots"
+        env:
+          ANCILLA_SITE_SCREENSHOTS: ${{ runner.temp }}/screenshots
+      # The latest release (drafts and pre-releases never are), for the download links. Before the first
+      # release there's none, and the download page says the installers are coming soon.
+      - name: Find the latest release
+        run: gh api "repos/${{ github.repository }}/releases/latest" > "${{ runner.temp }}/latest.json" || rm -f "${{ runner.temp }}/latest.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Build the site
+        run: >-
+          dotnet run --project site --no-build --configuration Release --
+          --out _site --release "${{ runner.temp }}/latest.json" --screenshots "${{ runner.temp }}/screenshots"
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

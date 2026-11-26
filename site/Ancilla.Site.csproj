@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    The project website (GitHub Pages): Razor components rendered to static HTML by HtmlRenderer, with
+    the app's logo and colour tokens (Ancilla.UI's Logo and app.css), and no JavaScript or third-party
+    requests. Program.cs has the command line to build it.
+    .github/workflows/site.yml builds and publishes it; the browser tests check it with axe.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Ancilla.Site</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\Ancilla.UI\Ancilla.UI.csproj" />
+  </ItemGroup>
+
+  <!-- Copied into the site as-is. Embedded, so the build works wherever the assembly runs from. -->
+  <ItemGroup>
+    <EmbeddedResource Include="assets\site.css" LogicalName="assets/site.css" />
+    <EmbeddedResource Include="..\src\Ancilla.UI\wwwroot\app.css" LogicalName="assets/app.css" />
+    <EmbeddedResource Include="..\src\Ancilla.Web\wwwroot\favicon.ico" LogicalName="favicon.ico" />
+    <EmbeddedResource Include="..\src\Ancilla.Web\wwwroot\favicon.svg" LogicalName="favicon.svg" />
+    <EmbeddedResource Include="..\src\Ancilla.Web\wwwroot\favicon-32x32.png" LogicalName="favicon-32x32.png" />
+    <EmbeddedResource Include="..\src\Ancilla.Web\wwwroot\apple-touch-icon.png" LogicalName="apple-touch-icon.png" />
+  </ItemGroup>
+
+</Project>

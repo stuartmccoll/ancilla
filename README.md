@@ -22,6 +22,7 @@ src/Ancilla.App      the desktop app: .NET MAUI Blazor Hybrid, Windows (WinUI) a
 src/Ancilla.Web      web dev host for Ancilla.UI (interactive server rendering), for hot reload and browser tests
 src/Ancilla.Theater  Theater film decoding and match analysis, used by the app (see src/Ancilla.Theater/README.md)
 src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline) and the API drift check
+site/                the project website (GitHub Pages), rendered to static HTML (see Website)
 tests/               unit, component and browser tests on synthetic data (dotnet test; see Tests)
 ```
 
@@ -151,7 +152,7 @@ Nothing needs a Spartan token or a network connection to Halo. The tests come in
 | `tests/Ancilla.Data.Tests` | The SQLite archive: schema migrations (an empty database and every earlier schema), storage per player, the one-off snapshot import, CSV and JSON export | xUnit |
 | `tests/Ancilla.Theater.Tests` | Theater film decoding, on films built bit by bit | xUnit |
 | `tests/Ancilla.UI.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), the desktop shell's asset provider, theme preference and export, and every page and shared component rendered without a browser | xUnit, bUnit |
-| `tests/Ancilla.Web.E2E` | The web dev host in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
+| `tests/Ancilla.Web.E2E` | The web dev host in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme. The project website: axe on every page in light and dark, the disclaimer on every page, no scripts or requests elsewhere, and the download links | xUnit, Playwright, axe-core |
 
 `tests/Ancilla.Testing` holds a fake of the Halo Waypoint services (`FakeHalo`) that answers the
 same URLs as the real ones, from a made-up world (`HaloWorld`): Noble Six and the rest of Noble Team,
@@ -388,6 +389,28 @@ mkdir -p ~/ancilla-drift
 HALO_SPARTAN_TOKEN='v4=...' dotnet run --project src/Ancilla.Theater.Cli -- drift > ~/ancilla-drift/report.txt
 .github/scripts/privacy-check.sh --log ~/ancilla-drift
 ```
+
+## Website
+
+`site/` is the project website: what Ancilla does, screenshots, the download, a getting started guide
+(installing, the first-launch warning and signing in), privacy and the disclaimer. It's a small console app that renders Razor components to static HTML with
+`HtmlRenderer`, using the app's `Logo` and `app.css` in the Basic theme (light or dark, following the
+system). The pages have no scripts, cookies or analytics, and a content security policy that stops them
+loading anything from elsewhere.
+
+```bash
+dotnet run --project site -- --out _site                      # open _site/index.html
+dotnet run --project site -- --out _site --release latest.json --screenshots shots
+```
+
+`--release` takes GitHub's latest-release response (`gh api repos/{owner}/{repo}/releases/latest`), and
+the download page links to its Windows installer, found by extension (`.msix`, `.msi`, `.exe`, in that
+order). Without one, it says it's coming soon. The site only mentions Windows. `--screenshots` takes the PNGs that
+`SiteScreenshots` in the browser tests saves when `ANCILLA_SITE_SCREENSHOTS` names a folder: the web dev
+host signed in to the fake backend, so they only show made-up players.
+
+`.github/workflows/site.yml` does all of that and publishes to GitHub Pages on each release, when the site
+changes on `main`, and by hand. The repository's Pages source must be set to GitHub Actions.
 
 ## Disclaimer
 
