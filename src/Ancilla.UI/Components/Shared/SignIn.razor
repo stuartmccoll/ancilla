@@ -6,6 +6,10 @@
 
 <section class="card signin">
     <h1>Sign in</h1>
+    @if (Session.Notice is { } notice)
+    {
+        <p class="notice" role="status">@notice</p>
+    }
     @if (Session.Expired)
     {
         <p class="expired" role="status">Your sign-in has run out. Sign in again to carry on where you left off.</p>

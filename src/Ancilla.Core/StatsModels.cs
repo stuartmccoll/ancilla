@@ -156,7 +156,21 @@ public sealed record MatchSkill(
     RankRecap? RankRecap,
     Dictionary<string, StatPerformance>? StatPerformances,
     int TeamId,
-    Dictionary<string, double>? TeamMmrs);
+    Dictionary<string, double>? TeamMmrs)
+{
+    /// <summary>
+    /// This result without the stat performances and team MMRs that aren't finite numbers. The service
+    /// sends infinity for some older matches; it means nothing, breaks averages and charts, and can't be
+    /// written as JSON.
+    /// </summary>
+    public MatchSkill Finite() => this with
+    {
+        TeamMmr = double.IsFinite(TeamMmr) ? TeamMmr : 0,
+        StatPerformances = StatPerformances?.Where(p => p.Value is { } v && double.IsFinite(v.Count) && double.IsFinite(v.Expected) && double.IsFinite(v.StdDev))
+            .ToDictionary(p => p.Key, p => p.Value),
+        TeamMmrs = TeamMmrs?.Where(p => double.IsFinite(p.Value)).ToDictionary(p => p.Key, p => p.Value),
+    };
+}
 
 public sealed record RankRecap(Csr? PreMatchCsr, Csr? PostMatchCsr);
 

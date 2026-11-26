@@ -69,6 +69,18 @@ public sealed class JourneyTests(AppFixture app)
     }
 
     [Fact]
+    public async Task A_theme_picked_in_settings_shows_in_the_menu_too()
+    {
+        var page = await app.NewPageAsync();
+        await page.OpenAsync("settings");
+        var settings = page.Locator("section[aria-labelledby=theme-h]");
+        await settings.GetByRole(AriaRole.Radio, new() { Name = "XBOX" }).ClickAsync();
+        await Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "xbox");
+        await page.Locator(".user-btn").ClickAsync();
+        await Expect(page.Locator("#user-menu").GetByRole(AriaRole.Radio, new() { Name = "XBOX" })).ToHaveAttributeAsync("aria-checked", "true");
+    }
+
+    [Fact]
     public async Task A_forged_theme_cookie_falls_back_to_the_default()
     {
         var page = await app.NewPageAsync();

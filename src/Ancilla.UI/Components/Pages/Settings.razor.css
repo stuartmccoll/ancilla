@@ -15,3 +15,21 @@ tbody th { font-weight: 500; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .defs { grid-template-columns: 1fr; gap: .2rem; } .defs dd { margin-bottom: .6rem; } }
 .content .actions { margin: 1rem 0 .75rem; flex-wrap: wrap; }
 .content .defs { margin-top: .75rem; }
+.stored td:first-of-type { text-align: left; }
+.stored td:last-child { white-space: nowrap; }
+.stored th[scope=row] { font-weight: 700; vertical-align: top; }
+.stored td { vertical-align: top; }
+.item-desc { display: block; font-weight: 400; font-size: .85rem; color: var(--muted); margin-top: .15rem; }
+button.danger { color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.archive-status { margin: 0 0 .75rem; font-weight: 600; }
+.archive-status:empty { display: none; }
+.confirm { margin-top: 1rem; padding: .9rem 1rem; border: 1px solid var(--danger); border-radius: 8px; }
+.confirm h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.confirm .actions { margin-bottom: 0; }
+label.stay { display: flex; align-items: center; gap: .5rem; margin: 1rem 0 .4rem; }
+@media (max-width: 600px) {
+    .stored thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .stored tr { display: block; border-top: 1px solid var(--border); padding: .5rem 0; }
+    .stored th, .stored td { display: block; text-align: left; border-top: 0; padding: .1rem 0; }
+    .stored td:last-child { color: var(--muted); }
+}

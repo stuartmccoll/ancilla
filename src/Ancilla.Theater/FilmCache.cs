@@ -50,6 +50,17 @@ public sealed class FilmCache(string root)
     }
 
     /// <summary>
+    /// Deletes every cached film and the shared medal file, then the cache folder if nothing else is
+    /// in it (it may be a folder of your choosing, so anything else there is left alone).
+    /// </summary>
+    public void DeleteAll()
+    {
+        Clear();
+        if (File.Exists(MedalsPath)) File.Delete(MedalsPath);
+        if (Directory.Exists(root) && !Directory.EnumerateFileSystemEntries(root).Any()) Directory.Delete(root);
+    }
+
+    /// <summary>
     /// Deletes the least recently fetched films until the cache is within <paramref name="maxBytes"/>,
     /// never touching <paramref name="keep"/> (the film just downloaded). Returns how many were removed.
     /// </summary>

@@ -3,6 +3,7 @@
 @inject Ancilla.Theater.FilmCache Films
 @inject DiagnosticLog Log
 @inject IWaypointSignIn Waypoint
+@inject LocalSettings Settings
 
 <PageTitle>About · Ancilla</PageTitle>
 
@@ -85,8 +86,9 @@
                         sign-in is kept on this computer so the app can sign you in when it starts: on macOS in a WebKit
                         store inside the app's sandbox container, and on Windows in a WebView2 profile in your local app
                         data folder (<code class="path">%LOCALAPPDATA%\Ancilla\SignIn</code>), where WebView2 encrypts cookies with a
-                        key Windows keeps for your account. Ancilla doesn't add encryption of its own. Signing out removes
-                        it (on macOS, WebKit wipes it at once and its folder goes the next time the app starts).
+                        key Windows keeps for your account. Ancilla doesn't add encryption of its own. Signing out (from the
+                        menu or <a href="settings">Settings</a>) removes it, and so does turning Stay signed in off (on
+                        macOS, WebKit wipes it at once and its folder goes the next time the app starts).
                     </li>
                 }
                 <li>
@@ -99,26 +101,40 @@
                     timestamp), which power the XP-per-match rates and the Hero forecast. Everything is filed under your
                     player ID, so a different account's data stays separate. New matches are added in the background while
                     the app is open, and <a href="settings">Settings</a> can load older ones, export your matches as CSV or
-                    JSON, and says how big it is. Delete the file to remove it. If you used an earlier version, its
-                    snapshots file is copied in once and left where it was.
+                    JSON, and says how big it is. If you used an earlier version, its snapshots file is copied in once and
+                    left where it was; Settings lists it while it's there.
                 </li>
                 <li>
                     <strong>Theater films</strong> are downloaded only when you open a match's timeline and choose to load
                     it (usually 9–30 MB each), and kept on this machine at <code class="path">@Films.DisplayRoot</code> so
-                    they needn't be downloaded again. A film holds the gamertags of everyone in the match. The cache is
-                    trimmed to a size limit, and <a href="settings">Settings</a> can clear it.
+                    they needn't be downloaded again. A film holds the gamertags of everyone in the match. When the cache
+                    goes over its size limit (2 GB unless you pick another in <a href="settings">Settings</a>), the films
+                    fetched longest ago are deleted, and Settings can clear it.
                 </li>
                 <li>
                     <strong>Log files</strong> record what the app did, to help with bug reports: each call to Halo's
                     services by service name, result and time taken (never the address, which holds IDs), and the app
-                    starting and signing in. Before anything is written, tokens, player IDs, gamertags, film download
+                    starting and signing in. When something goes wrong, they also record the error and where in the
+                    app it happened, so a bug report can say what failed. Before anything is written, tokens, player IDs, gamertags, film download
                     addresses and file paths are removed. They're kept on this machine at
                     <code class="path">@Log.DisplayFolder</code>, one file a day, for a week. The
-                    <a href="diagnostics">Diagnostics</a> page shows how the services are doing and can copy a redacted
+                    <a href="diagnostics">Diagnostics</a> page lists recent errors, shows how the services are doing and can copy a redacted
                     summary for a bug report.
                 </li>
                 <li>
                     <strong>Your theme choice</strong> is remembered on this machine: in the desktop app's settings, or a browser cookie in the web version.
+                </li>
+                <li>
+                    <strong>Your settings</strong>, such as the film cache limit, are kept in a small file at
+                    <code class="path">@Settings.DisplayPath</code>, written only once you change one.
+                </li>
+                <li>
+                    <strong>Seeing and deleting it all:</strong> <a href="settings">Settings</a> lists everything above
+                    with where it is and how big it is. <strong>Export everything</strong> saves your matches, progress
+                    snapshots and settings as one JSON file (without other players' names or IDs, and without films or
+                    logs). <strong>Delete everything</strong>, after asking you to confirm, signs you out and deletes all of
+                    it from this machine: the archive, films, logs, settings, the old snapshots file, your theme choice
+                    and any kept sign-in, then Ancilla's own folder if nothing else is in it.
                 </li>
                 <li>
                     <strong>Caching:</strong> finished matches, maps, modes, medal data and images are kept in memory while

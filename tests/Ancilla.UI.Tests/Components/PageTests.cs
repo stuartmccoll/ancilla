@@ -4,6 +4,7 @@ using Ancilla.UI.Components.Pages;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using static Ancilla.Testing.Spartans;
 
 namespace Ancilla.UI.Tests.Components;
@@ -511,8 +512,25 @@ public sealed class SettingsPageTests : ComponentTest
         await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
         var cut = Render<Settings>();
         Click(cut, "button", "Load older matches");
-        cut.WaitForAssertion(() => Assert.Contains($"{H.World.Games.Count} are stored", cut.Find("p[role=status]").TextContent), Wait);
+        cut.WaitForAssertion(() => Assert.Contains($"{H.World.Games.Count} are stored", cut.Find("#archive-status").TextContent), Wait);
         Assert.Equal(H.World.Games.Count, Session.ArchiveSummary().WithScoreboard);
+    }
+
+    [Fact]
+    public async Task Loading_older_matches_shows_its_progress_in_the_match_archive_card()
+    {
+        await SignInAsync();
+        await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
+        H.Halo.Latency = TimeSpan.FromMilliseconds(20);   // slow enough to watch it go
+        var cut = Render<Settings>();
+
+        Click(cut, "button", "Load older matches");
+
+        cut.WaitForAssertion(() => Assert.Matches(@"Loaded \d+ of \d+ scoreboards",
+            cut.Find("section[aria-labelledby=archive-h] [role=status]").TextContent), Wait);
+        Assert.Equal("", cut.Find("p[role=status]").TextContent.Trim());   // the page's own status line stays quiet
+        cut.WaitForAssertion(() => Assert.Contains("are stored", cut.Find("#archive-status").TextContent), TimeSpan.FromSeconds(30));
+        Assert.Contains($"{H.World.Games.Count:N0}", cut.Find("section[aria-labelledby=archive-h] dl").TextContent);
     }
 
     [Fact]
@@ -538,13 +556,13 @@ public sealed class SettingsPageTests : ComponentTest
         await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
         var cut = Render<Settings>();
         Click(cut, "button", "Export as JSON");
-        cut.WaitForAssertion(() => Assert.EndsWith("matches to ~/Downloads/ancilla-matches.json.", cut.Find("p[role=status]").TextContent), Wait);
+        cut.WaitForAssertion(() => Assert.EndsWith("matches to ~/Downloads/ancilla-matches.json.", cut.Find("#archive-status").TextContent), Wait);
         Assert.Equal("ancilla-matches.json", export.Saved);
         Assert.Empty(JSInterop.Invocations["ancillaDownload"]);
 
         export.Fail = true;
         Click(cut, "button", "Export as CSV");
-        cut.WaitForAssertion(() => Assert.Equal("Couldn't save the file.", cut.Find("p[role=status]").TextContent), Wait);
+        cut.WaitForAssertion(() => Assert.Equal("Couldn't save the file.", cut.Find("#archive-status").TextContent), Wait);
     }
 
     private sealed class SavedExport : UI.Services.IFileExport
@@ -573,6 +591,131 @@ public sealed class SettingsPageTests : ComponentTest
         Assert.Empty(H.Films.CachedMatches());
         Assert.Contains("Deleted 1 film.", cut.Find("p[role=status]").TextContent);
         Assert.True(cut.Find("section[aria-labelledby=films-h] button").HasAttribute("disabled"));
+    }
+}
+
+public sealed class SettingsDataTests : ComponentTest
+{
+    [Fact]
+    public async Task Lists_what_is_stored_without_the_home_folder()
+    {
+        await SignInAsync();
+        await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
+        var cut = Render<Settings>();
+        var rows = cut.FindAll("table.stored tbody th").Select(th => th.ChildNodes[0].TextContent).ToList();
+        Assert.Equal(["Match archive", "Theater films", "Log files", "Settings", "Sign-in", "Theme"], rows);
+        Assert.Contains(H.Archive.DisplayPath, cut.FindAll("table.stored code.path").Select(c => c.TextContent));
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (H.Root.StartsWith(home)) Assert.DoesNotContain(home, cut.Markup);
+    }
+
+    [Fact]
+    public async Task The_film_limit_is_saved_and_the_default_forgets_it()
+    {
+        await SignInAsync();
+        var cut = Render<Settings>();
+        Assert.Equal("2048", cut.Find("#film-limit").GetAttribute("value"));
+        Assert.Contains("2 GB (default)", cut.FindAll("#film-limit option").Select(o => o.TextContent));
+
+        OnRenderer(cut, () => cut.Find("#film-limit").Change("512"));
+        Assert.Equal(512, H.Settings.FilmCacheLimitMb);
+        Assert.Equal(512L << 20, Session.FilmLimitBytes);
+        Assert.Equal("Film cache limit set to 512 MB.", cut.Find("p[role=status]").TextContent);
+
+        OnRenderer(cut, () => cut.Find("#film-limit").Change("2048"));
+        Assert.Null(H.Settings.FilmCacheLimitMb);
+    }
+
+    [Fact]
+    public async Task Export_everything_hands_one_file_to_the_browser()
+    {
+        await SignInAsync();
+        var cut = Render<Settings>();
+        Click(cut, "button", "Export everything");
+        var call = JSInterop.Invocations["ancillaDownload"].Single();
+        Assert.Equal("ancilla-export.json", call.Arguments[0]);
+        Assert.Contains("\"progressSnapshots\"", (string)call.Arguments[2]!);
+        Assert.Equal("Exported everything.", cut.Find("p[role=status]").TextContent);
+    }
+
+    [Fact]
+    public async Task Delete_everything_asks_first_then_signs_out_with_nothing_left()
+    {
+        Theme.Saved = "halo";
+        await SignInAsync();
+        await Session.GetRecentMatchesAsync(MatchHistoryType.Matchmaking, 5);
+        if (Session.BackgroundSync is { } sync) await sync;
+        var cut = Render<Settings>();
+        Assert.Empty(cut.FindAll("#delete-confirm"));
+
+        Click(cut, "button", "Delete everything…");
+        Assert.Equal("true", cut.FindAll("button").Single(b => b.TextContent == "Delete everything…").GetAttribute("aria-expanded"));
+        Click(cut, "#delete-confirm button", "Cancel");
+        Assert.Empty(cut.FindAll("#delete-confirm"));
+        Assert.True(Session.IsSignedIn);
+        Assert.True(Directory.Exists(H.Root));
+
+        Click(cut, "button", "Delete everything…");
+        Click(cut, "#delete-confirm button", "Yes, delete everything");
+        cut.WaitForAssertion(() => Assert.False(Session.IsSignedIn), Wait);
+        Assert.False(Directory.Exists(H.Root));
+        Assert.Null(Theme.Saved);
+        JSInterop.VerifyInvoke("haloTheme.forget");
+        Assert.Equal("Everything Ancilla kept on this device has been deleted.", Session.Notice);
+    }
+
+    [Fact]
+    public async Task The_theme_can_be_picked_here_too()
+    {
+        Theme.Saved = "basic";
+        await SignInAsync();
+        var cut = Render<Settings>();
+        var group = cut.Find("section[aria-labelledby=theme-h] [role=radiogroup]");
+        Assert.Equal("theme-h", group.GetAttribute("aria-labelledby"));
+        OnRenderer(cut, () => cut.FindAll("section[aria-labelledby=theme-h] .theme-opt").Single(b => b.TextContent.Contains("XBOX")).Click());
+        Assert.Equal("xbox", Theme.Saved);
+        cut.WaitForAssertion(() => Assert.Equal("true",
+            cut.FindAll("section[aria-labelledby=theme-h] .theme-opt").Single(b => b.TextContent.Contains("XBOX")).GetAttribute("aria-checked")), Wait);
+        Assert.Equal("XBOX", cut.FindAll("table.stored tbody tr").Last().QuerySelectorAll("td").Last().TextContent);
+    }
+
+    [Fact]
+    public async Task The_web_host_signs_out_without_a_sign_in_to_forget()
+    {
+        await SignInAsync();
+        var cut = Render<Settings>();
+        Assert.Empty(cut.FindAll("label.stay"));
+        Click(cut, "section[aria-labelledby=signin-h] button", "Sign out");
+        Assert.False(Session.IsSignedIn);
+    }
+}
+
+public sealed class SettingsDesktopTests() : ComponentTest(new Harness { Waypoint = new FakeWaypointSignIn() })
+{
+    private FakeWaypointSignIn Waypoint => (FakeWaypointSignIn)H.Waypoint;
+
+    [Fact]
+    public async Task Stay_signed_in_can_be_turned_on_and_off()
+    {
+        await SignInAsync();
+        var cut = Render<Settings>();
+        Assert.Contains("Not kept", cut.Find("table.stored").TextContent);
+        OnRenderer(cut, () => cut.Find("label.stay input").Change(true));
+        Assert.True(Waypoint.StaySignedIn);
+        Assert.Contains("Kept", cut.FindAll("table.stored tbody tr").Single(r => r.TextContent.StartsWith("Sign-in")).TextContent);
+        OnRenderer(cut, () => cut.Find("label.stay input").Change(false));
+        Assert.False(Waypoint.StaySignedIn);
+        Assert.Equal("The kept sign-in has been removed.", cut.Find("p[role=status]").TextContent);
+    }
+
+    [Fact]
+    public async Task Signing_out_forgets_the_sign_in()
+    {
+        await SignInAsync();
+        var cut = Render<Settings>();
+        Click(cut, "section[aria-labelledby=signin-h] button", "Sign out and forget this sign-in");
+        Assert.False(Session.IsSignedIn);
+        Assert.Equal(1, Waypoint.SignOuts);
     }
 }
 
@@ -620,5 +763,111 @@ public sealed class DiagnosticsPageTests : ComponentTest
         Assert.DoesNotContain(Spartans.Token, text);
         cut.WaitForAssertion(() => Assert.StartsWith("Copied", cut.Find("[role=status]").TextContent), Wait);
         Assert.Contains(cut.FindAll("a"), a => a.GetAttribute("href")!.Contains("template=bug.yml"));
+    }
+
+    [Fact]
+    public async Task Copies_through_the_hosts_clipboard_not_the_web_view()
+    {
+        var clipboard = new FakeClipboard();
+        Services.AddSingleton<UI.Services.IClipboardWriter>(clipboard);   // as the desktop app does
+        await SignInAsync();
+        var cut = Render<Diagnostics>();
+
+        Click(cut, "button", "Copy diagnostics");
+
+        cut.WaitForAssertion(() => Assert.StartsWith("Copied", cut.Find("[role=status]").TextContent), Wait);
+        Assert.Contains("profile/users/me: 1 calls", clipboard.Text);
+        Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier.Contains("clipboard"));
+    }
+
+    [Fact]
+    public async Task Says_so_when_the_clipboard_refuses()
+    {
+        await SignInAsync();
+        JSInterop.SetupVoid("navigator.clipboard.writeText", _ => true).SetException(new JSException("NotAllowedError"));
+        var cut = Render<Diagnostics>();
+
+        Click(cut, "button", "Copy diagnostics");
+
+        cut.WaitForAssertion(() => Assert.Equal("Couldn't copy to the clipboard.", cut.Find("[role=status]").TextContent), Wait);
+    }
+
+    [Fact]
+    public async Task Lists_recent_errors_and_copies_the_latest_with_their_stack_traces()
+    {
+        for (var i = 1; i <= 3; i++)
+        {
+            try { throw new InvalidOperationException($"Scoreboard {i} for xuid({Spartans.NobleSix.Xuid}) failed"); }
+            catch (Exception ex) { H.Log.Error($"Unhandled exception number {i}", ex); }
+        }
+        var clipboard = new FakeClipboard();
+        Services.AddSingleton<UI.Services.IClipboardWriter>(clipboard);
+        await SignInAsync();
+        var cut = Render<Diagnostics>();
+
+        var listed = cut.FindAll(".errors summary").Select(s => s.TextContent).ToList();
+        Assert.Equal(3, listed.Count);
+        Assert.EndsWith("Unhandled exception number 3", listed[0]);
+        Assert.Contains("Scoreboard 3 for xuid([xuid]) failed", cut.Find(".errors pre").TextContent);
+
+        Click(cut, "button", "Copy diagnostics");
+        cut.WaitForAssertion(() => Assert.NotNull(clipboard.Text), Wait);
+        var text = clipboard.Text!;
+        Assert.Contains("Unhandled exception number 3", text);
+        Assert.Contains("Unhandled exception number 2", text);
+        Assert.DoesNotContain("Unhandled exception number 1", text);
+        Assert.Contains("and 1 earlier", text);
+        Assert.Contains("System.InvalidOperationException: Scoreboard 3", text);
+        Assert.Contains("at Ancilla.UI.Tests.Components.DiagnosticsPageTests", text);
+        Assert.DoesNotContain(Spartans.NobleSix.Xuid, text);
+    }
+
+    [Fact]
+    public async Task Says_when_there_are_no_errors_and_only_offers_the_folder_where_it_can_open()
+    {
+        await SignInAsync();
+        var cut = Render<Diagnostics>();
+        Assert.Contains("No errors in the log files", cut.Find("section[aria-labelledby=errors-h]").TextContent);
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent == "Open log folder");   // the web host's
+    }
+
+    [Fact]
+    public async Task Opens_the_log_folder_in_the_desktop_app()
+    {
+        var folders = new FakeFolders();
+        Services.AddSingleton<UI.Services.IFolderOpener>(folders);
+        await SignInAsync();
+        var cut = Render<Diagnostics>();
+
+        Click(cut, "button", "Open log folder");
+        Assert.Equal(H.Log.Folder, folders.Opened);
+
+        folders.Works = false;
+        Click(cut, "button", "Open log folder");
+        cut.WaitForAssertion(() => Assert.Equal("Couldn't open the log folder.", cut.Find("[role=status]").TextContent), Wait);
+    }
+
+    private sealed class FakeFolders : UI.Services.IFolderOpener
+    {
+        public string? Opened { get; private set; }
+        public bool Works { get; set; } = true;
+        public bool IsAvailable => true;
+
+        public Task<bool> OpenAsync(string folder)
+        {
+            Opened = folder;
+            return Task.FromResult(Works);
+        }
+    }
+
+    private sealed class FakeClipboard : UI.Services.IClipboardWriter
+    {
+        public string? Text { get; private set; }
+
+        public Task SetTextAsync(string text)
+        {
+            Text = text;
+            return Task.CompletedTask;
+        }
     }
 }

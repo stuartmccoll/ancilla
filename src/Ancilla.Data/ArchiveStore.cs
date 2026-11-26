@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Ancilla.Core;
 using Microsoft.Data.Sqlite;
 
@@ -19,20 +20,24 @@ public sealed record ArchiveSummary(
 /// </summary>
 public sealed class ArchiveStore : IDisposable
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    // Named literals ("Infinity", "NaN") so a number that isn't finite is stored, not thrown on.
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
     private readonly string _connectionString;
     private readonly string _path;
+    private readonly Lock _setup = new();
+    // False until the file exists with the current schema, and again after Erase, so the file is
+    // only made again when something is next stored or read.
+    private volatile bool _ready;
 
     /// <summary>Opens the archive at <paramref name="path"/>, creating it and running any migrations it needs.</summary>
     public ArchiveStore(string path)
     {
         _path = path;
-        var dir = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString();
-        using var c = Open();
-        Exec(c, "PRAGMA journal_mode = WAL");
-        ArchiveSchema.Upgrade(c);
+        Open().Dispose();
     }
 
     public string FilePath => _path;
@@ -309,10 +314,46 @@ public sealed class ArchiveStore : IDisposable
 
     public void Dispose() => SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
 
+    /// <summary>
+    /// Deletes the archive file and its SQLite side files, for every player. Nothing is made again
+    /// until something is next stored or read.
+    /// </summary>
+    /// <exception cref="IOException">A file is in use and couldn't be deleted.</exception>
+    public void Erase()
+    {
+        lock (_setup)
+        {
+            _ready = false;
+            // Pooled connections keep the file open, which stops Windows deleting it.
+            SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
+            foreach (var f in Files) File.Delete(f);
+        }
+    }
+
+    /// <summary>The archive file and the SQLite side files next to it that exist now.</summary>
+    public IEnumerable<string> Files =>
+        new[] { _path, _path + "-wal", _path + "-shm", _path + "-journal" }.Where(File.Exists);
+
     // ---- Plumbing -----------------------------------------------------------------------
 
     private SqliteConnection Open()
     {
+        if (!_ready)
+        {
+            lock (_setup)
+            {
+                if (!_ready)
+                {
+                    var dir = Path.GetDirectoryName(Path.GetFullPath(_path));
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    using var setup = new SqliteConnection(_connectionString);
+                    setup.Open();
+                    Exec(setup, "PRAGMA journal_mode = WAL");
+                    ArchiveSchema.Upgrade(setup);
+                    _ready = true;
+                }
+            }
+        }
         var c = new SqliteConnection(_connectionString);
         c.Open();
         return c;

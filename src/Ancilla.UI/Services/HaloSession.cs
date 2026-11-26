@@ -53,7 +53,7 @@ public sealed class MatchListState
 /// The token lives only inside the client object, in server memory.
 /// </summary>
 public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache, AssetCache assets, FilmCache films, IConfiguration config, HaloDiagnostics diagnostics,
-    ArchiveStore archive, SnapshotStore legacySnapshots, IWaypointSignIn waypoint)
+    ArchiveStore archive, SnapshotStore legacySnapshots, IWaypointSignIn waypoint, LocalSettings settings)
 {
     private readonly ConcurrentDictionary<string, Task<MatchTimeline>> _timelines = new();
     // The ranked-playlist list isn't discoverable by name without a version ID, so seed the common one.
@@ -91,6 +91,8 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     /// signing in again as the same player carries on where it left off.
     /// </summary>
     public bool Expired { get; private set; }
+    /// <summary>A message for the sign-in page after signing out, such as "everything was deleted". Cleared on sign-in.</summary>
+    public string? Notice { get; private set; }
 
     public ProgressReport? Report { get; set; }
     /// <summary>When the service record was last fetched.</summary>
@@ -180,6 +182,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
         }
 
         Reset();
+        Notice = null;
         _client = client;
         _source = source;
         Method = source.Method;
@@ -229,6 +232,7 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     public async Task SignOutAsync()
     {
         Reset();
+        Notice = null;
         Changed?.Invoke();
         if (waypoint.IsAvailable)
         {
@@ -238,6 +242,13 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
                 diagnostics.Info($"Clearing the sign-in browser failed ({ex.GetType().Name})");
             }
         }
+    }
+
+    /// <summary>Shows <paramref name="notice"/> on the sign-in page, while signed out.</summary>
+    public void ShowNotice(string notice)
+    {
+        Notice = notice;
+        Changed?.Invoke();
     }
 
     private void Reset()
@@ -650,8 +661,23 @@ public sealed class HaloSession(IHttpClientFactory httpFactory, HaloCache cache,
     /// <summary>Where films are cached, with the home folder shown as ~.</summary>
     public string FilmFolder => films.DisplayRoot;
 
-    /// <summary>The most the film cache may hold before the oldest films are deleted (setting <c>FilmCacheLimitMb</c>, 2 GB by default).</summary>
-    public long FilmLimitBytes => (long.TryParse(config["FilmCacheLimitMb"], out var mb) && mb > 0 ? mb : 2048) << 20;
+    /// <summary>
+    /// The most the film cache may hold before the oldest films are deleted: the limit picked on the
+    /// Settings page, else <see cref="DefaultFilmLimitMb"/>.
+    /// </summary>
+    public long FilmLimitBytes => (long)(settings.FilmCacheLimitMb ?? DefaultFilmLimitMb) << 20;
+
+    /// <summary>The film cache limit, in MB, when none is picked: the <c>FilmCacheLimitMb</c> setting, else 2 GB.</summary>
+    public int DefaultFilmLimitMb => int.TryParse(config["FilmCacheLimitMb"], out var mb) && mb > 0 ? mb : 2048;
+
+    /// <summary>Changes the film cache's size limit (null: back to the default), and trims the cache to it now.</summary>
+    /// <exception cref="IOException">The setting couldn't be saved.</exception>
+    public int SetFilmLimit(int? mb)
+    {
+        settings.FilmCacheLimitMb = mb == DefaultFilmLimitMb ? null : mb;
+        _timelines.Clear();
+        return films.Trim(FilmLimitBytes);
+    }
 
     /// <summary>Bytes the cached films take up.</summary>
     public long FilmBytes() => films.TotalBytes();

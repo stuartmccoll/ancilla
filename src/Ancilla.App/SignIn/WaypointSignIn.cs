@@ -107,7 +107,9 @@ public sealed class WaypointSignIn : IWaypointSignIn
         set
         {
             if (value == StaySignedIn) return;
-            Preferences.Default.Set(StayKey, value);
+            // Off is the default, so it's removed rather than kept.
+            if (value) Preferences.Default.Set(StayKey, true);
+            else Preferences.Default.Remove(StayKey);
             var previous = _ready;
             _ready = SwitchAsync(previous, value);
         }

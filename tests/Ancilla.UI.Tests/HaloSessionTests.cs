@@ -433,7 +433,7 @@ public sealed class HaloSessionTests : IDisposable
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         using var h = new Harness();
-        var s = new HaloSession(h.Halo.Factory, h.Cache, h.Assets, new FilmCache(Path.Combine(home, ".ancilla-films")), h.Config, h.Diagnostics, h.Archive, h.Snapshots, h.Waypoint);
+        var s = new HaloSession(h.Halo.Factory, h.Cache, h.Assets, new FilmCache(Path.Combine(home, ".ancilla-films")), h.Config, h.Diagnostics, h.Archive, h.Snapshots, h.Waypoint, h.Settings);
         Assert.StartsWith("~", s.FilmFolder);
     }
 

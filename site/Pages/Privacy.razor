@@ -29,7 +29,7 @@
                 Signing in with Microsoft happens on Halo Waypoint's own sign-in page, in a window with a browser profile of
                 its own, so your password goes only to Microsoft. Halo Waypoint keeps the token there as a cookie, and Ancilla
                 reads it from there. With <strong>Stay signed in</strong> on, that profile is kept on your computer so you're
-                signed in when the app starts. <a href="getting-started.html#stay">Getting started</a> says where. Signing out removes it.
+                signed in when the app starts. <a href="getting-started.html#stay">Getting started</a> says where. Signing out, or turning Stay signed in off, removes it.
             </p>
         </section>
 
@@ -40,19 +40,24 @@
                     <strong>Your match archive:</strong> each match you've played, its full scoreboard (which includes the IDs,
                     scores and medals of everyone in it), your skill result, map, mode and playlist names, and snapshots of your
                     progress, which power the matches-to-go figures. It's filed under your player ID, so another account's data
-                    stays separate. You can export it from Settings, or delete the file.
+                    stays separate. You can export it from Settings.
                 </li>
                 <li>
                     <strong>Theater films</strong>, only when you open a match's timeline and choose to load it. A film holds the
-                    gamertags of everyone in the match. The cache is trimmed to a size limit, and Settings can clear it.
+                    gamertags of everyone in the match. When the cache goes over its size limit (2 GB unless you pick another in Settings), the films fetched longest ago are deleted, and Settings can clear it.
                 </li>
                 <li>
-                    <strong>Log files</strong>, to help with bug reports. Tokens, player IDs, gamertags, download addresses and
+                    <strong>Log files</strong>, to help with bug reports: calls to Halo's services, and any errors and where in the app they happened. Tokens, player IDs, gamertags, download addresses and
                     file paths are removed before anything is written. They're kept for a week.
                 </li>
                 <li><strong>Your theme choice</strong>, in the app's settings.</li>
+                <li><strong>Your settings</strong>, such as the film cache limit, in a small file written only once you change one.</li>
             </ul>
-            <p>The app's About page shows where each of these is kept.</p>
+            <p>
+                Settings lists all of these, with where each is kept and how big it is. <strong>Export everything</strong> saves
+                your matches, progress snapshots and settings as one JSON file, without other players' names or IDs.
+                <strong>Delete everything</strong>, after asking you to confirm, signs you out and deletes all of it from your computer.
+            </p>
         </section>
 
         <section class="card" aria-labelledby="internet">

@@ -77,4 +77,25 @@ public sealed class FilmCacheLimitTests : IDisposable
         Assert.Empty(_cache.CachedMatches());
         Assert.True(File.Exists(_cache.MedalsPath));
     }
+
+    [Fact]
+    public void Deleting_everything_takes_the_medal_file_and_the_empty_folder()
+    {
+        Film(1, 10, DateTime.UtcNow);
+        File.WriteAllText(_cache.MedalsPath, "{}");
+        _cache.DeleteAll();
+        Assert.False(Directory.Exists(_root));
+        _cache.DeleteAll();   // nothing there: no error
+    }
+
+    [Fact]
+    public void Deleting_everything_leaves_a_folder_that_holds_other_files()
+    {
+        Film(1, 10, DateTime.UtcNow);
+        var mine = Path.Combine(_root, "notes.txt");
+        File.WriteAllText(mine, "Cortana's notes");
+        _cache.DeleteAll();
+        Assert.Empty(_cache.CachedMatches());
+        Assert.Equal([mine], Directory.EnumerateFileSystemEntries(_root));
+    }
 }

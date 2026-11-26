@@ -14,7 +14,11 @@ public sealed record ArchiveRow(
 
 public static class ArchiveExport
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true,
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,   // never throw on a stored infinity
+    };
 
     public static string ToJson(IReadOnlyList<ArchiveRow> rows) => JsonSerializer.Serialize(rows, JsonOptions);
 

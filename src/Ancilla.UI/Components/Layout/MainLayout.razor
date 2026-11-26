@@ -2,8 +2,7 @@
 @implements IDisposable
 @inject HaloSession Session
 @inject NavigationManager Nav
-@inject IJSRuntime JS
-@inject IThemePreference ThemePreference
+@inject ThemeChoice Theme
 
 <header class="appbar">
     <div class="appbar-inner">
@@ -42,23 +41,9 @@
                         {
                             <p class="menu-note">Signed in with HALO_SPARTAN_TOKEN. Signing out lasts until the page is reloaded.</p>
                         }
-                        <div class="menu-section" role="radiogroup" aria-label="Theme">
-                            <span class="menu-label">Theme</span>
-                            @foreach (var t in Themes.All)
-                            {
-                                var on = t.Id == _theme;
-                                <button class="theme-opt @(on ? "on" : "")" role="radio" aria-checked="@(on ? "true" : "false")"
-                                        title="@t.Description" @onclick="() => SetThemeAsync(t.Id)">
-                                    <span class="swatch" aria-hidden="true">
-                                        @foreach (var c in t.Swatches) { <span style="background:@c"></span> }
-                                    </span>
-                                    <span class="theme-name">@t.Name</span>
-                                    @if (on)
-                                    {
-                                        <svg class="check" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5 5.5 10.5 11.5 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                                    }
-                                </button>
-                            }
+                        <div class="menu-section">
+                            <span class="menu-label" id="menu-theme-label">Theme</span>
+                            <ThemePicker LabelledBy="menu-theme-label" />
                         </div>
                         <a class="menu-item" href="settings">Settings</a>
                         <a class="menu-item" href="diagnostics">Diagnostics</a>
@@ -93,7 +78,19 @@
     }
     else
     {
-        @Body
+        <LoggedErrorBoundary @ref="_boundary">
+            <ChildContent>@Body</ChildContent>
+            <ErrorContent>
+                <section class="card page-error" role="alert">
+                    <h1>Something went wrong</h1>
+                    <p>This page hit a problem it couldn't recover from. It's been written to the log file, so you can include it in a bug report.</p>
+                    <p>
+                        <button @onclick="() => _boundary?.Recover()">Try again</button>
+                        <a href="diagnostics">Diagnostics</a>
+                    </p>
+                </section>
+            </ErrorContent>
+        </LoggedErrorBoundary>
     }
 </main>
 
@@ -147,6 +144,7 @@
         new("About", "about", p => p == "about", []),
     ];
 
+    private LoggedErrorBoundary? _boundary;
     private bool _starting = true;
     private string? _envError;
     private bool _menuOpen;
@@ -177,36 +175,15 @@
     {
         UpdateLocation();
         _menuOpen = false;
-        InvokeAsync(StateHasChanged);
-    }
-
-    private string _theme = Themes.Default.Id;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-        try
+        InvokeAsync(() =>
         {
-            // The desktop shell remembers the theme itself; the web host's page shell already shows the cookie's.
-            if (ThemePreference.Saved is { } saved)
-            {
-                _theme = Themes.Normalize(saved);
-                await JS.InvokeVoidAsync("haloTheme.set", _theme);
-            }
-            else _theme = Themes.Normalize(await JS.InvokeAsync<string>("haloTheme.get"));
+            _boundary?.Recover();   // a page that failed shouldn't stop the next one showing
             StateHasChanged();
-        }
-        catch (JSException) { }
-        catch (InvalidOperationException) { }   // no JS (e.g. static rendering)
+        });
     }
 
-    private async Task SetThemeAsync(string id)
-    {
-        _theme = Themes.Normalize(id);
-        ThemePreference.Save(_theme);
-        try { await JS.InvokeVoidAsync("haloTheme.set", _theme); }
-        catch (JSException) { }
-    }
+    // The saved theme is applied as soon as the page can run scripts, menu open or not.
+    protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Theme.LoadAsync() : Task.CompletedTask;
 
     private void OnMenuKey(KeyboardEventArgs e)
     {

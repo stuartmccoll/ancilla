@@ -15,7 +15,8 @@ public sealed record DiagnosticsSnapshot(
     int Snapshots, int ArchivedMatches, long ArchiveBytes,
     int Films, long FilmBytes,
     long LogBytes, string LogFolder,
-    int Queued, int InFlight);
+    int Queued, int InFlight,
+    IReadOnlyList<LoggedError> Errors);
 
 public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cache, AssetCache assets,
     ArchiveStore archive, FilmCache films)
@@ -56,8 +57,15 @@ public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cac
         return new(AppVersion, RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription,
             diagnostics.Endpoints(), cache.Count, images, imageBytes, snapshotCount, archived, archiveBytes,
             filmCount, filmBytes, diagnostics.Log?.SizeBytes() ?? 0, diagnostics.Log?.DisplayFolder ?? "(logging is off)",
-            session.QueueLength, session.InFlight);
+            session.QueueLength, session.InFlight,
+            diagnostics.Log?.RecentErrors(ErrorsShown) ?? []);
     }
+
+    /// <summary>How many recent errors the page lists, and how many of them (with their stack traces) a copy includes.</summary>
+    public const int ErrorsShown = 10, ErrorsCopied = 2;
+
+    // A stack trace is cut to this many lines in a copy: enough to see where, short enough to paste.
+    private const int DetailLinesCopied = 40;
 
     /// <summary>A plain-text summary for a bug report, run through the redactor.</summary>
     public string ToText(DiagnosticsSnapshot d)
@@ -80,6 +88,16 @@ public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cac
         sb.AppendLine($"  Log files: {Size(d.LogBytes)}");
         sb.AppendLine();
         sb.AppendLine($"Requests: {d.InFlight} running, {d.Queued} waiting");
+        sb.AppendLine();
+        sb.AppendLine("Recent errors:");
+        if (d.Errors.Count == 0) sb.AppendLine("  none in the log files");
+        foreach (var e in d.Errors.Take(ErrorsCopied))
+        {
+            sb.AppendLine($"  {e.At:u} {e.Message}");
+            foreach (var line in e.Detail.Take(DetailLinesCopied)) sb.AppendLine($"    {line}");
+            if (e.Detail.Count > DetailLinesCopied) sb.AppendLine($"    ({e.Detail.Count - DetailLinesCopied} more lines in the log file)");
+        }
+        if (d.Errors.Count > ErrorsCopied) sb.AppendLine($"  and {d.Errors.Count - ErrorsCopied} earlier (see the log files)");
         return diagnostics.Redactor.Redact(sb.ToString());
     }
 
@@ -87,6 +105,7 @@ public sealed class DiagnosticsReport(HaloDiagnostics diagnostics, HaloCache cac
     {
         < 1024 => $"{bytes} B",
         < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
-        _ => $"{bytes / 1024.0 / 1024.0:0.#} MB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024.0:0.#} MB",
+        _ => $"{bytes / 1024.0 / 1024.0 / 1024.0:0.#} GB",
     };
 }

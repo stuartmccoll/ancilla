@@ -11,6 +11,46 @@ public sealed class SettingsThemePreference : IThemePreference
     public string? Saved => Preferences.Default.Get<string?>(Key, null);
 
     public void Save(string id) => Preferences.Default.Set(Key, id);
+
+    public void Forget() => Preferences.Default.Remove(Key);
+}
+
+/// <summary>
+/// The system clipboard. The web view's own (<c>navigator.clipboard</c>) isn't usable here: WebKit
+/// doesn't count the app's page as a secure context, and wants the write inside the click itself,
+/// not after a trip to .NET and back.
+/// </summary>
+public sealed class SystemClipboard : IClipboardWriter
+{
+    public Task SetTextAsync(string text) =>
+        MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.SetTextAsync(text));
+}
+
+/// <summary>Opens a folder in Finder or File Explorer, creating it first so there's something to show.</summary>
+public sealed class SystemFolderOpener : IFolderOpener
+{
+    public bool IsAvailable => true;
+
+    public async Task<bool> OpenAsync(string folder)
+    {
+        try
+        {
+            Directory.CreateDirectory(folder);
+#if WINDOWS
+            using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe") { ArgumentList = { folder } });
+            return true;
+#else
+            // On Mac Catalyst a file URL for a folder opens it in Finder.
+            return await MainThread.InvokeOnMainThreadAsync(() => Launcher.Default.OpenAsync(
+                new UriBuilder { Scheme = Uri.UriSchemeFile, Host = "", Path = Path.TrimEndingDirectorySeparator(folder) + "/" }.Uri));
+#endif
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                                       or System.ComponentModel.Win32Exception or FeatureNotSupportedException)
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>Exports go straight to the Downloads folder, as a browser download would.</summary>
