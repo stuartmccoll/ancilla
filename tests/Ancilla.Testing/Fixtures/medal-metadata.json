@@ -1,0 +1,75 @@
+{
+  "difficulties": [
+    "normal",
+    "heroic",
+    "legendary",
+    "mythic"
+  ],
+  "types": [
+    "spree",
+    "mode",
+    "multikill",
+    "proficiency",
+    "skill",
+    "style"
+  ],
+  "sprites": {
+    "small": {
+      "path": "medals/images/medal_sheet_sm.png",
+      "columns": 16,
+      "size": 72
+    },
+    "medium": {
+      "path": "medals/images/medal_sheet_med.png",
+      "columns": 16,
+      "size": 128
+    },
+    "extra-large": {
+      "path": "medals/images/medal_sheet_xl.png",
+      "columns": 16,
+      "size": 256
+    }
+  },
+  "medals": [
+    {
+      "name": {
+        "value": "Killjoy",
+        "translations": {
+          "fr-FR": "Rabat-joie"
+        }
+      },
+      "description": {
+        "value": "End an enemy's killing spree.",
+        "translations": {
+          "fr-FR": "End an enemy's killing spree."
+        }
+      },
+      "spriteIndex": 4,
+      "sortingWeight": 150,
+      "difficultyIndex": 0,
+      "typeIndex": 0,
+      "personalScore": 50,
+      "nameId": 4000000001
+    },
+    {
+      "name": {
+        "value": "Overkill",
+        "translations": {
+          "fr-FR": "Overkill"
+        }
+      },
+      "description": {
+        "value": "Kill four enemies in quick succession.",
+        "translations": {
+          "fr-FR": "Kill four enemies in quick succession."
+        }
+      },
+      "spriteIndex": 21,
+      "sortingWeight": 310,
+      "difficultyIndex": 2,
+      "typeIndex": 2,
+      "personalScore": 100,
+      "nameId": 2063152177
+    }
+  ]
+}

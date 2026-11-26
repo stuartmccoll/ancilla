@@ -1,0 +1,22 @@
+[
+  {
+    "xuid": "{xuid:Kat}",
+    "gamertag": "Kat B320",
+    "gamerpic": {
+      "small": "https://example.invalid/gamerpics/kat-64.png",
+      "medium": "https://example.invalid/gamerpics/kat-208.png",
+      "large": "https://example.invalid/gamerpics/kat-424.png",
+      "xlarge": "https://example.invalid/gamerpics/kat-1080.png"
+    }
+  },
+  {
+    "xuid": "{xuid:Jorge}",
+    "gamertag": "Jorge 052",
+    "gamerpic": {
+      "small": "https://example.invalid/gamerpics/jorge-64.png",
+      "medium": "https://example.invalid/gamerpics/jorge-208.png",
+      "large": "https://example.invalid/gamerpics/jorge-424.png",
+      "xlarge": "https://example.invalid/gamerpics/jorge-1080.png"
+    }
+  }
+]

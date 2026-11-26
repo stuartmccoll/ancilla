@@ -1,0 +1,38 @@
+{
+  "FilmStatusBond": 1,
+  "CustomData": {
+    "FilmLength": 747485,
+    "Chunks": [
+      {
+        "Index": 0,
+        "ChunkStartTimeOffsetMilliseconds": 0,
+        "DurationMilliseconds": 0,
+        "ChunkSize": 2048,
+        "FileRelativePath": "/filmChunk0",
+        "ChunkType": 1
+      },
+      {
+        "Index": 1,
+        "ChunkStartTimeOffsetMilliseconds": 0,
+        "DurationMilliseconds": 20000,
+        "ChunkSize": 65536,
+        "FileRelativePath": "/filmChunk1",
+        "ChunkType": 2
+      },
+      {
+        "Index": 2,
+        "ChunkStartTimeOffsetMilliseconds": 0,
+        "DurationMilliseconds": 0,
+        "ChunkSize": 4096,
+        "FileRelativePath": "/filmChunk2",
+        "ChunkType": 3
+      }
+    ],
+    "HasGameEnded": true,
+    "ManifestRefreshSeconds": 30,
+    "MatchId": "000ba771-0000-4000-8000-000000000117",
+    "FilmMajorVersion": 41
+  },
+  "BlobStoragePathPrefix": "https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/film/00f11a00-0000-4000-8000-000000000117/000ba771-0000-4000-8000-000000000117/",
+  "AssetId": "00f11a00-0000-4000-8000-000000000117"
+}

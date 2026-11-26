@@ -1,0 +1,63 @@
+{
+  "CustomData": {
+    "KeyValues": {
+      "ScoreToWin": 200,
+      "TimeLimitSeconds": 720,
+      "SkullRespawnSeconds": 10
+    },
+    "HasNodeGraph": false
+  },
+  "Tags": [
+    "343i"
+  ],
+  "AssetId": "0000a0de-0000-4000-8000-000000000006",
+  "VersionId": "0000fe25-0000-4000-8000-000000000006",
+  "PublicName": "Oddball",
+  "Description": "Hold the skull to score.",
+  "Files": {
+    "Prefix": "https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/ugcgamevariant/0000a0de-0000-4000-8000-000000000006/0000fe25-0000-4000-8000-000000000006/",
+    "FileRelativePaths": [
+      "images/thumbnail.jpg",
+      "images/hero.jpg",
+      "Oddball.bin"
+    ],
+    "PrefixEndpoint": {
+      "AuthorityId": "iUgcFiles",
+      "Path": "/ugcstorage/ugcgamevariant/0000a0de-0000-4000-8000-000000000006/0000fe25-0000-4000-8000-000000000006/",
+      "QueryString": null,
+      "RetryPolicyId": "linearretry",
+      "TopicName": "",
+      "AcknowledgementTypeId": 0,
+      "AuthenticationLifetimeExtensionSupported": false,
+      "ClearanceAware": false
+    }
+  },
+  "Contributors": [
+    "xuid({xuid:NobleSix})"
+  ],
+  "AssetHome": 1,
+  "AssetStats": {
+    "PlaysRecent": 117,
+    "PlaysAllTime": 25000,
+    "Favorites": 312,
+    "Likes": 520,
+    "Bookmarks": 41,
+    "ParentAssetCount": 0,
+    "AverageRating": 4.5,
+    "NumberOfRatings": 88
+  },
+  "InspectionResult": 0,
+  "CloneBehavior": 0,
+  "Order": 0,
+  "PublishedDate": {
+    "ISO8601Date": "2026-03-04T17:00:00Z"
+  },
+  "VersionNumber": 7,
+  "Admin": null,
+  "DisplayOwnerOverride": "Noble Team",
+  "EngineGameVariantLink": {
+    "AssetId": "0000a0de-0000-4000-8000-000000000106",
+    "VersionId": "0000fe25-0000-4000-8000-000000000106",
+    "AssetKind": 8
+  }
+}

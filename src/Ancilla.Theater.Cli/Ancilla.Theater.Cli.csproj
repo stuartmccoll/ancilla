@@ -13,4 +13,9 @@
     <ProjectReference Include="../Ancilla.Theater/Ancilla.Theater.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The API fixtures, the last known shape of each response, for the drift command. -->
+    <Content Include="../../tests/Ancilla.Testing/Fixtures/*.json" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

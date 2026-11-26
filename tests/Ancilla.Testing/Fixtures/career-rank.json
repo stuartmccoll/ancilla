@@ -1,0 +1,14 @@
+{
+  "RewardTrackPath": "RewardTracks/CareerRanks/careerRank1.json",
+  "TrackType": "CareerRank",
+  "CurrentProgress": {
+    "Rank": 12,
+    "PartialProgress": 400,
+    "IsOwned": true,
+    "HasReachedMaxRank": false
+  },
+  "PreviousProgress": null,
+  "IsOwned": true,
+  "BaseXp": null,
+  "BoostXp": null
+}

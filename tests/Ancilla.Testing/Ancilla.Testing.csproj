@@ -16,4 +16,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Hand-written API responses (see Fixtures.cs). The drift check in Ancilla.Theater.Cli copies them too. -->
+    <EmbeddedResource Include="Fixtures/*" LogicalName="Fixtures/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

@@ -3,19 +3,6 @@ using Ancilla.Core;
 
 namespace Ancilla.Theater;
 
-/// <summary>GET discovery-infiniteugc.svc.halowaypoint.com/hi/films/matches/{matchId}/spectate</summary>
-public sealed record FilmManifest(int FilmStatusBond, FilmCustomData CustomData, string BlobStoragePathPrefix, string AssetId);
-
-public sealed record FilmCustomData(
-    long FilmLength, List<FilmChunkInfo> Chunks, bool HasGameEnded, string MatchId, int FilmMajorVersion)
-{
-    /// <summary>
-    /// Whether the film has its summary chunk (type 3), which holds the kills, medals and scores.
-    /// Matches that didn't end normally have none (their manifest says <c>HasGameEnded: false</c>).
-    /// </summary>
-    public bool HasSummary => Chunks.Any(c => c.ChunkType == 3);
-}
-
 /// <summary>
 /// The film has no summary chunk, so no timeline can be built from it: the match didn't end
 /// normally. (<see cref="InvalidDataException"/> is sealed, so this is an <see cref="IOException"/>
@@ -23,11 +10,6 @@ public sealed record FilmCustomData(
 /// </summary>
 public sealed class UnfinishedFilmException()
     : IOException("The film has no summary chunk: the match didn't end normally.");
-
-/// <summary>ChunkType 1 = header, 2 = replication (about 20 s each), 3 = summary.</summary>
-public sealed record FilmChunkInfo(
-    int Index, long ChunkStartTimeOffsetMilliseconds, long DurationMilliseconds, long ChunkSize,
-    string FileRelativePath, int ChunkType);
 
 /// <summary>
 /// Film manifests and chunks. The manifest needs the Spartan token, so it's fetched by

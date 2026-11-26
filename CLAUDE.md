@@ -16,6 +16,7 @@ dotnet test --filter "FullyQualifiedName!~Ancilla.Web.E2E"     # everything but 
 dotnet run --project src/Ancilla.Web --launch-profile http     # http://localhost:5260
 dotnet watch --project src/Ancilla.Web --launch-profile http   # same, with hot reload
 dotnet run --project src/Ancilla.App                            # the desktop app (Windows; needs the MAUI workload)
+HALO_SPARTAN_TOKEN=... dotnet run --project src/Ancilla.Theater.Cli -- drift   # live API shape vs models and fixtures (the user runs it)
 ```
 
 `Ancilla.App` isn't in `Ancilla.sln`: it needs the MAUI workload and has no Linux target, so
@@ -44,6 +45,10 @@ Tests (see the README's Tests section for the full table):
 - `tests/Ancilla.Testing`: `FakeHalo`, a fake of the Halo services serving a made-up `HaloWorld`
   (films included, for its two custom games). Pages and the browser tests talk to it instead of halowaypoint.com. Add new endpoints here when you add them
   to `HaloWaypointClient`, and new pages to the routes in `SmokeTests` and `AccessibilityTests`.
+  `Fixtures/` holds one hand-written response per endpoint in the real shape (never a recorded one), with
+  XUIDs as `{xuid:NobleSix}` placeholders. A new endpoint also needs an entry in `ApiContract.Endpoints`
+  (`src/Ancilla.Core/ApiContract.cs`), a fixture and a parsing test in `ApiContractTests`; a new model
+  field needs adding to its fixture. Tests fail otherwise.
 
 All test data is made up and Halo-themed (Noble Team, Blue Team, Sangheili). Never add real film
 data, API responses, gamertags or XUIDs as fixtures. Write XUIDs in hex (`Spartans.Xuid`), so the privacy
@@ -60,7 +65,8 @@ real API still returns what the fake does. Say so rather than claiming a page wo
 
 - `src/Ancilla.Core`: no NuGet dependencies, no ASP.NET. Holds the API client
   (`HaloWaypointClient`), JSON models (`Models.cs`, `StatsModels.cs`), progress maths
-  (`ProgressService`), `HaloCache`, `SnapshotStore` and the Forge map navmesh reader (`NavMesh`).
+  (`ProgressService`), `HaloCache`, `SnapshotStore`, the Forge map navmesh reader (`NavMesh`), and the API
+  contract and drift check (`ApiContract`, `JsonShape`).
 - `src/Ancilla.Data`: the local SQLite archive (`ArchiveStore`) of matches, skill results, UGC names and
   progress snapshots, keyed by XUID, with numbered schema migrations in `ArchiveSchema`. It's the only
   project that uses `Microsoft.Data.Sqlite`. Add a schema change as a new migration at the end; never
@@ -95,7 +101,7 @@ real API still returns what the fake does. Say so rather than claiming a page wo
 - `src/Ancilla.Theater`: library that decodes Theater films into match analysis (see its `README.md`
   and `FORMAT.md`). `MatchTimeline` is what the match timeline page shows. It references
   `Ancilla.Core`, and `Ancilla.UI` references it.
-- `src/Ancilla.Theater.Cli`: the research console (`fetch`, `inspect`, `timeline`), run with
+- `src/Ancilla.Theater.Cli`: the research console (`fetch`, `inspect`, `timeline`, and `drift`, the API drift check), run with
   `dotnet run --project src/Ancilla.Theater.Cli -- <command>`. Films contain every player's gamertag and XUID: keep them in its cache outside
   the repo, and never commit film data or paste other players' gamertags into code, docs or
   commit messages.
