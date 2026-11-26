@@ -1,0 +1,34 @@
+{
+  "ActiveOperationRewardTrackPath": "RewardTracks/Operations/OpFallOfReach.json",
+  "OperationRewardTracks": [
+    {
+      "RewardTrackPath": "RewardTracks/Operations/OpFallOfReach.json",
+      "TrackType": "Operation",
+      "CurrentProgress": {
+        "Rank": 7,
+        "PartialProgress": 650,
+        "IsOwned": true,
+        "HasReachedMaxRank": false
+      },
+      "PreviousProgress": null,
+      "IsOwned": true,
+      "BaseXp": null,
+      "BoostXp": null
+    },
+    {
+      "RewardTrackPath": "RewardTracks/Operations/OpSacredIcon.json",
+      "TrackType": "Operation",
+      "CurrentProgress": {
+        "Rank": 20,
+        "PartialProgress": 0,
+        "IsOwned": true,
+        "HasReachedMaxRank": true
+      },
+      "PreviousProgress": null,
+      "IsOwned": true,
+      "BaseXp": null,
+      "BoostXp": null
+    }
+  ],
+  "ScheduledOperationRewardTrackPath": "RewardTracks/Operations/OpFirstStrike.json"
+}

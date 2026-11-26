@@ -249,6 +249,26 @@ public sealed record MedalDefinition(
 public sealed record AppearanceResponse(Appearance? Appearance);
 public sealed record Appearance(string? ServiceTag);
 
+// ---- Theater ---------------------------------------------------------------------
+
+/// <summary>GET discovery-infiniteugc.svc.halowaypoint.com/hi/films/matches/{matchId}/spectate</summary>
+public sealed record FilmManifest(int FilmStatusBond, FilmCustomData CustomData, string BlobStoragePathPrefix, string AssetId);
+
+public sealed record FilmCustomData(
+    long FilmLength, List<FilmChunkInfo> Chunks, bool HasGameEnded, string MatchId, int FilmMajorVersion)
+{
+    /// <summary>
+    /// Whether the film has its summary chunk (type 3), which holds the kills, medals and scores.
+    /// Matches that didn't end normally have none (their manifest says <c>HasGameEnded: false</c>).
+    /// </summary>
+    public bool HasSummary => Chunks.Any(c => c.ChunkType == 3);
+}
+
+/// <summary>ChunkType 1 = header, 2 = replication (about 20 s each), 3 = summary.</summary>
+public sealed record FilmChunkInfo(
+    int Index, long ChunkStartTimeOffsetMilliseconds, long DurationMilliseconds, long ChunkSize,
+    string FileRelativePath, int ChunkType);
+
 // ---- Helpers -----------------------------------------------------------------------
 
 public static class IsoDuration

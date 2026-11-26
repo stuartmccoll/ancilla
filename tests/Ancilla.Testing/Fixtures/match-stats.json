@@ -1,0 +1,551 @@
+{
+  "MatchId": "000ba771-0000-4000-8000-000000000117",
+  "MatchInfo": {
+    "StartTime": "2026-11-20T19:02:11.417Z",
+    "EndTime": "2026-11-20T19:14:38.902Z",
+    "Duration": "PT12M27.4855S",
+    "LifecycleMode": 3,
+    "GameVariantCategory": 18,
+    "LevelId": "6b1d3f7a-0000-4000-8000-000000000001",
+    "MapVariant": {
+      "AssetKind": 2,
+      "AssetId": "0000ba5e-0000-4000-8000-000000000001",
+      "VersionId": "0000fe25-0000-4000-8000-000000000001"
+    },
+    "UgcGameVariant": {
+      "AssetKind": 6,
+      "AssetId": "0000a0de-0000-4000-8000-000000000006",
+      "VersionId": "0000fe25-0000-4000-8000-000000000006"
+    },
+    "ClearanceId": "c0a1a2a3-0000-4000-8000-000000000117",
+    "Playlist": {
+      "AssetKind": 3,
+      "AssetId": "edfef3ac-9cbe-4fa2-b949-8f29deafd483",
+      "VersionId": "0000fe25-0000-4000-8000-000000000021"
+    },
+    "PlaylistExperience": 2,
+    "PlaylistMapModePair": {
+      "AssetKind": 7,
+      "AssetId": "00001157-0000-4000-8000-000000000007",
+      "VersionId": "0000fe25-0000-4000-8000-000000000007"
+    },
+    "SeasonId": "Seasons/Season7.json",
+    "PlayableDuration": "PT12M20S",
+    "TeamsEnabled": true,
+    "TeamScoringEnabled": true,
+    "GameplayInteraction": 1
+  },
+  "Teams": [
+    {
+      "TeamId": 0,
+      "Outcome": 2,
+      "Rank": 1,
+      "Stats": {
+        "CoreStats": {
+          "Score": 1250,
+          "PersonalScore": 1340,
+          "RoundsWon": 1,
+          "RoundsLost": 1,
+          "RoundsTied": 0,
+          "Kills": 41,
+          "Deaths": 30,
+          "Assists": 19,
+          "KDA": 17.33,
+          "Suicides": 0,
+          "Betrayals": 0,
+          "AverageLifeDuration": "PT41.6S",
+          "GrenadeKills": 2,
+          "HeadshotKills": 7,
+          "MeleeKills": 3,
+          "PowerWeaponKills": 1,
+          "ShotsFired": 310,
+          "ShotsHit": 161,
+          "Accuracy": 51.93,
+          "DamageDealt": 4820,
+          "DamageTaken": 3910,
+          "CalloutAssists": 4,
+          "VehicleDestroys": 0,
+          "DriverAssists": 0,
+          "Hijacks": 0,
+          "EmpAssists": 1,
+          "MaxKillingSpree": 5,
+          "Medals": [
+            {
+              "NameId": 4000000001,
+              "Count": 1,
+              "TotalPersonalScoreAwarded": 50
+            },
+            {
+              "NameId": 2063152177,
+              "Count": 1,
+              "TotalPersonalScoreAwarded": 100
+            }
+          ],
+          "PersonalScores": [
+            {
+              "NameId": 1024030246,
+              "Count": 41,
+              "TotalPersonalScoreAwarded": 4100
+            },
+            {
+              "NameId": 638246808,
+              "Count": 19,
+              "TotalPersonalScoreAwarded": 950
+            }
+          ],
+          "Spawns": 31,
+          "ObjectivesCompleted": 2,
+          "DeprecatedDamageDealt": 4820.5,
+          "DeprecatedDamageTaken": 3910.25
+        },
+        "OddballStats": {
+          "KillsAsSkullCarrier": 2,
+          "LongestTimeAsSkullCarrier": "PT38.4S",
+          "SkullCarriersKilled": 3,
+          "SkullGrabs": 5,
+          "TimeAsSkullCarrier": "PT1M32.5S",
+          "SkullScoringTicks": 92
+        },
+        "CaptureTheFlagStats": {
+          "FlagCaptureAssists": 1,
+          "FlagCaptures": 1,
+          "FlagCarriersKilled": 2,
+          "FlagGrabs": 3,
+          "FlagReturnersKilled": 1,
+          "FlagReturns": 1,
+          "FlagSecures": 1,
+          "FlagSteals": 2,
+          "KillsAsFlagCarrier": 1,
+          "KillsAsFlagReturner": 1,
+          "TimeAsFlagCarrier": "PT41.5S"
+        },
+        "PvpStats": {
+          "Kills": 41,
+          "Deaths": 30,
+          "Assists": 19,
+          "KDA": 17.33
+        }
+      }
+    },
+    {
+      "TeamId": 1,
+      "Outcome": 3,
+      "Rank": 2,
+      "Stats": {
+        "CoreStats": {
+          "Score": 1250,
+          "PersonalScore": 1340,
+          "RoundsWon": 1,
+          "RoundsLost": 1,
+          "RoundsTied": 0,
+          "Kills": 30,
+          "Deaths": 41,
+          "Assists": 14,
+          "KDA": -6.33,
+          "Suicides": 0,
+          "Betrayals": 0,
+          "AverageLifeDuration": "PT41.6S",
+          "GrenadeKills": 2,
+          "HeadshotKills": 7,
+          "MeleeKills": 3,
+          "PowerWeaponKills": 1,
+          "ShotsFired": 310,
+          "ShotsHit": 161,
+          "Accuracy": 51.93,
+          "DamageDealt": 4820,
+          "DamageTaken": 3910,
+          "CalloutAssists": 4,
+          "VehicleDestroys": 0,
+          "DriverAssists": 0,
+          "Hijacks": 0,
+          "EmpAssists": 1,
+          "MaxKillingSpree": 5,
+          "Medals": [
+            {
+              "NameId": 4000000001,
+              "Count": 1,
+              "TotalPersonalScoreAwarded": 50
+            },
+            {
+              "NameId": 2063152177,
+              "Count": 1,
+              "TotalPersonalScoreAwarded": 100
+            }
+          ],
+          "PersonalScores": [
+            {
+              "NameId": 1024030246,
+              "Count": 30,
+              "TotalPersonalScoreAwarded": 3000
+            },
+            {
+              "NameId": 638246808,
+              "Count": 14,
+              "TotalPersonalScoreAwarded": 700
+            }
+          ],
+          "Spawns": 42,
+          "ObjectivesCompleted": 2,
+          "DeprecatedDamageDealt": 4820.5,
+          "DeprecatedDamageTaken": 3910.25
+        },
+        "OddballStats": {
+          "KillsAsSkullCarrier": 2,
+          "LongestTimeAsSkullCarrier": "PT38.4S",
+          "SkullCarriersKilled": 3,
+          "SkullGrabs": 5,
+          "TimeAsSkullCarrier": "PT1M32.5S",
+          "SkullScoringTicks": 92
+        },
+        "CaptureTheFlagStats": {
+          "FlagCaptureAssists": 1,
+          "FlagCaptures": 1,
+          "FlagCarriersKilled": 2,
+          "FlagGrabs": 3,
+          "FlagReturnersKilled": 1,
+          "FlagReturns": 1,
+          "FlagSecures": 1,
+          "FlagSteals": 2,
+          "KillsAsFlagCarrier": 1,
+          "KillsAsFlagReturner": 1,
+          "TimeAsFlagCarrier": "PT41.5S"
+        },
+        "PvpStats": {
+          "Kills": 30,
+          "Deaths": 41,
+          "Assists": 14,
+          "KDA": -6.33
+        }
+      }
+    }
+  ],
+  "Players": [
+    {
+      "PlayerId": "xuid({xuid:NobleSix})",
+      "PlayerType": 1,
+      "LastTeamId": 0,
+      "Outcome": 2,
+      "Rank": 1,
+      "ParticipationInfo": {
+        "FirstJoinedTime": "2026-11-20T19:02:11.417Z",
+        "LastLeaveTime": null,
+        "PresentAtBeginning": true,
+        "JoinedInProgress": false,
+        "LeftInProgress": false,
+        "PresentAtCompletion": true,
+        "TimePlayed": "PT12M27.4855S",
+        "ConfirmedParticipation": null
+      },
+      "PlayerTeamStats": [
+        {
+          "TeamId": 0,
+          "Stats": {
+            "CoreStats": {
+              "Score": 1250,
+              "PersonalScore": 1340,
+              "RoundsWon": 1,
+              "RoundsLost": 1,
+              "RoundsTied": 0,
+              "Kills": 14,
+              "Deaths": 9,
+              "Assists": 6,
+              "KDA": 7.0,
+              "Suicides": 0,
+              "Betrayals": 0,
+              "AverageLifeDuration": "PT41.6S",
+              "GrenadeKills": 2,
+              "HeadshotKills": 7,
+              "MeleeKills": 3,
+              "PowerWeaponKills": 1,
+              "ShotsFired": 310,
+              "ShotsHit": 161,
+              "Accuracy": 51.93,
+              "DamageDealt": 4820,
+              "DamageTaken": 3910,
+              "CalloutAssists": 4,
+              "VehicleDestroys": 0,
+              "DriverAssists": 0,
+              "Hijacks": 0,
+              "EmpAssists": 1,
+              "MaxKillingSpree": 5,
+              "Medals": [
+                {
+                  "NameId": 4000000001,
+                  "Count": 1,
+                  "TotalPersonalScoreAwarded": 50
+                },
+                {
+                  "NameId": 2063152177,
+                  "Count": 1,
+                  "TotalPersonalScoreAwarded": 100
+                }
+              ],
+              "PersonalScores": [
+                {
+                  "NameId": 1024030246,
+                  "Count": 14,
+                  "TotalPersonalScoreAwarded": 1400
+                },
+                {
+                  "NameId": 638246808,
+                  "Count": 6,
+                  "TotalPersonalScoreAwarded": 300
+                }
+              ],
+              "Spawns": 10,
+              "ObjectivesCompleted": 2,
+              "DeprecatedDamageDealt": 4820.5,
+              "DeprecatedDamageTaken": 3910.25
+            },
+            "OddballStats": {
+              "KillsAsSkullCarrier": 2,
+              "LongestTimeAsSkullCarrier": "PT38.4S",
+              "SkullCarriersKilled": 3,
+              "SkullGrabs": 5,
+              "TimeAsSkullCarrier": "PT1M32.5S",
+              "SkullScoringTicks": 92
+            },
+            "CaptureTheFlagStats": {
+              "FlagCaptureAssists": 1,
+              "FlagCaptures": 1,
+              "FlagCarriersKilled": 2,
+              "FlagGrabs": 3,
+              "FlagReturnersKilled": 1,
+              "FlagReturns": 1,
+              "FlagSecures": 1,
+              "FlagSteals": 2,
+              "KillsAsFlagCarrier": 1,
+              "KillsAsFlagReturner": 1,
+              "TimeAsFlagCarrier": "PT41.5S"
+            },
+            "PvpStats": {
+              "Kills": 14,
+              "Deaths": 9,
+              "Assists": 6,
+              "KDA": 7.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "PlayerId": "xuid({xuid:Kat})",
+      "PlayerType": 1,
+      "LastTeamId": 0,
+      "Outcome": 2,
+      "Rank": 1,
+      "ParticipationInfo": {
+        "FirstJoinedTime": "2026-11-20T19:02:11.417Z",
+        "LastLeaveTime": null,
+        "PresentAtBeginning": false,
+        "JoinedInProgress": true,
+        "LeftInProgress": false,
+        "PresentAtCompletion": true,
+        "TimePlayed": "PT12M27.4855S",
+        "ConfirmedParticipation": null
+      },
+      "PlayerTeamStats": [
+        {
+          "TeamId": 0,
+          "Stats": {
+            "CoreStats": {
+              "Score": 1250,
+              "PersonalScore": 1340,
+              "RoundsWon": 1,
+              "RoundsLost": 1,
+              "RoundsTied": 0,
+              "Kills": 11,
+              "Deaths": 8,
+              "Assists": 7,
+              "KDA": 5.33,
+              "Suicides": 0,
+              "Betrayals": 0,
+              "AverageLifeDuration": "PT41.6S",
+              "GrenadeKills": 2,
+              "HeadshotKills": 7,
+              "MeleeKills": 3,
+              "PowerWeaponKills": 1,
+              "ShotsFired": 310,
+              "ShotsHit": 161,
+              "Accuracy": 51.93,
+              "DamageDealt": 4820,
+              "DamageTaken": 3910,
+              "CalloutAssists": 4,
+              "VehicleDestroys": 0,
+              "DriverAssists": 0,
+              "Hijacks": 0,
+              "EmpAssists": 1,
+              "MaxKillingSpree": 5,
+              "Medals": [
+                {
+                  "NameId": 4000000001,
+                  "Count": 1,
+                  "TotalPersonalScoreAwarded": 50
+                },
+                {
+                  "NameId": 2063152177,
+                  "Count": 1,
+                  "TotalPersonalScoreAwarded": 100
+                }
+              ],
+              "PersonalScores": [
+                {
+                  "NameId": 1024030246,
+                  "Count": 11,
+                  "TotalPersonalScoreAwarded": 1100
+                },
+                {
+                  "NameId": 638246808,
+                  "Count": 7,
+                  "TotalPersonalScoreAwarded": 350
+                }
+              ],
+              "Spawns": 9,
+              "ObjectivesCompleted": 2,
+              "DeprecatedDamageDealt": 4820.5,
+              "DeprecatedDamageTaken": 3910.25
+            },
+            "OddballStats": {
+              "KillsAsSkullCarrier": 2,
+              "LongestTimeAsSkullCarrier": "PT38.4S",
+              "SkullCarriersKilled": 3,
+              "SkullGrabs": 5,
+              "TimeAsSkullCarrier": "PT1M32.5S",
+              "SkullScoringTicks": 92
+            },
+            "CaptureTheFlagStats": {
+              "FlagCaptureAssists": 1,
+              "FlagCaptures": 1,
+              "FlagCarriersKilled": 2,
+              "FlagGrabs": 3,
+              "FlagReturnersKilled": 1,
+              "FlagReturns": 1,
+              "FlagSecures": 1,
+              "FlagSteals": 2,
+              "KillsAsFlagCarrier": 1,
+              "KillsAsFlagReturner": 1,
+              "TimeAsFlagCarrier": "PT41.5S"
+            },
+            "PvpStats": {
+              "Kills": 11,
+              "Deaths": 8,
+              "Assists": 7,
+              "KDA": 5.33
+            }
+          }
+        }
+      ]
+    },
+    {
+      "PlayerId": "bid(2001.0)",
+      "PlayerType": 2,
+      "BotAttributes": {
+        "Difficulty": 2
+      },
+      "LastTeamId": 1,
+      "Outcome": 3,
+      "Rank": 2,
+      "ParticipationInfo": {
+        "FirstJoinedTime": "2026-11-20T19:02:11.417Z",
+        "LastLeaveTime": null,
+        "PresentAtBeginning": true,
+        "JoinedInProgress": false,
+        "LeftInProgress": false,
+        "PresentAtCompletion": true,
+        "TimePlayed": "PT12M27.4855S",
+        "ConfirmedParticipation": null
+      },
+      "PlayerTeamStats": [
+        {
+          "TeamId": 1,
+          "Stats": {
+            "CoreStats": {
+              "Score": 1250,
+              "PersonalScore": 1340,
+              "RoundsWon": 1,
+              "RoundsLost": 1,
+              "RoundsTied": 0,
+              "Kills": 6,
+              "Deaths": 12,
+              "Assists": 3,
+              "KDA": -5.0,
+              "Suicides": 0,
+              "Betrayals": 0,
+              "AverageLifeDuration": "PT41.6S",
+              "GrenadeKills": 2,
+              "HeadshotKills": 7,
+              "MeleeKills": 3,
+              "PowerWeaponKills": 1,
+              "ShotsFired": 310,
+              "ShotsHit": 161,
+              "Accuracy": 51.93,
+              "DamageDealt": 4820,
+              "DamageTaken": 3910,
+              "CalloutAssists": 4,
+              "VehicleDestroys": 0,
+              "DriverAssists": 0,
+              "Hijacks": 0,
+              "EmpAssists": 1,
+              "MaxKillingSpree": 5,
+              "Medals": [
+                {
+                  "NameId": 4000000001,
+                  "Count": 1,
+                  "TotalPersonalScoreAwarded": 50
+                },
+                {
+                  "NameId": 2063152177,
+                  "Count": 1,
+                  "TotalPersonalScoreAwarded": 100
+                }
+              ],
+              "PersonalScores": [
+                {
+                  "NameId": 1024030246,
+                  "Count": 6,
+                  "TotalPersonalScoreAwarded": 600
+                },
+                {
+                  "NameId": 638246808,
+                  "Count": 3,
+                  "TotalPersonalScoreAwarded": 150
+                }
+              ],
+              "Spawns": 13,
+              "ObjectivesCompleted": 2,
+              "DeprecatedDamageDealt": 4820.5,
+              "DeprecatedDamageTaken": 3910.25
+            },
+            "OddballStats": {
+              "KillsAsSkullCarrier": 2,
+              "LongestTimeAsSkullCarrier": "PT38.4S",
+              "SkullCarriersKilled": 3,
+              "SkullGrabs": 5,
+              "TimeAsSkullCarrier": "PT1M32.5S",
+              "SkullScoringTicks": 92
+            },
+            "CaptureTheFlagStats": {
+              "FlagCaptureAssists": 1,
+              "FlagCaptures": 1,
+              "FlagCarriersKilled": 2,
+              "FlagGrabs": 3,
+              "FlagReturnersKilled": 1,
+              "FlagReturns": 1,
+              "FlagSecures": 1,
+              "FlagSteals": 2,
+              "KillsAsFlagCarrier": 1,
+              "KillsAsFlagReturner": 1,
+              "TimeAsFlagCarrier": "PT41.5S"
+            },
+            "PvpStats": {
+              "Kills": 6,
+              "Deaths": 12,
+              "Assists": 3,
+              "KDA": -5.0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

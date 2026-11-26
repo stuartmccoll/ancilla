@@ -1,0 +1,69 @@
+{
+  "Value": [
+    {
+      "Id": "xuid({xuid:NobleSix})",
+      "ResultCode": 0,
+      "Result": {
+        "TeamId": 0,
+        "TeamMmr": 1452.7,
+        "TeamMmrs": {
+          "0": 1452.7,
+          "1": 1440.15
+        },
+        "RankRecap": {
+          "PreMatchCsr": {
+            "Value": 1440,
+            "MeasurementMatchesRemaining": 0,
+            "Tier": "Diamond",
+            "TierStart": 1400,
+            "SubTier": 4,
+            "NextTier": "Diamond",
+            "NextTierStart": 1450,
+            "NextSubTier": 5,
+            "InitialMeasurementMatches": 5,
+            "DemotionProtectionMatchesRemaining": 0,
+            "InitialDemotionProtectionMatches": 3
+          },
+          "PostMatchCsr": {
+            "Value": 1452,
+            "MeasurementMatchesRemaining": 0,
+            "Tier": "Diamond",
+            "TierStart": 1450,
+            "SubTier": 5,
+            "NextTier": "Onyx",
+            "NextTierStart": 1500,
+            "NextSubTier": 0,
+            "InitialMeasurementMatches": 5,
+            "DemotionProtectionMatchesRemaining": 0,
+            "InitialDemotionProtectionMatches": 3
+          }
+        },
+        "StatPerformances": {
+          "Kills": {
+            "Count": 14,
+            "Expected": 11.6,
+            "StdDev": 3.2
+          },
+          "Deaths": {
+            "Count": 9,
+            "Expected": 10.5,
+            "StdDev": 2.8
+          }
+        },
+        "Counterfactuals": {
+          "SelfCounterfactuals": {
+            "Kills": 11.6,
+            "Deaths": 10.5
+          },
+          "TierCounterfactuals": {
+            "Bronze": {
+              "Kills": 4.2,
+              "Deaths": 15.1
+            }
+          }
+        },
+        "RankedRewards": null
+      }
+    }
+  ]
+}

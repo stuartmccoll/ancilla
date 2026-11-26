@@ -1,0 +1,61 @@
+@* The page shell every page shares: head, navigation, and the unofficial-fan-project disclaimer in
+   the footer (N13: it's on every page). No scripts, and a content security policy that allows none,
+   so nothing on the site can load from anywhere but the site itself. *@
+<html lang="en-GB">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="description" content="@Description" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@(File == "index.html" ? "Ancilla: an unofficial Halo Infinite stats viewer" : $"{Title} · Ancilla")</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="stylesheet" href="assets/app.css" />
+    <link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="appbar">
+        <div class="appbar-inner">
+            <a class="brand" href="index.html" aria-label="Ancilla home"><Logo /></a>
+            <nav class="sections" aria-label="Site">
+                @foreach (var p in SiteBuilder.Pages)
+                {
+                    <a href="@p.File" aria-current="@(p.File == File ? "page" : null)">@p.Title</a>
+                }
+            </nav>
+        </div>
+    </header>
+
+    <main id="content">
+        @ChildContent
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <p>
+                <strong>Ancilla</strong> is an unofficial fan project. Not affiliated with, endorsed or sponsored by
+                Microsoft, Xbox or Halo Studios. Halo and Xbox are trademarks of Microsoft Corporation.
+            </p>
+            <p class="footer-links">
+                <a href="disclaimer.html">Disclaimer</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="@SiteModel.Repo">Source code</a>
+                <a href="@SiteModel.Issues">Report a problem</a>
+                <span>Free, with no ads, accounts or tracking</span>
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
+
+@code {
+    /// <summary>This page's file, to mark it in the navigation.</summary>
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

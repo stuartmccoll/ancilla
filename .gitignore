@@ -25,3 +25,6 @@ snapshots.json
 # Coverage output (see the README's Tests section)
 TestResults/
 coverage/
+
+# The project website's build output (dotnet run --project site -- --out _site)
+_site/

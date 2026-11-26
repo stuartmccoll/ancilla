@@ -1,0 +1,92 @@
+{
+  "Start": 0,
+  "Count": 25,
+  "ResultCount": 2,
+  "Results": [
+    {
+      "MatchId": "000ba771-0000-4000-8000-000000000117",
+      "MatchInfo": {
+        "StartTime": "2026-11-20T19:02:11.417Z",
+        "EndTime": "2026-11-20T19:14:38.902Z",
+        "Duration": "PT12M27.4855S",
+        "LifecycleMode": 3,
+        "GameVariantCategory": 18,
+        "LevelId": "6b1d3f7a-0000-4000-8000-000000000001",
+        "MapVariant": {
+          "AssetKind": 2,
+          "AssetId": "0000ba5e-0000-4000-8000-000000000001",
+          "VersionId": "0000fe25-0000-4000-8000-000000000001"
+        },
+        "UgcGameVariant": {
+          "AssetKind": 6,
+          "AssetId": "0000a0de-0000-4000-8000-000000000006",
+          "VersionId": "0000fe25-0000-4000-8000-000000000006"
+        },
+        "ClearanceId": "c0a1a2a3-0000-4000-8000-000000000117",
+        "Playlist": {
+          "AssetKind": 3,
+          "AssetId": "edfef3ac-9cbe-4fa2-b949-8f29deafd483",
+          "VersionId": "0000fe25-0000-4000-8000-000000000021"
+        },
+        "PlaylistExperience": 2,
+        "PlaylistMapModePair": {
+          "AssetKind": 7,
+          "AssetId": "00001157-0000-4000-8000-000000000007",
+          "VersionId": "0000fe25-0000-4000-8000-000000000007"
+        },
+        "SeasonId": "Seasons/Season7.json",
+        "PlayableDuration": "PT12M20S",
+        "TeamsEnabled": true,
+        "TeamScoringEnabled": true,
+        "GameplayInteraction": 1
+      },
+      "LastTeamId": 0,
+      "Outcome": 2,
+      "Rank": 1,
+      "PresentAtEndOfMatch": true
+    },
+    {
+      "MatchId": "000ba771-0000-4000-8000-000000000118",
+      "MatchInfo": {
+        "StartTime": "2026-11-20T19:02:11.417Z",
+        "EndTime": "2026-11-20T19:14:38.902Z",
+        "Duration": "PT12M27.4855S",
+        "LifecycleMode": 3,
+        "GameVariantCategory": 18,
+        "LevelId": "6b1d3f7a-0000-4000-8000-000000000001",
+        "MapVariant": {
+          "AssetKind": 2,
+          "AssetId": "0000ba5e-0000-4000-8000-000000000001",
+          "VersionId": "0000fe25-0000-4000-8000-000000000001"
+        },
+        "UgcGameVariant": {
+          "AssetKind": 6,
+          "AssetId": "0000a0de-0000-4000-8000-000000000006",
+          "VersionId": "0000fe25-0000-4000-8000-000000000006"
+        },
+        "ClearanceId": "c0a1a2a3-0000-4000-8000-000000000117",
+        "Playlist": {
+          "AssetKind": 3,
+          "AssetId": "edfef3ac-9cbe-4fa2-b949-8f29deafd483",
+          "VersionId": "0000fe25-0000-4000-8000-000000000021"
+        },
+        "PlaylistExperience": 2,
+        "PlaylistMapModePair": {
+          "AssetKind": 7,
+          "AssetId": "00001157-0000-4000-8000-000000000007",
+          "VersionId": "0000fe25-0000-4000-8000-000000000007"
+        },
+        "SeasonId": "Seasons/Season7.json",
+        "PlayableDuration": "PT12M20S",
+        "TeamsEnabled": true,
+        "TeamScoringEnabled": true,
+        "GameplayInteraction": 1
+      },
+      "LastTeamId": 0,
+      "Outcome": 3,
+      "Rank": 2,
+      "PresentAtEndOfMatch": true
+    }
+  ],
+  "Links": {}
+}

@@ -1,0 +1,10 @@
+{
+  "xuid": "{xuid:NobleSix}",
+  "gamertag": "Noble Six",
+  "gamerpic": {
+    "small": "https://example.invalid/gamerpics/noble-six-64.png",
+    "medium": "https://example.invalid/gamerpics/noble-six-208.png",
+    "large": "https://example.invalid/gamerpics/noble-six-424.png",
+    "xlarge": "https://example.invalid/gamerpics/noble-six-1080.png"
+  }
+}

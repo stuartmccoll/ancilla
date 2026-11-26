@@ -1,0 +1,77 @@
+<SiteLayout File="index.html" Title="Home"
+            Description="Ancilla is a free, unofficial Halo Infinite stats viewer for Windows: battle pass and Hero progress, service record, medals, matches and more.">
+    <section class="hero">
+        <h1>Your Halo Infinite stats, on your own computer</h1>
+        <p class="lede">
+            Ancilla is a free desktop app for Windows. It shows how many more matches you need to finish your
+            battle passes and reach Hero, plus your service record, medals, match history and the players you meet.
+        </p>
+        <p class="actions">
+            <a class="button" href="download.html">Download Ancilla</a>
+            <a class="button secondary" href="@SiteModel.Repo">See the source code</a>
+        </p>
+        <p class="hint">An unofficial fan project. You sign in with your own Xbox account, and your data stays on your computer.</p>
+    </section>
+
+    <section aria-labelledby="what">
+        <h2 id="what">What it does</h2>
+        <ul class="features">
+            <li class="card">
+                <h3>Progress</h3>
+                <p>How many matches until you finish each battle pass and reach Hero, measured from your own recent games, with a forecast date.</p>
+            </li>
+            <li class="card">
+                <h3>Service record and medals</h3>
+                <p>Your career figures, with PvP worked out separately from Firefight, and how often you earn each medal.</p>
+            </li>
+            <li class="card">
+                <h3>Match history</h3>
+                <p>Every match's full scoreboard, your skill result, and the matchmaker's expected kills and deaths.</p>
+            </li>
+            <li class="card">
+                <h3>Match timeline</h3>
+                <p>Who killed whom and when, medals and flag actions, read from the match's Theater film.</p>
+            </li>
+            <li class="card">
+                <h3>Trends and insights</h3>
+                <p>Your K/D, kills against the matchmaker's expectations and ranked CSR over time, and the maps, modes and playlists where you do best.</p>
+            </li>
+            <li class="card">
+                <h3>Players you meet</h3>
+                <p>The people you play with and against most, and how your matches with them went.</p>
+            </li>
+        </ul>
+    </section>
+
+    @if (Site.Screenshots.Count > 0)
+    {
+        <section aria-labelledby="screens">
+            <h2 id="screens">Screenshots</h2>
+            <p class="muted">These show made-up players, from the test data Ancilla is built with.</p>
+            <div class="shots">
+                @foreach (var s in Site.Screenshots)
+                {
+                    <figure class="card">
+                        <img src="screenshots/@s.File" alt="@s.Alt" width="1280" height="800" loading="lazy" />
+                        <figcaption>@s.Caption</figcaption>
+                    </figure>
+                }
+            </div>
+        </section>
+    }
+
+    <section aria-labelledby="private">
+        <h2 id="private">Private by design</h2>
+        <div class="card prose">
+            <p>
+                Ancilla has no account and no server of its own. It talks to the same services halowaypoint.com uses, signed
+                in as you, and keeps what it loads on your computer. Nothing is sent anywhere else.
+                <a href="privacy.html">Read the privacy statement</a>.
+            </p>
+        </div>
+    </section>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired] public SiteModel Site { get; set; } = null!;
+}

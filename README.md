@@ -21,7 +21,8 @@ src/Ancilla.UI       every page, component and service (Razor class library, sha
 src/Ancilla.App      the desktop app: .NET MAUI Blazor Hybrid, Windows (WinUI) and macOS (Mac Catalyst)
 src/Ancilla.Web      web dev host for Ancilla.UI (interactive server rendering), for hot reload and browser tests
 src/Ancilla.Theater  Theater film decoding and match analysis, used by the app (see src/Ancilla.Theater/README.md)
-src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline)
+src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline) and the API drift check
+site/                the project website (GitHub Pages), rendered to static HTML (see Website)
 tests/               unit, component and browser tests on synthetic data (dotnet test; see Tests)
 ```
 
@@ -147,11 +148,11 @@ Nothing needs a Spartan token or a network connection to Halo. The tests come in
 
 | Project | What it covers | Tools |
 |---|---|---|
-| `tests/Ancilla.Core.Tests` | The API client (URLs, headers, ID checks, error messages), progress and service record maths, caching, snapshots | xUnit |
+| `tests/Ancilla.Core.Tests` | The API client (URLs, headers, ID checks, error messages), the API contract (every endpoint parses its fixture, which holds every field the models need) and the drift check, progress and service record maths, caching, snapshots | xUnit |
 | `tests/Ancilla.Data.Tests` | The SQLite archive: schema migrations (an empty database and every earlier schema), storage per player, the one-off snapshot import, CSV and JSON export | xUnit |
 | `tests/Ancilla.Theater.Tests` | Theater film decoding, on films built bit by bit | xUnit |
 | `tests/Ancilla.UI.Tests` | Formatting and chart helpers, `HaloSession` (sign-in, filters, caching, throttling, quiet failures), the desktop shell's asset provider, theme preference and export, the settings file, listing, exporting and deleting everything stored (a test checks no files are left), and every page and shared component rendered without a browser | xUnit, bUnit |
-| `tests/Ancilla.Web.E2E` | The web dev host in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme | xUnit, Playwright, axe-core |
+| `tests/Ancilla.Web.E2E` | The web dev host in Chromium: every route, sign-in, navigation, themes, the token staying on the server, and axe accessibility checks (WCAG 2.1 A and AA, colour contrast included) on every main page in every theme. The project website: axe on every page in light and dark, the disclaimer on every page, no scripts or requests elsewhere, and the download links | xUnit, Playwright, axe-core |
 
 `tests/Ancilla.Testing` holds a fake of the Halo Waypoint services (`FakeHalo`) that answers the
 same URLs as the real ones, from a made-up world (`HaloWorld`): Noble Six and the rest of Noble Team,
@@ -161,6 +162,13 @@ have Theater films, built bit by bit (`Synthetic.cs`, which the Theater tests sh
 kill feed and one that ended without a summary. The component and
 browser tests use it in place of halowaypoint.com, and the browser tests sign in with its token
 through `HALO_SPARTAN_TOKEN`.
+
+`tests/Ancilla.Testing/Fixtures` holds one response per endpoint (`ApiContract.Endpoints` lists them),
+hand-written in the shape the real services answer with, extra fields included, and filled with made-up
+Halo values. They're never recorded from the real API. XUIDs are placeholders (`{xuid:NobleSix}`) that
+the tests fill in. A test fails when `HaloWaypointClient` gains an endpoint that isn't in the contract,
+or a model gains a field its fixture lacks. See [Checking for API changes](#checking-for-api-changes)
+for comparing them with the live API.
 
 The first browser test run downloads Chromium (about 150 MB) through Playwright. CI runs the browser
 tests in their own Ubuntu job.
@@ -369,13 +377,68 @@ Progress semantics: `CurrentProgress.Rank` = ranks **completed**, and `PartialPr
 the next one. Operations have a flat `XpPerRank` (1,000). Career rank has 272 ranks, each with its
 own `XpRequiredForRank`; reaching Hero takes 9,319,351 XP in total.
 
-## Ideas for next steps
+### Checking for API changes
 
-- A direct Microsoft sign-in, as one more `ISpartanTokenSource`: Microsoft account OAuth, then an
-  Xbox Live user token, then an XSTS token for the Halo relying party, then a Spartan token from
-  `settings.svc.halowaypoint.com/spartan-token`. This needs an app registration Microsoft doesn't
-  currently grant for Xbox Live.
-- More themes: Xbox 360, Xbox One, Xbox Series X|S.
+The API is undocumented and can change without notice. The drift check calls every endpoint the app
+uses, with your own IDs, and compares the shape of each response (field names and kinds of value,
+never the values) with what the models read and with the endpoint's fixture. Run it on demand, for
+example before a release. It needs your token, so it isn't run in CI:
+
+```bash
+HALO_SPARTAN_TOKEN='v4=...' dotnet run --project src/Ancilla.Theater.Cli -- drift
+```
+
+For each endpoint it reports fields that were added, have gone missing or hold a different kind of
+value. They're in two groups:
+
+- **Could break Ancilla**: a field a model needs is missing, or holds a kind of value the model can't
+  take (text where a number was, a fraction where a whole number was, null where null isn't allowed),
+  or the endpoint failed. Fix the models, then the fixture. The command exits with 1.
+- **Doesn't break Ancilla**: other changes since the fixture was written, and optional fields the
+  models can do without going missing. Update the fixture to the new shape, with made-up values.
+
+Fields the models make nullable are optional: `KDA`, for instance, is only in match stats. Fields
+inside an empty list or a null object aren't reported as missing, and neither are per-mode stat groups
+(`OddballStats`, `PveStats`...), as each match has only its own mode's; a new group is reported as added.
+A few big objects Ancilla doesn't read (a game variant's settings, a playlist's rotation) are untracked:
+only their presence is checked (`Untracked` in `ApiContract.Endpoints`). Endpoints the player's data gives
+nothing to call with are skipped. It uses your latest matchmade match that isn't Firefight (which has
+no skill results), so its film manifest fails if that film has expired.
+
+An added object is reported with a count of the fields inside it. Add `--detail` to list them, with
+their kinds, when you need them for a fixture.
+
+Responses stay in memory. Dictionary keys and anything that isn't a field name (IDs, XUIDs, locales)
+show as `*`, and the report goes through the same redactor as the logs, with your token, clearance and
+gamertag registered. To check a saved report with the privacy check too:
+
+```bash
+mkdir -p ~/ancilla-drift
+HALO_SPARTAN_TOKEN='v4=...' dotnet run --project src/Ancilla.Theater.Cli -- drift > ~/ancilla-drift/report.txt
+.github/scripts/privacy-check.sh --log ~/ancilla-drift
+```
+
+## Website
+
+`site/` is the project website: what Ancilla does, screenshots, the download, a getting started guide
+(installing, the first-launch warning and signing in), privacy and the disclaimer. It's a small console app that renders Razor components to static HTML with
+`HtmlRenderer`, using the app's `Logo` and `app.css` in the Basic theme (light or dark, following the
+system). The pages have no scripts, cookies or analytics, and a content security policy that stops them
+loading anything from elsewhere.
+
+```bash
+dotnet run --project site -- --out _site                      # open _site/index.html
+dotnet run --project site -- --out _site --release latest.json --screenshots shots
+```
+
+`--release` takes GitHub's latest-release response (`gh api repos/{owner}/{repo}/releases/latest`), and
+the download page links to its Windows installer, found by extension (`.msix`, `.msi`, `.exe`, in that
+order). Without one, it says it's coming soon. The site only mentions Windows. `--screenshots` takes the PNGs that
+`SiteScreenshots` in the browser tests saves when `ANCILLA_SITE_SCREENSHOTS` names a folder: the web dev
+host signed in to the fake backend, so they only show made-up players.
+
+`.github/workflows/site.yml` does all of that and publishes to GitHub Pages on each release, when the site
+changes on `main`, and by hand. The repository's Pages source must be set to GitHub Actions.
 
 ## Disclaimer
 

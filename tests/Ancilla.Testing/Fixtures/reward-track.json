@@ -1,0 +1,164 @@
+{
+  "TrackId": "careerRank1",
+  "Name": {
+    "value": "Career Rank",
+    "status": "Unchanged",
+    "translations": {
+      "fr-FR": "Rang de carrière"
+    }
+  },
+  "Description": {
+    "value": "Rise through the ranks of the UNSC.",
+    "status": "Unchanged",
+    "translations": {
+      "fr-FR": "Rise through the ranks of the UNSC."
+    }
+  },
+  "XpPerRank": null,
+  "OperationNumber": 0,
+  "IsRitual": false,
+  "WeekNumber": null,
+  "DateRange": {
+    "value": "Always available",
+    "status": "Unchanged",
+    "translations": {
+      "fr-FR": "Toujours disponible"
+    }
+  },
+  "SummaryImagePath": "career_rank/Summary/CareerRank.png",
+  "BackgroundImagePath": "career_rank/Background/Reach.png",
+  "Ranks": [
+    {
+      "Rank": 1,
+      "FreeRewards": {
+        "InventoryRewards": [
+          {
+            "InventoryItemPath": "Inventory/Spartan/Emblems/Recruit1.json",
+            "Amount": 1,
+            "Type": "SpartanEmblem"
+          }
+        ],
+        "CurrencyRewards": []
+      },
+      "PaidRewards": {
+        "InventoryRewards": [],
+        "CurrencyRewards": []
+      },
+      "XpRequiredForRank": 500,
+      "RankTitle": {
+        "value": "Recruit",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "Recruit"
+        }
+      },
+      "RankSubTitle": {
+        "value": "Bronze",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "Bronze"
+        }
+      },
+      "RankTier": {
+        "value": "1",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "1"
+        }
+      },
+      "RankIcon": "career_rank/ProgressWidget/1_Recruit.png",
+      "RankAdornmentIcon": "career_rank/NameplateAdornment/1_Recruit.png",
+      "RankLargeIcon": "career_rank/CelebrationMoment/1_Recruit.png",
+      "TierType": "Bronze",
+      "RankGrade": 1
+    },
+    {
+      "Rank": 2,
+      "FreeRewards": {
+        "InventoryRewards": [
+          {
+            "InventoryItemPath": "Inventory/Spartan/Emblems/Recruit2.json",
+            "Amount": 1,
+            "Type": "SpartanEmblem"
+          }
+        ],
+        "CurrencyRewards": []
+      },
+      "PaidRewards": {
+        "InventoryRewards": [],
+        "CurrencyRewards": []
+      },
+      "XpRequiredForRank": 750,
+      "RankTitle": {
+        "value": "Recruit",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "Recruit"
+        }
+      },
+      "RankSubTitle": {
+        "value": "Bronze",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "Bronze"
+        }
+      },
+      "RankTier": {
+        "value": "2",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "2"
+        }
+      },
+      "RankIcon": "career_rank/ProgressWidget/2_Recruit.png",
+      "RankAdornmentIcon": "career_rank/NameplateAdornment/2_Recruit.png",
+      "RankLargeIcon": "career_rank/CelebrationMoment/2_Recruit.png",
+      "TierType": "Bronze",
+      "RankGrade": 1
+    },
+    {
+      "Rank": 3,
+      "FreeRewards": {
+        "InventoryRewards": [
+          {
+            "InventoryItemPath": "Inventory/Spartan/Emblems/Cadet3.json",
+            "Amount": 1,
+            "Type": "SpartanEmblem"
+          }
+        ],
+        "CurrencyRewards": []
+      },
+      "PaidRewards": {
+        "InventoryRewards": [],
+        "CurrencyRewards": []
+      },
+      "XpRequiredForRank": 1000,
+      "RankTitle": {
+        "value": "Cadet",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "Cadet"
+        }
+      },
+      "RankSubTitle": {
+        "value": "Silver",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "Silver"
+        }
+      },
+      "RankTier": {
+        "value": "1",
+        "status": "Unchanged",
+        "translations": {
+          "fr-FR": "1"
+        }
+      },
+      "RankIcon": "career_rank/ProgressWidget/3_Cadet.png",
+      "RankAdornmentIcon": "career_rank/NameplateAdornment/3_Cadet.png",
+      "RankLargeIcon": "career_rank/CelebrationMoment/3_Cadet.png",
+      "TierType": "Silver",
+      "RankGrade": 1
+    }
+  ]
+}

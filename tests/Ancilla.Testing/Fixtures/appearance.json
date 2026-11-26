@@ -1,0 +1,17 @@
+{
+  "Status": "Ok",
+  "Appearance": {
+    "LastModifiedDateUtc": {
+      "ISO8601Date": "2026-11-01T09:00:00Z"
+    },
+    "ActionPosePath": "Inventory/Spartan/ActionPoses/NobleStance.json",
+    "BackdropImagePath": "Inventory/Spartan/BackdropImages/Reach.json",
+    "Emblem": {
+      "EmblemPath": "Inventory/Spartan/Emblems/NobleTeam.json",
+      "ConfigurationId": 117
+    },
+    "ServiceTag": "B312",
+    "IntroEmotePath": "Inventory/Spartan/IntroEmotes/Salute.json",
+    "PlayerTitlePath": "Inventory/Spartan/PlayerTitles/LoneWolf.json"
+  }
+}
