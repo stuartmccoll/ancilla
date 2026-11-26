@@ -24,6 +24,7 @@ try
         "track" => Track(ResolveMatch(rest.FirstOrDefault())),
         "rounds" => RoundsFired(ResolveMatch(rest.FirstOrDefault())),
         "floor" => await FloorAsync(ResolveMatch(rest.FirstOrDefault())),
+        "drift" => await DriftAsync(),
         "dump" => Dump(ResolveMatch(rest.FirstOrDefault()), rest.Length > 1 ? ParseNumber(rest[1], "chunk index") : 0),
         _ => Help(),
     };
@@ -64,9 +65,48 @@ int Help()
         Ancilla.Theater track [matchId]        biped positions as CSV (tick, ms, slot, x, y, z), for controlled tests
         Ancilla.Theater floor [matchId]        fit the map's navmesh to the film (scale, origin); fetching it needs HALO_SPARTAN_TOKEN
         Ancilla.Theater dump [matchId] [index] write chunk <index> decompressed, for hex tools
+        Ancilla.Theater drift                  compare every Halo API response's shape with the models and fixtures; needs HALO_SPARTAN_TOKEN
+                              --detail       list every field inside added objects, for updating the fixtures
         """);
     Console.WriteLine($"Cache: {cache.DisplayRoot}");
     return 0;
+}
+
+// The drift check (README, "Checking for API changes"): calls every endpoint the app uses with the
+// player's own IDs and prints how each response's shape differs from what the models read and from
+// its fixture. Field names and kinds only: responses stay in memory, and the report goes through the
+// redactor, with the token, clearance and gamertag registered, before it's printed.
+// Exit code 1 when something Ancilla needs has changed or an endpoint failed.
+async Task<int> DriftAsync()
+{
+    // Anything else is a mistake, such as "-- detail" for "--detail": say so rather than ignore it.
+    string[] options = ["--detail"];
+    foreach (var arg in args.Skip(1).Where(a => !options.Contains(a)))
+    {
+        var near = options.FirstOrDefault(o => o.TrimStart('-').Equals(arg.TrimStart('-'), StringComparison.OrdinalIgnoreCase));
+        throw new ArgumentException(arg == "--"
+            ? "drift got a '--' of its own. Only one '--' is needed, before 'drift'; write options as '--detail', with no space."
+            : $"drift doesn't take '{arg}'{(near is null ? "" : $" (did you mean '{near}'?)")}. Its only option is --detail.");
+    }
+
+    var token = Environment.GetEnvironmentVariable("HALO_SPARTAN_TOKEN");
+    if (string.IsNullOrWhiteSpace(token)) { Console.Error.WriteLine("Set HALO_SPARTAN_TOKEN first."); return 1; }
+
+    var diagnostics = new HaloDiagnostics();
+    var recorder = new ResponseRecorder { InnerHandler = new SocketsHttpHandler { AllowAutoRedirect = false } };
+    using var http = new HttpClient(recorder) { Timeout = TimeSpan.FromMinutes(1) };
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("Ancilla-Theater/0.1");
+
+    Console.Error.WriteLine("Finding IDs to call each endpoint with...");
+    var sample = await ApiSample.DiscoverAsync(new HaloWaypointClient(http, token, diagnostics));
+    diagnostics.Redactor.Register(sample.Gamertag);
+    // A new client, so the clearance endpoint is really called rather than remembered.
+    var report = await ApiDrift.RunAsync(new HaloWaypointClient(http, token, diagnostics), recorder, sample,
+        name => File.Exists(Path.Combine(AppContext.BaseDirectory, "Fixtures", name))
+            ? File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name)) : null,
+        diagnostics.Redactor);
+    Console.Write(diagnostics.Redactor.Redact(report.Format(args.Contains("--detail"))));
+    return report.Breaks ? 1 : 0;
 }
 
 async Task<int> FetchManyAsync(string? matchId)

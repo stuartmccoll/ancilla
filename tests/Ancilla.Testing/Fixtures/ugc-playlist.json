@@ -1,0 +1,86 @@
+{
+  "CustomData": {
+    "Strategy": 1,
+    "MinTeams": 2,
+    "MinTeamSize": 4,
+    "MaxTeams": 2,
+    "MaxTeamSize": 4,
+    "MaxTeamImbalance": 0,
+    "MaxSplitscreenPlayersAllowed": 1,
+    "AllowFriendJoinInProgress": false,
+    "AllowMatchmakingJoinInProgress": false,
+    "AllowBotJoinInProgress": false,
+    "ExitExperienceDurationSec": 30,
+    "FireteamLeaderKickAllowed": true,
+    "DisableMidgameChat": false,
+    "BotDifficulty": 2,
+    "MinFireteamSize": 1,
+    "MaxFireteamSize": 4,
+    "PlaylistEntries": [
+      {
+        "MapModePairAssetId": "00001157-0000-4000-8000-000000000007",
+        "Metadata": {
+          "Weight": 1.5
+        }
+      },
+      {
+        "MapModePairAssetId": "00001157-0000-4000-8000-000000000008",
+        "Metadata": {
+          "Weight": 0.75
+        }
+      }
+    ],
+    "AllowedDeviceInputs": [
+      1,
+      2
+    ]
+  },
+  "Tags": [
+    "Ranked"
+  ],
+  "AssetId": "edfef3ac-9cbe-4fa2-b949-8f29deafd483",
+  "VersionId": "0000fe25-0000-4000-8000-000000000021",
+  "PublicName": "Ranked Arena",
+  "Description": "Prove yourself against Spartans of your skill.",
+  "Files": {
+    "Prefix": "https://blobs-infiniteugc.svc.halowaypoint.com/ugcstorage/playlist/edfef3ac-9cbe-4fa2-b949-8f29deafd483/0000fe25-0000-4000-8000-000000000021/",
+    "FileRelativePaths": [
+      "images/thumbnail.jpg",
+      "images/hero.jpg"
+    ],
+    "PrefixEndpoint": {
+      "AuthorityId": "iUgcFiles",
+      "Path": "/ugcstorage/playlist/edfef3ac-9cbe-4fa2-b949-8f29deafd483/0000fe25-0000-4000-8000-000000000021/",
+      "QueryString": null,
+      "RetryPolicyId": "linearretry",
+      "TopicName": "",
+      "AcknowledgementTypeId": 0,
+      "AuthenticationLifetimeExtensionSupported": false,
+      "ClearanceAware": false
+    }
+  },
+  "Contributors": [
+    "xuid({xuid:NobleSix})"
+  ],
+  "AssetHome": 1,
+  "AssetStats": {
+    "PlaysRecent": 117,
+    "PlaysAllTime": 25000,
+    "Favorites": 312,
+    "Likes": 520,
+    "Bookmarks": 41,
+    "ParentAssetCount": 0,
+    "AverageRating": 4.5,
+    "NumberOfRatings": 88
+  },
+  "InspectionResult": 0,
+  "CloneBehavior": 0,
+  "Order": 0,
+  "PublishedDate": {
+    "ISO8601Date": "2026-03-04T17:00:00Z"
+  },
+  "VersionNumber": 7,
+  "Admin": null,
+  "DisplayOwnerOverride": "Noble Team",
+  "RotationEntries": []
+}

@@ -1,0 +1,167 @@
+{
+  "Subqueries": {
+    "SeasonIds": [
+      "Seasons/Season7.json"
+    ],
+    "GameVariantCategories": [
+      6,
+      15,
+      18
+    ],
+    "IsRanked": [
+      true,
+      false
+    ],
+    "PlaylistAssetIds": [
+      "edfef3ac-9cbe-4fa2-b949-8f29deafd483"
+    ],
+    "GameplayInteractions": null
+  },
+  "TimePlayed": "P2DT7H14M9.5S",
+  "MatchesCompleted": 117,
+  "Wins": 64,
+  "Losses": 50,
+  "Ties": 3,
+  "CoreStats": {
+    "Score": 146250,
+    "PersonalScore": 156780,
+    "RoundsWon": 117,
+    "RoundsLost": 117,
+    "RoundsTied": 0,
+    "Kills": 1402,
+    "Deaths": 1188,
+    "Assists": 611,
+    "AverageKDA": 3.56982905982906,
+    "Suicides": 0,
+    "Betrayals": 0,
+    "GrenadeKills": 234,
+    "HeadshotKills": 819,
+    "MeleeKills": 351,
+    "PowerWeaponKills": 117,
+    "ShotsFired": 36270,
+    "ShotsHit": 18837,
+    "Accuracy": 51.93,
+    "DamageDealt": 563940,
+    "DamageTaken": 457470,
+    "CalloutAssists": 468,
+    "VehicleDestroys": 0,
+    "DriverAssists": 0,
+    "Hijacks": 0,
+    "EmpAssists": 117,
+    "MaxKillingSpree": 5,
+    "Medals": [
+      {
+        "NameId": 4000000001,
+        "Count": 117,
+        "TotalPersonalScoreAwarded": 5850
+      },
+      {
+        "NameId": 2063152177,
+        "Count": 1,
+        "TotalPersonalScoreAwarded": 100
+      }
+    ],
+    "PersonalScores": [
+      {
+        "NameId": 1024030246,
+        "Count": 1402,
+        "TotalPersonalScoreAwarded": 140200
+      },
+      {
+        "NameId": 638246808,
+        "Count": 611,
+        "TotalPersonalScoreAwarded": 30550
+      }
+    ],
+    "Spawns": 1189,
+    "ObjectivesCompleted": 234
+  },
+  "CaptureTheFlagStats": {
+    "FlagCaptureAssists": 117,
+    "FlagCaptures": 117,
+    "FlagCarriersKilled": 234,
+    "FlagGrabs": 351,
+    "FlagReturnersKilled": 117,
+    "FlagReturns": 117,
+    "FlagSecures": 117,
+    "FlagSteals": 234,
+    "KillsAsFlagCarrier": 117,
+    "KillsAsFlagReturner": 117,
+    "TimeAsFlagCarrier": "PT41.5S"
+  },
+  "OddballStats": {
+    "KillsAsSkullCarrier": 2,
+    "LongestTimeAsSkullCarrier": "PT38.4S",
+    "SkullCarriersKilled": 3,
+    "SkullGrabs": 5,
+    "TimeAsSkullCarrier": "PT1M32.5S",
+    "SkullScoringTicks": 92
+  },
+  "ZonesStats": {
+    "ZoneCaptures": 52,
+    "ZoneDefensiveKills": 77,
+    "ZoneOffensiveKills": 63,
+    "ZoneSecures": 48,
+    "TotalZoneOccupationTime": "PT1H2M9S",
+    "ZoneScoringTicks": 410
+  },
+  "EliminationStats": {
+    "AlliesRevived": 12,
+    "EliminationAssists": 30,
+    "Eliminations": 41,
+    "EnemyRevivesDenied": 9,
+    "Executions": 6,
+    "KillsAsLastPlayerStanding": 4,
+    "LastPlayersStandingKilled": 7,
+    "RoundsSurvived": 19,
+    "TimesRevivedByAlly": 10
+  },
+  "ExtractionStats": {
+    "SuccessfulExtractions": 8,
+    "ExtractionConversionsDenied": 5,
+    "ExtractionConversionsCompleted": 6,
+    "ExtractionInitiationsDenied": 4,
+    "ExtractionInitiationsCompleted": 11
+  },
+  "InfectionStats": {
+    "AlphasKilled": 9,
+    "SpartansInfected": 64,
+    "SpartansInfectedAsAlpha": 17,
+    "KillsAsLastSpartanStanding": 12,
+    "LastSpartansStandingInfected": 7,
+    "RoundsAsAlpha": 5,
+    "RoundsAsLastSpartanStanding": 3,
+    "RoundsFinishedAsInfected": 21,
+    "RoundsSurvivedAsSpartan": 14,
+    "RoundsSurvivedAsLastSpartanStanding": 2,
+    "TimeAsLastSpartanStanding": "PT2M41.3S",
+    "InfectedKilled": 88
+  },
+  "StockpileStats": {
+    "KillsAsPowerSeedCarrier": 6,
+    "PowerSeedCarriersKilled": 13,
+    "PowerSeedsDeposited": 27,
+    "PowerSeedsStolen": 9,
+    "TimeAsPowerSeedCarrier": "PT6M12.5S",
+    "TimeAsPowerSeedDriver": "PT1M3S"
+  },
+  "PveStats": {
+    "Kills": 2210,
+    "Deaths": 96,
+    "Assists": 340,
+    "MarineKills": 0,
+    "GruntKills": 1150,
+    "JackalKills": 402,
+    "EliteKills": 233,
+    "BruteKills": 310,
+    "HunterKills": 18,
+    "SkimmerKills": 61,
+    "SentinelKills": 24,
+    "BossKills": 12
+  },
+  "PvpStats": {
+    "Kills": 1402,
+    "Deaths": 1188,
+    "Assists": 611
+  }
+}
