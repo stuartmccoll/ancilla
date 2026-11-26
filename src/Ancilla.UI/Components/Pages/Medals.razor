@@ -30,12 +30,13 @@
             var got = all.Count(m => _earned.GetValueOrDefault(m.NameId) > 0);
             var pct = all.Count == 0 ? 0 : 100.0 * got / all.Count;
             var on = _difficulty == d;
+            @* The name comes from the visible text, so voice control users can say what they see.
+               aria-pressed tells screen readers whether the filter is on. *@
             <button class="link seg @(on ? "on" : "")" aria-pressed="@(on ? "true" : "false")"
-                    aria-label="@($"{TypeLabel(d)}: {got} of {all.Count} earned. {(on ? "Showing only these; select to show all." : "Select to show only these.")}")"
                     @onclick="() => _difficulty = on ? null : d">
                 <span class="seg-head">
                     <span class="diff diff-@d">@TypeLabel(d)</span>
-                    <span class="seg-count">@got/@all.Count</span>
+                    <span class="seg-count">@got/@all.Count<span class="visually-hidden"> earned</span></span>
                 </span>
                 <span class="bar small"><span class="fill fill-@d" style="width:@Fmt.Css(pct)%"></span></span>
             </button>

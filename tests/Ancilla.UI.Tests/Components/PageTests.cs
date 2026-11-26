@@ -172,6 +172,24 @@ public sealed class MedalsPageTests : ComponentTest
     }
 
     [Fact]
+    public async Task Difficulty_buttons_are_named_by_their_visible_text()
+    {
+        await SignInAsync();
+        var cut = Render<Medals>();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".collection button.seg")), Wait);
+
+        // An aria-label that differs from what's on screen breaks voice control (WCAG 2.5.3).
+        foreach (var button in cut.FindAll(".collection button.seg"))
+        {
+            Assert.Null(button.GetAttribute("aria-label"));
+            Assert.Matches(@"^\S.* \d+/\d+ earned$", string.Join(' ', button.TextContent.Split((char[])[' ', '\n'], StringSplitOptions.RemoveEmptyEntries)));
+        }
+
+        OnRenderer(cut, () => cut.FindAll(".collection button.seg")[0].Click());
+        Assert.Equal("true", cut.FindAll(".collection button.seg")[0].GetAttribute("aria-pressed"));
+    }
+
+    [Fact]
     public async Task Searches_names_and_descriptions()
     {
         await SignInAsync();
