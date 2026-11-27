@@ -3,7 +3,7 @@
 Ancilla is an unofficial Halo Infinite stats viewer: a .NET 10 Blazor app that calls the undocumented
 services behind halowaypoint.com with the user's Spartan token. The pages live in a Razor class
 library (`Ancilla.UI`) with two hosts: the desktop app (`Ancilla.App`, .NET MAUI Blazor Hybrid, Windows
-and macOS) and a web dev host (`Ancilla.Web`, interactive server rendering) for hot reload and the
+only) and a web dev host (`Ancilla.Web`, interactive server rendering) for hot reload and the
 browser tests. See README.md for features, the API endpoint table and data quirks.
 
 ## Commands
@@ -20,10 +20,9 @@ dotnet run --project site -- --out _site                       # the project web
 HALO_SPARTAN_TOKEN=... dotnet run --project src/Ancilla.Theater.Cli -- drift   # live API shape vs models and fixtures (the user runs it)
 ```
 
-`Ancilla.App` isn't in `Ancilla.sln`: it needs the MAUI workload and has no Linux target, so
-`dotnet build` from the root skips it. Build it on its own after changing it, or anything it
-registers. On Windows it builds the WinUI target; on macOS, run it with
-`dotnet build src/Ancilla.App -t:Run -f net10.0-maccatalyst`.
+`Ancilla.App` isn't in `Ancilla.sln`: it needs the MAUI workload and only builds on Windows (its
+WinUI target), so `dotnet build` from the root skips it. Build it on its own on Windows after
+changing it, or anything it registers.
 
 With `dotnet watch`, some edits (new types, changed record parameters, `Program.cs`) can't be
 hot reloaded and force a restart. A restart drops every session, so the user signs in again unless
@@ -57,7 +56,7 @@ data, API responses, gamertags or XUIDs as fixtures. Write XUIDs in hex (`Sparta
 check never sees a decimal one. Verify changes by building with zero warnings and running the tests.
 For UI changes, also run the app. CI (`.github/workflows/ci.yml`) runs the privacy check, then builds
 with warnings as errors and runs the tests on Ubuntu and Windows, with the browser tests in a separate
-Ubuntu job and the desktop app built on Windows and macOS, for every pull request and every push to `main`. Each build-and-test job writes a coverage
+Ubuntu job and the desktop app built on Windows, for every pull request and every push to `main`. Each build-and-test job writes a coverage
 summary to its page (reported, not enforced); see the README for running it locally. Dependabot (`.github/dependabot.yml`) opens weekly PRs
 updating NuGet packages and the Actions CI uses; minor and patch updates come grouped. Every page needs a real Spartan token,
 so you can't check pages against live data yourself; the fake backend shows they work, not that the
@@ -89,10 +88,10 @@ real API still returns what the fake does. Say so rather than claiming a page wo
   - `Services/Themes.cs` and `wwwroot/app.css`: the theme catalogue and its CSS variables.
   - `Components/Pages`: one page per route. `Components/Shared`: charts and widgets.
     Each component has a `.razor.css` scoped stylesheet.
-- `src/Ancilla.App`: the desktop app, a .NET MAUI Blazor Hybrid head (WinUI and Mac Catalyst). It
+- `src/Ancilla.App`: the desktop app, a .NET MAUI Blazor Hybrid head (WinUI). It
   shows `Ancilla.UI`'s `Routes` in a `BlazorWebView` (`MainPage.cs`), whose file provider also serves
   `assets/`. It keeps the theme in MAUI `Preferences` and saves exports to Downloads. `SignIn/` and
-  `Platforms/*/WebProfile.cs` are its `IWaypointSignIn`: halowaypoint.com's sign-in in a native web
+  `Platforms/Windows/WebProfile.cs` are its `IWaypointSignIn`: halowaypoint.com's sign-in in a native web
   view with its own cookie store, and hidden silent sign-ins (`prompt=none`) for new tokens.
 - `src/Ancilla.Web`: the web dev host. `App.razor` (the page shell, which reads the theme cookie),
   `Program.cs` (the `/assets` endpoint) and the reconnect modal. Nothing else belongs here.

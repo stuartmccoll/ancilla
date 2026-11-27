@@ -112,15 +112,6 @@ at a time, and skips chunks already cached.
 ### In a sandboxed or Claude Code shell
 - **Network:** calls to the Halo services need network access. In a sandboxed shell they fail with
   a connection error until sandboxing is lifted for that command.
-- **Python on this Mac:** it rejects the HTTPS certificate chain ("self-signed certificate in
-  chain"), probably because something inspects HTTPS traffic. Don't switch verification off. Export
-  the keychain roots once and point Python at them:
-  ```bash
-  security find-certificate -a -p /Library/Keychains/System.keychain \
-    /System/Library/Keychains/SystemRootCertificates.keychain > /tmp/keychain-roots.pem
-  SSL_CERT_FILE=/tmp/keychain-roots.pem python3 -I script.py
-  ```
-  .NET uses the keychain directly, so Ancilla.Theater itself is unaffected.
 
 ## Code layout
 
@@ -258,8 +249,8 @@ In order of value:
 2, 8 and 12; the event clock's offset from film time; and packet header field 2.
 
 ## Privacy
-- **Where films live:** cached in `~/Library/Application Support/Ancilla/films` on macOS (the local
-  application data folder elsewhere), never in the repo. They contain **every player's gamertag and
+- **Where films live:** cached in `films` under the local application data folder's `Ancilla` folder
+  (`%LOCALAPPDATA%\Ancilla\films` on Windows), never in the repo. They contain **every player's gamertag and
   XUID**, and a scoreboard is saved beside each one.
 - **Never commit** film data, match IDs tied to people, or other players' gamertags or XUIDs. That
   covers code, docs, test fixtures and commit messages. Describe findings with counts and offsets

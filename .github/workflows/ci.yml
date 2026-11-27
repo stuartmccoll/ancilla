@@ -59,16 +59,11 @@ jobs:
             -assemblyfilters:"-Ancilla.Testing" -classfilters:"-System.Text.RegularExpressions.Generated*"
           cat coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
 
-  # The MAUI head isn't in Ancilla.sln (it needs the MAUI workload, and has no Linux target), so it's
-  # built on its own here, for the one target each OS can build: WinUI on Windows, Mac Catalyst on macOS.
+  # The MAUI head isn't in Ancilla.sln (it needs the MAUI workload and Windows), so it's built on its
+  # own here, for its WinUI target.
   desktop:
-    name: Desktop shell (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # A fixed macOS image rather than macos-latest, so the Xcode chosen below stays installed.
-        os: [windows-latest, macos-26]
+    name: Desktop shell
+    runs-on: windows-latest
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -77,15 +72,6 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      # .NET for Mac Catalyst needs one exact Xcode version, and the image defaults to a newer one. When
-      # the build fails with "requires Xcode X", pick X here (the image's readme lists what's installed).
-      # Use the app's real name, not the shorter symlink (Xcode_26.0.app): xcodebuild can't find the SDK
-      # through the symlink. Showing the SDK path fails this step, not the build, if it's wrong.
-      - name: Select Xcode
-        if: runner.os == 'macOS'
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.0.1.app
-          xcrun --sdk macosx --show-sdk-path
       - name: Install the MAUI workload
         run: dotnet workload install maui
       - name: Build

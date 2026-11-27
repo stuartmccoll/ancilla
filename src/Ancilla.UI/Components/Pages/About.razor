@@ -83,12 +83,10 @@
                         app's. Halo Waypoint keeps the token in it as a cookie until the app quits, and Ancilla reads it
                         from there. With <strong>Stay signed in</strong> off, the window's cookies stay in memory and
                         anything else it wrote is removed when you sign out or next start the app. With it on, Microsoft's
-                        sign-in is kept on this computer so the app can sign you in when it starts: on macOS in a WebKit
-                        store inside the app's sandbox container, and on Windows in a WebView2 profile in your local app
-                        data folder (<code class="path">%LOCALAPPDATA%\Ancilla\SignIn</code>), where WebView2 encrypts cookies with a
+                        sign-in is kept on this computer so the app can sign you in when it starts, in a WebView2 profile
+                        in your local app data folder (<code class="path">%LOCALAPPDATA%\Ancilla\SignIn</code>), where WebView2 encrypts cookies with a
                         key Windows keeps for your account. Ancilla doesn't add encryption of its own. Signing out (from the
-                        menu or <a href="settings">Settings</a>) removes it, and so does turning Stay signed in off (on
-                        macOS, WebKit wipes it at once and its folder goes the next time the app starts).
+                        menu or <a href="settings">Settings</a>) removes it, and so does turning Stay signed in off.
                     </li>
                 }
                 <li>

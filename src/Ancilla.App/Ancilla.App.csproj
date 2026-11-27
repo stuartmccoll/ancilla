@@ -2,12 +2,11 @@
 
   <!--
     The desktop app: a .NET MAUI Blazor Hybrid shell that shows Ancilla.UI in a native window on
-    Windows (WinUI) and macOS (Mac Catalyst). It needs the MAUI workload, so it isn't in Ancilla.sln:
-    build it on its own (see the README's Run section). Each OS builds only its own target.
+    Windows (WinUI). It needs the MAUI workload and Windows, so it isn't in Ancilla.sln: build it on
+    its own (see the README's Run section).
   -->
   <PropertyGroup>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst</TargetFrameworks>
 
     <OutputType>Exe</OutputType>
     <RootNamespace>Ancilla.App</RootNamespace>
@@ -27,7 +26,6 @@
     <!-- Unpackaged on Windows, so `dotnet run` works. Signed installers are N9 (#22). -->
     <WindowsPackageType>None</WindowsPackageType>
 
-    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
   </PropertyGroup>

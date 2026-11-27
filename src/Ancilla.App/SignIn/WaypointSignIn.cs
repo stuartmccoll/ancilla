@@ -4,8 +4,8 @@ using Ancilla.UI.Services;
 namespace Ancilla.App.SignIn;
 
 /// <summary>
-/// The sign-in browser's cookie store, kept apart from the app's own BlazorWebView: a
-/// <c>WKWebsiteDataStore</c> on macOS, a WebView2 user data folder on Windows. Persistent, it keeps
+/// The sign-in browser's cookie store, kept apart from the app's own BlazorWebView: a WebView2 user
+/// data folder. Persistent, it keeps
 /// Microsoft's sign-in on disk between runs; otherwise it lives in memory and goes when the app quits.
 /// </summary>
 public interface IWebProfile
