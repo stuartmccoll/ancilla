@@ -60,7 +60,7 @@ public sealed class BrowserClipboard(IJSRuntime js) : IClipboardWriter
     public async Task SetTextAsync(string text) => await js.InvokeVoidAsync("navigator.clipboard.writeText", text);
 }
 
-/// <summary>Shows a folder in the system's file manager (Finder, File Explorer).</summary>
+/// <summary>Shows a folder in the system's file manager (File Explorer).</summary>
 public interface IFolderOpener
 {
     /// <summary>False on the web host: a browser page can't open folders on the machine.</summary>

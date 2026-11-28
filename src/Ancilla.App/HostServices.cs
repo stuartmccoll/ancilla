@@ -16,9 +16,8 @@ public sealed class SettingsThemePreference : IThemePreference
 }
 
 /// <summary>
-/// The system clipboard. The web view's own (<c>navigator.clipboard</c>) isn't usable here: WebKit
-/// doesn't count the app's page as a secure context, and wants the write inside the click itself,
-/// not after a trip to .NET and back.
+/// The system clipboard, rather than the web view's own (<c>navigator.clipboard</c>), which wants the
+/// write inside the click itself, not after a trip to .NET and back.
 /// </summary>
 public sealed class SystemClipboard : IClipboardWriter
 {
@@ -26,29 +25,23 @@ public sealed class SystemClipboard : IClipboardWriter
         MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.SetTextAsync(text));
 }
 
-/// <summary>Opens a folder in Finder or File Explorer, creating it first so there's something to show.</summary>
+/// <summary>Opens a folder in File Explorer, creating it first so there's something to show.</summary>
 public sealed class SystemFolderOpener : IFolderOpener
 {
     public bool IsAvailable => true;
 
-    public async Task<bool> OpenAsync(string folder)
+    public Task<bool> OpenAsync(string folder)
     {
         try
         {
             Directory.CreateDirectory(folder);
-#if WINDOWS
             using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe") { ArgumentList = { folder } });
-            return true;
-#else
-            // On Mac Catalyst a file URL for a folder opens it in Finder.
-            return await MainThread.InvokeOnMainThreadAsync(() => Launcher.Default.OpenAsync(
-                new UriBuilder { Scheme = Uri.UriSchemeFile, Host = "", Path = Path.TrimEndingDirectorySeparator(folder) + "/" }.Uri));
-#endif
+            return Task.FromResult(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or FeatureNotSupportedException)
+                                       or System.ComponentModel.Win32Exception)
         {
-            return false;
+            return Task.FromResult(false);
         }
     }
 }

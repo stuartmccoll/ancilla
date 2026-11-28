@@ -9,7 +9,7 @@
 > monitors that look after the Halo rings, such as 343 Guilty Spark, to vast minds like Mendicant
 > Bias. Humans would just say "AI".
 
-An unofficial Halo Infinite stats viewer, built with Blazor: a desktop app for Windows and macOS. It
+An unofficial Halo Infinite stats viewer, built with Blazor: a desktop app for Windows. It
 shows how many more matchmade games you need to finish your battle passes and reach Hero, plus your
 service record, medals, match history, trends, insights and the players you meet. It uses the
 services behind halowaypoint.com.
@@ -18,7 +18,7 @@ services behind halowaypoint.com.
 src/Ancilla.Core     API client, models, calculations, caching, snapshot store (no NuGet deps)
 src/Ancilla.Data     the local SQLite match archive
 src/Ancilla.UI       every page, component and service (Razor class library, shared by both hosts)
-src/Ancilla.App      the desktop app: .NET MAUI Blazor Hybrid, Windows (WinUI) and macOS (Mac Catalyst)
+src/Ancilla.App      the desktop app: .NET MAUI Blazor Hybrid, Windows (WinUI)
 src/Ancilla.Web      web dev host for Ancilla.UI (interactive server rendering), for hot reload and browser tests
 src/Ancilla.Theater  Theater film decoding and match analysis, used by the app (see src/Ancilla.Theater/README.md)
 src/Ancilla.Theater.Cli  research console for Theater films (fetch, inspect, timeline) and the API drift check
@@ -41,18 +41,12 @@ in as the same player carries on where you left off.
 
 **Stay signed in** (off by default) keeps Microsoft's sign-in on this computer, so the app signs you
 in when it starts. Off, the sign-in window's cookies are kept in memory only, and anything else it
-wrote is removed at sign-out or the next start. Sign out removes a kept sign-in too:
+wrote is removed at sign-out or the next start. Sign out removes a kept sign-in too.
 
-| | Where it's kept with Stay signed in | How it's protected |
-|---|---|---|
-| macOS | A WebKit data store of its own in the app's sandbox container (`~/Library/Containers/app.ancilla.desktop/Data/Library/WebKit/`) | Your macOS account, and macOS asks you before another app reads an app's container. WebKit doesn't encrypt it; FileVault encrypts the disk |
-| Windows | A WebView2 profile in `%LOCALAPPDATA%\Ancilla\SignIn` | Your Windows account: WebView2 encrypts its cookies with a key Windows keeps for your account (DPAPI) |
-
-Ancilla doesn't add encryption of its own: the browser engines read and write these stores
-themselves, so there's nothing between them for Ancilla to encrypt.
-
-On macOS WebKit won't delete a store while it's open, so sign-out wipes its contents straight away
-and removes its folder the next time the app starts.
+A kept sign-in is a WebView2 profile in `%LOCALAPPDATA%\Ancilla\SignIn`, protected by your Windows
+account: WebView2 encrypts its cookies with a key Windows keeps for your account (DPAPI). Ancilla
+doesn't add encryption of its own: WebView2 reads and writes the profile itself, so there's nothing
+in between for Ancilla to encrypt.
 
 You can also paste a token, which is what the web dev host offers, or set `HALO_SPARTAN_TOKEN`:
 
@@ -73,21 +67,14 @@ registration for Xbox Live.
 
 ### The desktop app
 
-The desktop app needs the .NET MAUI workload (`dotnet workload install maui`), and on macOS, Xcode.
-It isn't in `Ancilla.sln`, because the workload isn't on every machine (and there's no Linux version),
-so build and run it on its own:
+The desktop app runs on Windows only and needs the .NET MAUI workload (`dotnet workload install maui`).
+It isn't in `Ancilla.sln`, because the workload isn't on every machine (and it doesn't build on macOS
+or Linux), so build and run it on its own:
 
 ```powershell
 $env:HALO_SPARTAN_TOKEN = 'v4=...'                                 # optional
-dotnet run --project src/Ancilla.App                               # Windows
+dotnet run --project src/Ancilla.App
 ```
-
-```bash
-export HALO_SPARTAN_TOKEN='v4=...'                                 # optional
-dotnet build src/Ancilla.App -t:Run -f net10.0-maccatalyst         # macOS
-```
-
-On macOS the variable only reaches the app when it's started from a terminal like this.
 
 ### The web dev host
 
@@ -226,7 +213,7 @@ Home · Progress · Stats › Service record, Medals · Matches › History, Tre
   time), cache sizes (shared data, images, snapshots, films, logs) and how many requests are running or
   waiting. **Copy diagnostics** puts a redacted text summary on the clipboard for a
   [bug report](.github/ISSUE_TEMPLATE/bug.yml), with the latest two errors and their stack traces (cut
-  to 40 lines each). In the desktop app, **Open log folder** shows the logs in Finder or File Explorer
+  to 40 lines each). In the desktop app, **Open log folder** shows the logs in File Explorer
   (`IFolderOpener`; the web host's isn't available, so it shows the path).
 
 Firefight (PvE) games are left out of Trends and Insights, because kills against AI would swamp the
@@ -261,8 +248,7 @@ To add a theme (e.g. Xbox 360):
   `Films` setting to a folder to store them elsewhere. A film holds every player's gamertag and XUID,
   so keep the folder out of anything you share.
 - **The match archive** (`Ancilla.Data`) is a SQLite database, `archive.db`, in an `Ancilla`
-  folder under the local application data folder (on macOS `~/Library/Application Support/Ancilla`,
-  on Windows `%LOCALAPPDATA%\Ancilla`). It keeps, per player (by XUID): match history entries,
+  folder under the local application data folder (`%LOCALAPPDATA%\Ancilla` on Windows). It keeps, per player (by XUID): match history entries,
   skill results and progress snapshots, plus scoreboards and versioned map, mode and playlist names,
   which are the same for everyone. Trends, Insights and Players can read all of it
   (**Everything stored**), and after a restart what you've loaded shows without asking Halo again.
@@ -287,8 +273,7 @@ To add a theme (e.g. Xbox 360):
 - **Settings > Delete everything** deletes the archive (and its SQLite side files), films, logs,
   `settings.json`, the old `snapshots.json`, the saved theme and, in the desktop app, the kept sign-in
   and its "Stay signed in" setting, then the `Ancilla` folder if nothing else is in it. Files you've
-  moved elsewhere with the settings above are deleted too, but their folders are left alone. On macOS
-  a kept sign-in's WebKit store is wiped at once and its folder removed at the next start-up.
+  moved elsewhere with the settings above are deleted too, but their folders are left alone.
 
 ### Logs
 
@@ -304,10 +289,6 @@ models don't expect, or a missing envelope) is logged by endpoint and fails like
 pages skip it. Before any line is written, `Redactor` removes Spartan tokens, clearance IDs, XUIDs
 (decimal, hex and `xuid(...)`), gamertags, film download URLs and absolute paths. To store logs
 elsewhere, set the `Logs` setting to a folder.
-
-The Mac app is sandboxed, so its logs are in
-`~/Library/Containers/app.ancilla.desktop/Data/Documents/Ancilla/logs`. The Diagnostics page shows
-the folder either way.
 
 To check the logs the browser tests produce, set `ANCILLA_E2E_LOGS` to a folder when running them, then run
 `.github/scripts/privacy-check.sh --log <folder>`. CI does this in the browser tests job.
